@@ -1,9 +1,9 @@
 ;;; mediawiki.el --- mediawiki frontend
 
-;; Copyright (C) 2004  Free Software Foundation, Inc.
+;; Copyright (C) 2008  Mark A. Hershberger
 
 ;; Original Author: Jerry <unidevel@yahoo.com.cn>
-;; Updated for Emacs22 url.el: Mark A. Hershberger <mah@everybody.org>
+;; Updated for Emacs22 url.el: Mark A. Hershberger <mhershberger@intrahealth.org>
 ;; Keywords: extensions, convenience, lisp
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -37,6 +37,7 @@
 ;; TODO:
 ;;  * pcomplete for site alist
 ;;  * Optionally use org-mode formatting for editing and translate that to mw
+;;  * Balk at "Sorry! We could not process your edit due to a loss of session data."
 
 ;; Latest version can be found at
 ;;   http://meta.wikimedia.org/wiki/mediawiki.el
@@ -228,7 +229,8 @@ later."
 (defcustom mediawiki-site-alist '(("Wikipedia"
                                    "http://en.wikipedia.org/wiki/index.php"
                                    "username"
-                                   "password"))
+                                   "password"
+				   "Main Page"))
   "A list of MediaWiki websites."
   :group 'mediawiki
   :type '(alist :tag "Site Name"
@@ -323,7 +325,7 @@ there will be local to that buffer."
 
   ;; Assume UTF-8, put contents in str
   (let ((str (decode-coding-string
-              (buffer-substring-no-properties (point) (point-max))
+              (buffer-string)
               'utf-8))
         form (start 0))
 
@@ -419,6 +421,11 @@ there will be local to that buffer."
        (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document." (buffer-name))))
 
+(defun mediawiki-save-and-bury (&optional summary)
+  (interactive "sSummary: ")
+  (mediawiki-save summary)
+  (bury-buffer))
+
 (defun mediawiki-save-as (&optional title summary)
   (interactive "sTitle: "
                "sSummary: ")
@@ -427,7 +434,10 @@ there will be local to that buffer."
     (mediawiki-open title)))
 
 (defun mediawiki-site-extract (sitename index)
-  (nil-blank-string (nth index (assoc sitename mediawiki-site-alist))))
+  (let ((bit (nth index (assoc sitename mediawiki-site-alist))))
+    (cond
+     ((string-match "[^[:blank:]]" bit) bit)
+     (nil))))
 
 (defun mediawiki-site-url (sitename)
   "Get the url for a given site."
