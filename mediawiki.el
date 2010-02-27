@@ -8,7 +8,12 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-27 16:05:49 mah>
+;; Last Modified: <2010-02-27 16:20:41 mah>
+
+(defconst mediawiki-version "2.0"
+  "Current version of mediawiki.el")
+
+;; This file is NOT (yet) part of GNU Emacs.
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
