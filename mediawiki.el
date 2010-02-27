@@ -8,7 +8,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network
 ;; URL: http://emacswiki.org/emacs/mediawiki.el
-;; Last Modified: <2010-01-11 20:29:47 mah>
+;; Last Modified: <2010-02-27 05:56:46 mah>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -52,23 +52,17 @@
 ;;    that to mw
 ;;  * Re-login at loss of session data "Sorry! We could not process
 ;;    your edit due to a loss of session data."
-;;  * Handle Captcha's like those on Wikipedia for adding external links.
-;;    (<form> element will include <img src=".*wpCaptchaId.*">, result
-;;    to go in wpCaptchaWord)
-;;  * Use the mode from wikipedia.el
 ;;  * Move url-* methods to url-http
 ;;  * Use the MW API to support searching, etc.
 
 ;;; Latest version can be found at
-;;   http://meta.wikimedia.org/wiki/mediawiki.el
-;;   http://www.emacswiki.org/cgi-bin/emacs/mediawiki.el
+;;    http://launchpad.net/mediawiki-el
 
 ;;; Code:
 
 (require 'url-http)
 (require 'mml)
 (require 'mm-url)
-
 
 (when (not (fboundp 'url-user-for-url))
   (require 'url-parse)
@@ -155,7 +149,7 @@ string: \"%\" followed by two lowercase hex digits."
               (mm-url-encode-multipart-form-data
                parameters boundary)
             (mm-url-encode-www-form-urlencoded parameters))))
-    (mapcar
+    (mapc
      (lambda (pair)
        (let ((key (car pair))
              (val (cdr pair)))
@@ -195,7 +189,7 @@ string: \"%\" followed by two lowercase hex digits."
       (kill-buffer (current-buffer))
       (when bufname
         (set-buffer bufname)
-        (insert-string str)
+        (insert str)
         (goto-char (point-min))
         (set-buffer-modified-p nil))
       (when callback
@@ -247,7 +241,8 @@ string: \"%\" followed by two lowercase hex digits."
 
 (defgroup mediawiki nil
   "A mode for editting pages on MediaWiki sites."
-  :tag "MediaWiki")
+  :tag "MediaWiki"
+  :group 'applications)
 
 (defcustom mediawiki-site-default "Wikipedia"
   "The default mediawiki site to point to.  Set here for the
@@ -272,6 +267,78 @@ later."
                                   (string :tag "Password")
                                   (string :tag "First Page"
                                           :description "First page to open when `mediawiki-site' is called for this site"))))
+
+(defvar mediawiki-enumerate-with-terminate-paragraph nil
+"*Before insert enumerate/itemize do \\[mediawiki-terminate-paragraph].")
+
+(defvar mediawiki-english-or-german t
+  "*Variable in order to set the english (t) or german (nil) environment.")
+
+(defvar mediawiki-user-simplify-signature t
+  "*Simple varible in order to threat complicated signatures of users, which uses
+fonts and other makeup.")
+
+(defgroup mediawiki-draft nil
+  "A mode to mediawiki-draft information."
+  :group 'mediawiki)
+
+;;; User Variables:
+
+(defcustom mediawiki-draft-mode-hook nil
+  "*Functions run upon entering mediawiki-draft-mode."
+  :type 'hook
+  :group 'mediawiki-draft)
+
+(defcustom mediawiki-draft-register ?R
+  "The register in which the window configuration is stored."
+  :type 'character
+  :group 'mediawiki-draft)
+
+(defcustom mediawiki-draft-filter-functions nil
+  "*Functions run to filter mediawiki-draft data.
+All functions are run in the mediawiki-draft buffer."
+  :type 'hook
+  :group 'mediawiki-draft)
+
+(defcustom mediawiki-draft-handler-functions '(mediawiki-draft-append-to-file)
+  "*Functions run to process mediawiki-draft data.
+Each function is called with the current buffer narrowed to what the
+user wants mediawiki-drafted.
+If any function returns non-nil, the data is assumed to have been
+recorded somewhere by that function. "
+  :type 'hook
+  :group 'mediawiki-draft)
+
+(defcustom mediawiki-draft-data-file "~/Wiki/discussions/draft.wiki"
+  "*The file in which to store the wikipedia drafts."
+  :type 'file
+  :group 'mediawiki-draft)
+
+(defcustom mediawiki-draft-reply-register ?M
+  "The register in which the window configuration is stored."
+  :type 'character
+  :group 'mediawiki-draft)
+
+(defcustom mediawiki-draft-page ?S		;Version:1.37
+  "The register in which the a page of the wiki draft file is stored."
+  :type 'character
+  :group 'mediawiki-draft)
+
+
+(defcustom mediawiki-draft-leader-text "== "
+  "*The text used to begin each mediawiki-draft item."
+  :type 'string
+  :group 'mediawiki-draft)
+
+(defvar mediawiki-reply-with-hline nil
+"*Whether to use a hline as a header seperator in the reply.")
+
+(defvar mediawiki-reply-with-quote nil
+  "*Whether to use a quotation tempalate or not.")
+
+(defvar mediawiki-imenu-generic-expression
+  (list '(nil "^==+ *\\(.*[^\n=]\\)==+" 1))
+  "Imenu expression for `mediawiki-mode'.  See `imenu-generic-expression'.")
 
 (defvar mediawiki-login-success "pt-logout"
   "A string that should be present on login success on all
@@ -309,6 +376,236 @@ the base URI of the wiki engine as well as group and page name.")
 
 (defvar mediawiki-page-ring-index 0)
 
+(defvar font-mediawiki-sedate-face 'font-mediawiki-sedate-face
+  "Face to use for mediawiki  minor keywords.")
+(defvar font-mediawiki-italic-face 'font-mediawiki-italic-face
+  "Face to use for mediawiki italics.")
+(defvar font-mediawiki-bold-face 'font-mediawiki-bold-face
+  "Face to use for mediawiki bolds.")
+(defvar font-mediawiki-math-face 'font-mediawiki-math-face
+  "Face to use for mediawiki math environments.")
+(defvar font-mediawiki-string-face 'font-mediawiki-string-face
+  "Face to use for strings.")
+(defvar font-mediawiki-verbatim-face 'font-mediawiki-verbatim-face
+  "Face to use for text in verbatim macros or environments.")
+
+(defface font-mediawiki-bold-face
+  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit bold))
+		    ((assq :weight custom-face-attributes) '(:weight bold))
+		    (t '(:bold t)))))
+    `((((class grayscale) (background light))
+       (:foreground "DimGray" ,@font))
+      (((class grayscale) (background dark))
+       (:foreground "LightGray" ,@font))
+      (((class color) (background light))
+       (:foreground "DarkOliveGreen" ,@font))
+      (((class color) (background dark))
+       (:foreground "OliveDrab" ,@font))
+      (t (,@font))))
+  "Face used to highlight text to be typeset in bold."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defface font-mediawiki-italic-face
+  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit italic))
+		    ((assq :slant custom-face-attributes) '(:slant italic))
+		    (t '(:italic t)))))
+    `((((class grayscale) (background light))
+       (:foreground "DimGray" ,@font))
+      (((class grayscale) (background dark))
+       (:foreground "LightGray" ,@font))
+      (((class color) (background light))
+       (:foreground "DarkOliveGreen" ,@font))
+      (((class color) (background dark))
+       (:foreground "OliveDrab" ,@font))
+      (t (,@font))))
+  "Face used to highlight text to be typeset in italic."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defface font-mediawiki-math-face
+  (let ((font (cond ((assq :inherit custom-face-attributes)
+		     '(:inherit underline))
+		    (t '(:underline t)))))
+    `((((class grayscale) (background light))
+       (:foreground "DimGray" ,@font))
+      (((class grayscale) (background dark))
+       (:foreground "LightGray" ,@font))
+      (((class color) (background light))
+       (:foreground "SaddleBrown"))
+      (((class color) (background dark))
+       (:foreground "burlywood"))
+      (t (,@font))))
+  "Face used to highlight math."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defface font-mediawiki-sedate-face
+  '((((class grayscale) (background light)) (:foreground "DimGray"))
+    (((class grayscale) (background dark))  (:foreground "LightGray"))
+    (((class color) (background light)) (:foreground "DimGray"))
+    (((class color) (background dark))  (:foreground "LightGray"))
+   ;;;(t (:underline t))
+    )
+  "Face used to highlight sedate stuff."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defface font-mediawiki-string-face
+  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit italic))
+		    ((assq :slant custom-face-attributes) '(:slant italic))
+		    (t '(:italic t)))))
+    `((((type tty) (class color))
+       (:foreground "green"))
+      (((class grayscale) (background light))
+       (:foreground "DimGray" ,@font))
+      (((class grayscale) (background dark))
+       (:foreground "LightGray" ,@font))
+      (((class color) (background light))
+       (:foreground "RosyBrown"))
+      (((class color) (background dark))
+       (:foreground "LightSalmon"))
+      (t (,@font))))
+  "Face used to highlight strings."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defface font-mediawiki-warning-face
+  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit bold))
+		    ((assq :weight custom-face-attributes) '(:weight bold))
+		    (t '(:bold t)))))
+    `((((class grayscale)(background light))
+       (:foreground "DimGray" ,@font))
+      (((class grayscale)(background dark))
+       (:foreground "LightGray" ,@font))
+      (((class color)(background light))
+       (:foreground "red" ,@font))
+      (((class color)(background dark))
+       (:foreground "red" ,@font))
+      (t (,@font))))
+  "Face for important keywords."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defface font-mediawiki-verbatim-face
+  (let ((font (if (and (assq :inherit custom-face-attributes)
+		       (if (fboundp 'find-face)
+			   (find-face 'fixed-pitch)
+			 (facep 'fixed-pitch)))
+		  '(:inherit fixed-pitch)
+		'(:family "courier"))))
+    `((((class grayscale) (background light))
+       (:foreground "DimGray" ,@font))
+      (((class grayscale) (background dark))
+       (:foreground "LightGray" ,@font))
+      (((class color) (background light))
+       (:foreground "SaddleBrown" ,@font))
+      (((class color) (background dark))
+       (:foreground "burlywood" ,@font))
+      (t (,@font))))
+  "Face used to highlight TeX verbatim environments."
+  :group 'font-mediawiki-highlighting-faces)
+
+(defvar mediawiki-simple-tags
+  '("b" "big" "blockquote" "br" "caption" "code" "center" "cite" "del"
+    "dfn" "dl" "em" "i" "ins" "kbd" "math" "nowiki" "ol" "pre" "samp"
+    "small" "strike" "strong" "sub" "sup" "tt" "u" "ul" "var")
+  "Tags that do not accept arguments.")
+
+(defvar mediawiki-complex-tags
+  '("a" "div" "font" "table" "td" "th" "tr")
+  "Tags that accept arguments.")
+
+(defvar mediawiki-url-protocols
+  '("ftp" "gopher" "http" "https" "mailto" "news")
+  "Valid protocols for URLs in Wikipedia articles.")
+
+(defvar mediawiki-draft-buffer "*MW-Draft*"
+  "The name of the wikipedia-draft (temporary) data entry buffer.")
+
+(defvar mediawiki-edit-form-vars nil)
+
+(defvar mediawiki-font-lock-keywords
+  (list
+
+   ;; Apostrophe-style text markup
+   (cons "''''\\([^']\\|[^']'\\)*?\\(''''\\|\n\n\\)"
+         'font-lock-builtin-face)
+   (cons "'''\\([^']\\|[^']'\\)*?\\('''\\|\n\n\\)"
+                                        ;'font-lock-builtin-face)
+         'font-mediawiki-bold-face)
+   (cons "''\\([^']\\|[^']'\\)*?\\(''\\|\n\n\\)"
+         'font-mediawiki-italic-face)
+
+   ;; Headers and dividers
+   (list "^\\(==+\\)\\(.*\\)\\(\\1\\)"
+         '(1 font-lock-builtin-face)
+                                        ;'(2 mediawiki-header-face)
+         '(2 font-mediawiki-sedate-face)
+         '(3 font-lock-builtin-face))
+   (cons "^-----*" 'font-lock-builtin-face)
+
+   ;; Bare URLs and ISBNs
+   (cons (concat "\\(^\\| \\)" (regexp-opt mediawiki-url-protocols t)
+                 "://[-A-Za-z0-9._\/~%+&#?!=()@]+")
+         'font-lock-variable-name-face)
+   (cons "\\(^\\| \\)ISBN [-0-9A-Z]+" 'font-lock-variable-name-face)
+
+   ;; Colon indentation, lists, definitions, and tables
+   (cons "^\\(:+\\|[*#]+\\||[}-]?\\|{|\\)" 'font-lock-builtin-face)
+   (list "^\\(;\\)\\([^:\n]*\\)\\(:?\\)"
+         '(1 font-lock-builtin-face)
+         '(2 font-lock-keyword-face)
+         '(3 font-lock-builtin-face))
+
+   ;; Tags and comments
+   (list (concat "\\(</?\\)"
+                 (regexp-opt mediawiki-simple-tags t) "\\(>\\)")
+         '(1 font-lock-builtin-face t t)
+         '(2 font-lock-function-name-face t t)
+         '(3 font-lock-builtin-face t t))
+   (list (concat "\\(</?\\)"
+                 (regexp-opt mediawiki-complex-tags t)
+                 "\\(\\(?: \\(?:[^\"'/><]\\|\"[^\"]*\"\\|'[^']*'\\)*\\)?\\)\\(>\\)")
+         '(1 font-lock-builtin-face t t)
+         '(2 font-lock-function-name-face t t)
+         '(3 font-lock-keyword-face t t)
+         '(4 font-lock-builtin-face t t))
+   (cons (concat "<!-- \\([^->]\\|>\\|-\\([^-]\\|-[^>]\\)\\)*-->")
+         '(0 font-lock-comment-face t t))
+
+   ;; External Links
+   (list (concat "\\(\\[\\)\\(\\(?:"
+                 (regexp-opt mediawiki-url-protocols)
+                 "\\)://[-A-Za-z0-9._\/~%-+&#?!=()@]+\\)\\(\\(?: [^]\n]*\\)?\\)\\(\\]\\)")
+         '(1 font-lock-builtin-face t t)
+         '(2 font-lock-variable-name-face t t)
+         '(3 font-lock-keyword-face t t)
+         '(4 font-lock-builtin-face t t))
+
+   ;; Wiki links
+   '("\\(\\[\\[\\)\\([^]\n|]*\\)\\(|?\\)\\([^]\n]*\\)\\(\\]\\]\\)"
+     (1 font-lock-builtin-face t t)
+     (2 font-lock-variable-name-face t t)
+     (3 font-lock-builtin-face t t)
+     (4 font-lock-keyword-face t t)
+     (5 font-lock-builtin-face t t))
+
+   ;; Wiki variables
+   '("\\({{\\)\\(.+?\\)\\(}}\\)"
+     (1 font-lock-builtin-face t t)
+     (2 font-lock-variable-name-face t t)
+     (3 font-lock-builtin-face t t))
+
+   ;; Character entity references
+   (cons "&#?[a-zA-Z0-9]+;" '(0 font-lock-type-face t t))
+
+   ;; Preformatted text
+   (cons "^ .*$" '(0 font-lock-constant-face t t))
+
+   ;; Math environment (uniform highlight only, no TeX markup)
+   (list "<math>\\(\\(\n?.\\)*\\)</math>"
+         '(1 font-lock-keyword-face t t))))
+
+(defvar mediawiki-draft-send-archive t
+  "*Archive the reply.")
+
+(defvar mediawiki-draft-mode-map ())
+
 (defun mediawiki-make-url (title action &optional sitename)
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
                   mediawiki-argument-pattern)
@@ -330,7 +627,6 @@ the base URI of the wiki engine as well as group and page name.")
 	(mediawiki-open title)
       (error "Error: %s is not a mediawiki document." (buffer-name)))))
 
-
 (defun mediawiki-edit (title)
   "Edit wiki file with the name of title"
   (when (not (ring-p mediawiki-page-ring))
@@ -341,7 +637,6 @@ the base URI of the wiki engine as well as group and page name.")
                 (concat mediawiki-site ": " title)))
   (mediawiki-get title (ring-ref mediawiki-page-ring 0) mediawiki-site))
 
-(defvar mediawiki-edit-form-vars nil)
 (defun mediawiki-get-edit-form-vars (str bufname)
   "Extract the form variables from a page.  This should only be
 called from a buffer in mediawiki-mode as the variables it sets
@@ -420,21 +715,19 @@ there will be local to that buffer."
                   nil              ; headers
                   bufname          ; output buffer
                   ;; callback on result buf
-                  'mediawiki-setup-buffer-for-edit
+                  (lambda (str title)
+                    (url-http-get
+                     (mediawiki-make-url title "edit")
+                     nil (get-buffer-create " *mediawiki-form*")
+                     'mediawiki-get-edit-form-vars
+                     (current-buffer))
+                    (set-buffer-file-coding-system 'utf-8)
+                    (goto-char (point-min))
+                    (pop-to-buffer bufname)
+                    (set-buffer-modified-p nil)
+                    (setq buffer-undo-list t)
+                    (buffer-enable-undo))
                   title)))
-
-(defun mediawiki-setup-buffer-for-edit (str title)
-  (url-http-get
-   (mediawiki-make-url title "edit")
-   nil (get-buffer-create " *mediawiki-form*")
-   'mediawiki-get-edit-form-vars
-   (current-buffer))
-  (set-buffer-file-coding-system 'utf-8)
-  (goto-char (point-min))
-  (pop-to-buffer bufname)
-  (set-buffer-modified-p nil)
-  (setq buffer-undo-list t)
-  (buffer-enable-undo bufname))
 
 (defun mediawiki-save (&optional summary)
   (interactive "sSummary: ")
@@ -450,12 +743,12 @@ there will be local to that buffer."
   (mediawiki-save summary)
   (bury-buffer))
 
-(defun mediawiki-save-as (&optional title summary)
-  (interactive "sTitle: "
-               "sSummary: ")
-  (when (and title (not (string= title "")))
-    (mediawiki-save-page title summary (buffer-string-no-properties))
-    (mediawiki-open title)))
+;; (defun mediawiki-save-as (&optional title summary)
+;;   (interactive "sTitle: "
+;;                "sSummary: ")
+;;   (when (and title (not (string= title "")))
+;;     (mediawiki-save-page title summary (buffer-string-no-properties))
+;;     (mediawiki-open title)))
 
 (defun mediawiki-site-extract (sitename index)
   (let ((bit (nth index (assoc sitename mediawiki-site-alist))))
@@ -470,12 +763,12 @@ there will be local to that buffer."
 (defun mediawiki-site-username (sitename)
   "Get the username for a given site."
   (or (mediawiki-site-extract sitename 2)
-      (url-user-for-url (mediawiki-site-url))))
+      (url-user-for-url (mediawiki-site-url sitename))))
 
 (defun mediawiki-site-password (sitename)
   "Get the password for a given site."
   (or (mediawiki-site-extract sitename 3)
-      (url-user-for-url (mediawiki-site-url))))
+      (url-user-for-url (mediawiki-site-url sitename))))
 
 (defun mediawiki-site-first-page (sitename)
   "Get the password for a given site."
@@ -533,10 +826,10 @@ get a cookie."
   (let ((page-uri (mediawiki-make-url title "submit&externaledit=true"
                                       mediawiki-site))
         (document (if content content
-                      (buffer-substring)))
+                      (buffer-string)))
         (args mediawiki-edit-form-vars))
 
-    (mapcar
+    (mapc
      (lambda (pair)
        (let ((key (car pair))
              (val (cdr pair)))
@@ -626,6 +919,112 @@ anything enclosed in [[PAGE]]."
                              (,direction mediawiki-page-ring-index 1)))))
      (pop-to-buffer buff)))
 
+(defun mediawiki-next-header ()
+  "Move point to the end of the next section header."
+  (interactive)
+  (let ((oldpoint (point)))
+    (end-of-line)
+    (if (re-search-forward "\\(^==+\\).*\\1" (point-max) t)
+        (beginning-of-line)
+      (goto-char oldpoint)
+      (message "No section headers after point."))))
+
+(defun mediawiki-prev-header ()
+  "Move point to the start of the previous section header."
+  (interactive)
+  (unless (re-search-backward "\\(^==+\\).*\\1" (point-min) t)
+    (message "No section headers before point.")))
+
+(defun mediawiki-terminate-paragraph ()	;Version:1.58
+  "In a list, start a new list item. In a paragraph, start a new
+paragraph; if the current paragraph is colon indented, the new
+paragraph will be indented in the same way."
+  (interactive)
+  (let (indent-chars)
+    (save-excursion
+      (beginning-of-line)
+      (while (cond ((looking-at "^$") nil)
+                   ((looking-at "^\\(\\(?: \\|:+\\|[#*]+\\) *\\)")
+                    (setq indent-chars (match-string 1)) nil)
+                   ((eq (point) (point-min)) nil)
+                   ((progn (forward-line -1) t)))
+        t))
+    (newline) (if (not indent-chars) (newline) 
+		(insert indent-chars))))
+
+(defun mediawiki-terminate-paragraph-and-indent ()
+  "In a list, start a new list item. In a paragraph, start a new
+paragraph but *,# will be ignored; if the current paragraph is colon
+; indented, the new paragraph will be indented in the same way."
+  (interactive)
+  (let (indent-chars)
+    (save-excursion
+      (beginning-of-line)
+      (while (cond ((looking-at "^$") nil)
+                   ((looking-at "^\\(\\(?: \\|:+\\) *\\)")
+                    (setq indent-chars (match-string 1)) nil)
+                   ((eq (point) (point-min)) nil)
+                   ((progn (forward-line -1) t)))
+        t))
+    (newline)
+    (if (not indent-chars) (newline)
+      (insert indent-chars))))
+
+(defun mediawiki-draft-reply ()
+  "Open a temporary buffer in mediawiki mode for editing an
+mediawiki draft, with an arbitrary piece of data. After finishing
+the editing |]]:either use \"C-c C-k\" \\[mediawiki-draft-buffer]
+to send the data into the mediawiki-draft-data-file, or send the
+buffer \"C-c\C-c\", to the current article. Check the variable
+mediawiki-draft-send-archive."
+  (interactive)
+  (mediawiki-reply-at-point-simple)
+  (beginning-of-line 1)
+  (kill-line nil)
+  (save-excursion
+	(window-configuration-to-register mediawiki-draft-register)
+	(let ((buf (get-buffer-create mediawiki-draft-buffer)))
+	  (switch-to-buffer-other-window buf)
+	  (mediawiki-mode)
+	  (if mediawiki-reply-with-quote
+              (progn
+		(insert "{{Quotation|")
+		(yank)
+		(insert "'''Re: ")
+		(insert-register mediawiki-draft-reply-register 1)
+		(insert "''' |~~~~}}")
+		(backward-char 7))
+            (when mediawiki-reply-with-hline
+              (insert "----")
+              (newline 1))
+            (yank)
+            (end-of-line 1))
+	  (message " C-c C-k sends to draft, C-c C-c sends to org buffer."))))
+
+(defun mediawiki-reply-at-point-simple ()
+  "Very simple function to reply to posts in the discussion forum. You have to set
+the point around the signature, then the functions inserts the following
+:'''Re: [[User:foo]]'''."
+  (interactive)
+  (beginning-of-line 1)
+  (if mediawiki-english-or-german
+      (progn
+        (search-forward "(UTC)")
+        (search-backward "[[User:"))
+    (search-forward "(CET)")
+    (search-backward "[[Benutzer:"))
+  (if mediawiki-user-simplify-signature
+      (mark-word 2)
+    (mark-word 3))
+  (copy-to-register mediawiki-draft-reply-register (region-beginning) (region-end) nil)
+  (end-of-line 1)
+  (mediawiki-terminate-paragraph-and-indent)
+  (insert ":'''Re: ")
+  (insert-register mediawiki-draft-reply-register 1)
+  (if mediawiki-user-simplify-signature
+      (insert "|]]''' ")
+    (insert "]]''' ")))
+
 (defun mediawiki-goto-previous-page ()
   "Pop up the previous page being editted."
   (interactive)
@@ -650,11 +1049,641 @@ anything enclosed in [[PAGE]]."
       (let ((start (match-beginning 0)))
         (goto-char (+ start 2))))))
 
+(defvar wikipedia-enumerate-with-terminate-paragraph nil
+"*Before insert enumerate/itemize do \\[wikipedia-terminate-paragraph].")
+
+(defun mediawiki-insert-enumerate ()
+"Primitive Function for inserting enumerated items, check the
+variable wikipedia-enumerate-with-terminate-paragraph. Note however
+that the function \\[wikipedia-terminate-paragraph] does not work very
+well will longlines-mode."
+  (interactive)
+  (if mediawiki-enumerate-with-terminate-paragraph
+      (progn
+        (mediawiki-terminate-paragraph)
+        (insert "#"))
+    (newline nil)
+    (insert ":#")))
+
+(defun mediawiki-insert-itemize ()
+  "Primitive Function for inserting no enumerated items, check
+the variable mediawiki-enumerate-with-terminate-paragraph. Note
+however that the function \\[mediawiki-terminate-paragraph] does
+not work very well will longlines-mode."
+  (interactive)
+  (if mediawiki-enumerate-with-terminate-paragraph
+      (progn
+        (mediawiki-terminate-paragraph)
+        (insert "*"))
+    (newline nil)
+    (insert ":*")))
+
+(defun mediawiki-insert-strong-emphasis ()
+  "Insert strong emphasis italics via four
+apostrophes (e.g. ''''FOO''''.) When mark is active, surrounds
+region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "''''")
+        (goto-char (mark))
+        (insert "''''"))
+    (insert "'''' ''''")
+    (backward-char 5)))
+
+(defun mediawiki-insert-bold ()
+  "Insert bold via three apostrophes (e.g. '''FOO'''.)
+When mark is active, surrounds region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "'''")
+        (goto-char (mark))
+        (insert "'''"))
+    (insert "''' '''")
+    (backward-char 4)))
+
+(defun mediawiki-insert-italics ()
+  "Insert bold via TWO apostrophes (e.g. ''FOO''.) When mark is active,
+surrounds region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "''")
+        (goto-char (mark))
+        (insert "''"))
+    (insert "'' ''")
+    (backward-char 3)))
+
+(defun mediawiki-insert-quotation-with-signature ()
+  "Insert bold via TWO apostrophes (e.g. ''FOO''.) When mark is active,
+surrounds region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "{{Quotation|}}")
+        (goto-char (mark))
+        (insert "{{~~~~}}"))
+    (insert "{{Quotation| }}{{~~~~}}")
+    (backward-sexp 1)
+    (backward-char 3)))
+
+(defun mediawiki-insert-quotation ()
+  "Quotation box of the form {{Quotation}}{{}}. When mark is active,
+surrounds region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "{{Quotation|}}")
+        (goto-char (mark))
+        (insert "{{}}"))
+    (insert "{{Quotation|}}{{ }}")
+    (backward-char 3)))
+
+(defun mediawiki-insert-bible-verse-template ()
+  "Insert a template for the quotation of bible verses."
+  (interactive)
+  (insert "({{niv|")
+  (let ((name    (read-string "Name: ")))
+    (insert (concat name "|"))
+    (let ((verse (read-string "Verse: ")))
+      (insert (concat verse "|" name " " verse "}})")))))
+
+(defun mediawiki-insert-user ()
+  "Inserts, interactively a user name [[User:foo]]"
+  (interactive)
+  (if mediawiki-english-or-german
+      (let ((user (read-string "Name of user: " )))
+        (insert (concat "[[User:" user "|" user "]]"))))
+  (let ((user (read-string "Name des Benutzers: " )))
+    (insert (concat "[[Benutzer:" user "|" user "]]"))))
+
+(defun mediawiki-insert-reply-prefix ()
+  "Quotation box of the form {{Quotation}}{{}}. When mark is active,
+surrounds region."
+  (interactive)
+  (beginning-of-line 1)
+  (search-forward "[[")
+  (backward-char 2)
+  (mark-sexp 1)
+  (copy-to-register mediawiki-draft-reply-register (region-beginning) (region-end) nil)
+  (end-of-line 1)
+  (mediawiki-terminate-paragraph)
+  (beginning-of-line 1)
+  (kill-line nil)
+  (insert "----")
+  (newline 1)
+  (yank)
+  (insert ":'''Re: ")
+  (insert-register mediawiki-draft-reply-register 1)
+  (insert "''' ")
+  (end-of-line 1))
+
+(defun mediawiki-insert-header ()
+  "Insert subheader  via  == (e.g. == FOO ==.)"
+  (interactive)
+  (insert "==   ==")
+  (backward-char 4))
+
+(defun mediawiki-insert-link ()
+  "Insert link via [[ (e.g. [[FOO]].) When mark is active, surround region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "]]")
+        (goto-char (mark))
+        (insert "[["))
+    (insert "[[ ]]")
+    (backward-char 3)))
+
+(defun mediawiki-insert-link-www ()
+  "Insert link via [[ (e.g. [http://FOO].) When mark is active, surround region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "]")
+        (goto-char (mark))
+        (insert "[http://"))
+    (insert "[http:// ]")
+    (backward-char 2)))
+
+(defun mediawiki-insert-image ()
+  "Insert link image  [[ (e.g. [[Image:FOO]].) Check the variable
+mediawiki-english-or-german. When mark is active, surround region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "]]")
+        (goto-char (mark))
+        (if mediawiki-english-or-german
+            (insert "[[Image:")
+          (insert "[[Bild:")))
+    (if mediawiki-english-or-german
+        (insert "[[Image: ]]")
+      (insert "[[Bild: ]]"))
+    (backward-char 3)))
+
+(defun mediawiki-insert-audio ()
+  "Insert link image  [[ (e.g. [[Image:FOO]].) Check the variable
+mediawiki-english-or-german. When mark is active, surround region."
+  (interactive)
+  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
+          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+      (save-excursion
+        (goto-char (point))
+        (insert "]]")
+        (goto-char (mark))
+        (if mediawiki-english-or-german
+            (insert "[[Media:")
+          (insert "[[Bild:"))
+    (if mediawiki-english-or-german
+        (insert "[[Media: ]]")
+      (insert "[[Bild: ]]"))
+    (backward-char 3)))
+
+(defun mediawiki-insert-signature ()
+  "Insert \"~~~~:\"  "
+  (interactive)
+  (insert "~~~~: "))
+
+(defun mediawiki-insert-hline ()
+  "Insert \"----\"  "
+  (interactive)
+  (insert "\n----\n"))
+
+(defun mediawiki-unfill-paragraph-or-region ()
+  "Unfill region, this function does NOT explicitly search for \"soft newlines\"
+as does mediawiki-unfill-region."
+  (interactive)
+  (set (make-local-variable 'paragraph-start) "[ \t\n]")
+  (set (make-local-variable 'paragraph-start)
+       "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
+  (set-fill-prefix)
+  (beginning-of-line 1)
+
+  (if use-hard-newlines
+      (progn
+        (set (make-local-variable 'use-hard-newlines) nil)
+        (set (make-local-variable 'sentence-end-double-space) t))
+    (set (make-local-variable 'sentence-end-double-space) nil)
+    (set (make-local-variable 'use-hard-newlines) t))
+  (let ((fill-column (point-max)))
+    (if (fboundp 'fill-paragraph-or-region)
+        (fill-paragraph-or-region nil)
+      (fill-paragraph nil))))
+
+(defun mediawiki-start-paragraph ()
+  (interactive)
+  (set (make-local-variable 'paragraph-start)
+       "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
+
+(defun mediawiki-hardlines ()
+"Set use-hard-newlines to NIL."
+  (interactive)
+  (setq use-hard-newlines nil))
+
+(defun mediawiki-next-long-line ()
+  "Move forward to the next long line with column-width greater
+than `fill-column'.
+
+TODO: When function reaches end of buffer, save-excursion to
+starting point. Generalise to make `previous-long-line'."
+  (interactive)
+  ;; global-variable: fill-column
+  (if (= (forward-line) 0)
+	  (let ((line-length
+			 (save-excursion
+			   (end-of-line)
+			   (current-column))))
+		(if (<= line-length fill-column)
+			(mediawiki-next-long-line)
+		  (message "Long line found")))
+	;; Stop, end of buffer reached.
+ 	(error "Long line not found")))
+
+(defun mediawiki-unfill-paragraph-simple ()
+  "A very simple function for unfilling a paragraph."
+  (interactive)
+  (if (functionp 'filladapt-mode)
+      (filladapt-mode nil))
+  (let ((fill-column (point-max)))
+    (fill-paragraph nil)
+    (if (functionp 'filladapt-mode)
+        (filladapt-mode nil))))
+
+(defun mediawiki-outline-magic-keys ()
+  (interactive)
+  (unless  (featurep 'xemacs)
+    (local-set-key [(shift iso-lefttab)] 'outline-cycle)
+    (local-set-key [iso-left-tab] 'outline-cycle))
+  (local-set-key [(meta left)]  'outline-promote)
+  (local-set-key [(meta right)] 'outline-demote)
+  (local-set-key [(shift return)] 'newline-and-indent)
+  (local-set-key [(control left)]  'mediawiki-simple-outline-promote)
+  (local-set-key [(control right)] 'mediawiki-simple-outline-demote)
+  (local-set-key [(control up)] 'outline-move-subtree-up)
+  (local-set-key [(control down)] 'outline-move-subtree-down))
+(add-hook 'mediawiki-mode-hook (lambda () (outline-minor-mode nil)))
+(add-hook 'outline-minor-mode-hook 'mediawiki-outline-magic-keys)
+
+(defun mediawiki-enhance-indent ()
+  (interactive)
+  (string-rectangle (region-beginning) (region-end) ":"))
+
+(defun mediawiki-yank-prefix ()
+  (interactive)
+  (string-rectangle (region-beginning) (region-end) ":"))
+
+(defun mediawiki-simple-outline-promote ()
+  "Function simple deletes \"=\" and the end and the beginning of line,
+does not promote the whole tree!"
+  (interactive)
+  (save-excursion
+    (progn
+      (beginning-of-line 1)
+      (search-forward "=")
+      (delete-char 1 nil)
+      (end-of-line 1)
+      (search-backward "=")
+      (delete-char 1 nil))))
+
+(defun mediawiki-simple-outline-demote ()
+  "Function simple adds \"=\" and the end and the beginning of line,
+does not promote the whole tree!"
+  (interactive)
+  (save-excursion
+    (progn
+      (beginning-of-line 1)
+      (search-forward "=")
+      (insert "=")
+      (end-of-line 1)
+      (search-backward "=")
+      (insert "="))))
+
+(defun mediawiki-rename-buffer ()
+  "Make sure that the option UNIQUE is used."
+  (interactive)
+  (rename-buffer (read-string "Name of new buffer (unique): " ) 1))
+
+(defsubst mediawiki-draft-time-to-seconds (time)
+  "Convert TIME to a floating point number."
+  (+ (* (car time) 65536.0)
+     (cadr time)
+     (/ (or (car (cdr (cdr time))) 0) 1000000.0)))
+
+(defsubst mediawiki-draft-mail-date (&optional rfc822-p)
+  "Return a simple date.  Nothing fancy."
+  (if rfc822-p
+      (format-time-string "%a, %e %b %Y %T %z" (current-time))
+    (format-time-string "%c" (current-time))))
+
+(defun mediawiki-draft-buffer-desc ()
+  "Using the first line of the current buffer, create a short description."
+  (buffer-substring (point-min)
+		    (save-excursion
+		      (goto-char (point-min))
+		      (end-of-line)
+		      (if (> (- (point) (point-min)) 60)
+			  (goto-char (+ (point-min) 60)))
+		      (point))))
+
+(defun mediawiki-draft-append-to-file ()
+  "Add a header together with a subject to the text and add it to the
+draft file. It might be better if longlines-mode is off."
+  (let ((text (buffer-string))
+        (desc (mediawiki-draft-buffer-desc)))
+    (with-temp-buffer
+      (insert (concat "\n\n"  mediawiki-draft-leader-text "Draft: "
+                      (read-string "Enter Subject: ") " "
+                      (current-time-string) " "
+                      mediawiki-draft-leader-text
+                      "\n\n\n\n" text "\n\n"))
+      (if (not (bolp))
+          (insert "\n\n"))
+      (if (find-buffer-visiting mediawiki-draft-data-file)
+          (let ((mediawiki-draft-text (buffer-string)))
+            (set-buffer (get-file-buffer mediawiki-draft-data-file))
+            (save-excursion
+              (goto-char (point-max))
+              (insert (concat "\n" mediawiki-draft-text "\n"))
+              (save-buffer)))
+        (append-to-file (point-min) (point-max) mediawiki-draft-data-file))))))
+
+;;;###autoload
+(defun mediawiki-draft ()
+  "Open a temporary buffer in wikipedia mode for editing an wikipedia
+ draft, which an arbitrary piece of data. After finishing the editing
+ either use C-c C-k \\[mediawiki-draft-buffer] to send the data into
+ the mediawiki-draft-data-file, or send  the buffer using C-c C-c
+\\[mediawiki-draft-send-to-mozex]  and insert it later into a wikipedia article."
+  (interactive)
+  (window-configuration-to-register mediawiki-draft-register)
+  (let ((buf (get-buffer-create mediawiki-draft-buffer)))
+    (switch-to-buffer-other-window buf)
+    (mediawiki-mode)
+    (message " C-c C-k sends to draft file, C-c C-c sends to org buffer.")))
+
+;;;###autoload
+(defun mediawiki-draft-page ()
+  (interactive)
+  (mark-page)
+  (copy-region-as-kill (region-beginning) (region-end))
+  (mediawiki-draft)
+  (yank nil))
+
+(defun mediawiki-draft-region (&optional beg end)
+  "Mediawiki-Draft the data from BEG to END.
+If called from within the mediawiki-draft buffer, BEG and END are ignored,
+and the entire buffer will be mediawiki-drafted.  If called from any other
+buffer, that region, plus any context information specific to that
+region, will be mediawiki-drafted."
+  (interactive)
+  (let ((b (or beg (min (point) (or (mark) (point-min)))))
+	(e (or end (max (point) (or (mark) (point-max))))))
+    (save-restriction
+      (narrow-to-region b e)
+      (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)
+    (when (equal mediawiki-draft-buffer (buffer-name))
+      (kill-buffer (current-buffer))
+      (jump-to-register mediawiki-draft-register)))))
+
+;;;###autoload
+(defun mediawiki-draft-buffer ()
+  "Mediawiki-draft-buffer sends the contents of the current (temporary)
+buffer to the mediawiki-draft-buffer, see the variable
+mediawiki-draft-data-file."
+  (interactive)
+  (mediawiki-draft-region  (point-min) (point-max)))
+
+(defun mediawiki-draft-clipboard ()
+  "Mediawiki-Draft the contents of the current clipboard.
+Most useful for mediawiki-drafting things from Netscape or other X Windows
+application."
+  (interactive)
+  (with-temp-buffer
+    (insert (x-get-clipboard))
+    (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
+
+(defun mediawiki-draft-view-draft ()
+  "Simple shortcut to visit the file, which contains the wikipedia drafts."
+  (interactive)
+  (find-file mediawiki-draft-data-file))
+
+(defun mediawiki-mark-section ()
+  "Set mark at end of current logical section, and point at top."
+  (interactive)
+  (re-search-forward (concat  "== "  "[a-z,A-z \t]*" " =="))
+  (re-search-backward "^")
+  (set-mark (point))
+  (re-search-backward (concat "== "  "[a-z,A-z \t]*" " "))
+  (if (featurep 'xemacs)
+      (zmacs-activate-region)))
+
+(defun mediawiki-mark-signature ()
+  "Set mark at end of current logical section, and point at top."
+  (interactive)
+  (re-search-forward "]]") ;;[[ ]]
+  (re-search-backward "^")
+  (set-mark (point))
+  (re-search-backward "[[")
+  (when (featurep 'xemacs)
+    (zmacs-activate-region)))
+
+(defun mediawiki-draft-copy-page-to-register ()
+  "Copy a page via the mediawiki-draft-register."
+  (interactive)
+  (save-excursion
+    (narrow-to-page nil)
+    (copy-to-register mediawiki-draft-page (point-min) (point-max) nil)
+    (message "draft page copied to wikipedia register mediawiki-draft-page.")
+    (widen)))
+
+(defun mediawiki-draft-yank-page-to-register ()
+  "Insert a page via the mediawiki-draft-register."
+  (interactive)
+  (insert-register mediawiki-draft-page nil))
+
+(define-derived-mode mediawiki-draft-mode text-mode "MW-Draft"
+  "Major mode for output from \\[mediawiki-draft].
+\\<mediawiki-draft-mode-map> This buffer is used to collect data that
+you want mediawiki-draft.  Just hit \\[mediawiki-draft-region] when
+you're done entering, and it will go ahead and file the data for
+latter retrieval, and possible indexing.
+\\{mediawiki-draft-mode-map}"
+  (kill-all-local-variables)
+  (indented-text-mode)
+  (define-key mediawiki-draft-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
+  (define-key mediawiki-draft-mode-map "\C-c\C-d" 'mediawiki-draft-buffer))
+
 (define-derived-mode mediawiki-mode text-mode "MW"
-  (progn
-    (make-variable-buffer-local 'mediawiki-page-title)
-    (make-variable-buffer-local 'mediawiki-site)
-    (make-variable-buffer-local 'mediawiki-edit-form-vars)
+  "Major mode for editing articles written in the markup language
+used by Mediawiki.
+
+Wikipedia articles are usually unfilled: newline characters are not
+used for breaking paragraphs into lines. Unfortunately, Emacs does not
+handle word wrapping yet. As a workaround, wikipedia-mode turns on
+longlines-mode automatically. In case something goes wrong, the
+following commands may come in handy:
+
+\\[mediawiki-fill-article] fills the buffer.
+\\[mediawiki-unfill-article] unfills the buffer.
+
+Be warned that function can be dead  slow, better use mediawiki-unfill-paragraph-or-region.
+\\[mediawiki-unfill-paragraph-or-region] unfills the paragraph
+\\[mediawiki-unfill-paragraph-simple] doehe same but simpler.
+
+The following commands put in markup structures.
+\\[mediawiki-insert-strong-emphasis] inserts italics
+\\[mediawiki-insert-bold] inserts bold text
+\\[mediawiki-insert-italics] italics
+\\[mediawiki-insert-header] header
+\\[mediawiki-insert-link] inserts a link
+
+The following commands are also defined:
+\\[mediawiki-insert-user] inserts user name
+\\[mediawiki-insert-signature] inserts ~~~~
+\\[mediawiki-insert-enumerate] inserts enumerate type structures
+\\[mediawiki-insert-itemize] inserts itemize type structures
+\\[mediawiki-insert-hline] inserts a hline
+
+The draft functionality
+\\[mediawiki-draft]
+\\[mediawiki-draft-region]
+\\[mediawiki-draft-view-draft]
+\\[mediawiki-draft-page]
+\\[mediawiki-draft-buffer]
+
+Replying and sending functionality
+\\[mediawiki-reply-at-point-simple]
+\\[mediawiki-draft-reply]
+\\[mediawiki-send-draft-to-mozex]
+
+The register functionality
+\\[mediawiki-copy-page-to-register]
+\\[defun mediawiki-insert-page-to-register]
+
+Some simple editing commands.
+\\[mediawiki-enhance-indent]
+\\[mediawiki-yank-prefix]
+\\[mediawiki-unfill-paragraph-or-region]
+
+\\[mediawiki-terminate-paragraph]     starts a new list item or paragraph in a context-aware manner.
+\\[mediawiki-next-header]     moves to the next (sub)section header.
+\\[mediawiki-prev-header]     moves to the previous (sub)section header."
+
+  (make-local-variable 'change-major-mode-hook)
+  (make-local-variable 'mediawiki-page-title)
+  (make-local-variable 'mediawiki-site)
+  (make-local-variable 'mediawiki-edit-form-vars)
+  (set (make-local-variable 'adaptive-fill-regexp) "[ ]*")
+  (set (make-local-variable 'comment-start-skip) "\\(?:<!\\)?-- *")
+  (set (make-local-variable 'comment-end-skip) " *--\\([ \n]*>\\)?")
+  (set (make-local-variable 'comment-start) "<!-- ")
+  (set (make-local-variable 'comment-end) " -->")
+  (set (make-local-variable 'paragraph-start)
+       "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
+  (set (make-local-variable 'sentence-end-double-space) nil)
+  (set (make-local-variable 'font-lock-multiline) t)
+  (set (make-local-variable 'font-lock-defaults)
+       '(mediawiki-font-lock-keywords t nil nil nil))
+  (set (make-local-variable 'fill-nobreak-predicate)
+       'mediawiki-link-fill-nobreak-p)
+  (set (make-local-variable 'auto-fill-inhibit-regexp) "^[ *#:|;]")
+
+  ;; Support for outline-minor-mode. No key conflicts, so we'll use
+  ;; the normal outline-mode prefix.
+  (set (make-local-variable 'outline-regexp) "==+")
+  (set (make-local-variable 'outline-minor-mode-prefix) "\C-c\C-o")
+; (set (make-local-variable 'outline-regexp) "=+")
+; (set (make-local-variable 'outline-regexp) ":")
+
+  ;; Turn on the Imenu automatically.
+  (when menu-bar-mode
+    (set (make-local-variable 'imenu-generic-expression)
+         mediawiki-imenu-generic-expression)
+    (imenu-add-to-menubar "Contents"))
+
+  (let ((map (make-sparse-keymap "mediawiki")))
+    (define-key mediawiki-mode-map [menu-bar mediawiki]
+      (cons "MediaWiki" map))
+    (define-key map [unfill-article]
+      '("Unfill article" . mediawiki-unfill-article))
+    (define-key map [fill-article]
+      '("Fill article" . mediawiki-fill-article))
+    (define-key map [separator-fill] '("--"))
+    (define-key map [next-header]
+      '("Next header" . mediawiki-next-header))
+    (define-key map [prev-header]
+      '("Previous header" . mediawiki-prev-header))
+    (define-key map [separator-header] '("--"))
+    (define-key map [outline]
+      '("Toggle Outline Mode..." . outline-minor-mode))
+
+    (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
+    (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table)
+
+    (define-key mediawiki-mode-map "\M-n" 'mediawiki-next-header)
+    (define-key mediawiki-mode-map "\C-c\C-n" 'mediawiki-next-long-line)
+    (define-key mediawiki-mode-map "\M-p" 'mediawiki-prev-header)
+    (define-key mediawiki-mode-map [(meta down)] 'mediawiki-next-header)
+    (define-key mediawiki-mode-map [(meta up)]   'mediawiki-prev-header)
+    (define-key mediawiki-mode-map "\C-j" 'mediawiki-terminate-paragraph)
+
+    (define-key mediawiki-mode-map "\C-c\C-q" 'mediawiki-unfill-article)
+    (define-key mediawiki-mode-map "\C-c\M-q" 'mediawiki-fill-article)
+    (define-key mediawiki-mode-map "\M-u" 'mediawiki-unfill-paragraph-or-region)
+    (define-key mediawiki-mode-map "\C-c\C-u" 'mediawiki-unfill-paragraph-simple)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-s" 'mediawiki-insert-strong-emphasis)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-b" 'mediawiki-insert-bold)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-i" 'mediawiki-insert-italics)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-h" 'mediawiki-insert-header)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-l" 'mediawiki-insert-link)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-u" 'mediawiki-insert-user)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-q" 'mediawiki-insert-quotation)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-v" 'mediawiki-insert-bible-verse-template)
+    (define-key mediawiki-mode-map "\C-c\C-w" 'mediawiki-insert-signature)
+    (define-key mediawiki-mode-map "\C-c\C-h" 'mediawiki-insert-hline)
+    (define-key mediawiki-mode-map [(meta f7)] 'mediawiki-draft)
+    (define-key mediawiki-mode-map [(meta f8)] 'mediawiki-reply-at-point-simple)
+    (define-key mediawiki-mode-map [(meta f9)] 'mediawiki-draft-view-draft)
+    (define-key mediawiki-mode-map "\C-c\C-r" 'mediawiki-reply-at-point-simple)
+    (define-key mediawiki-mode-map "\C-cr" 'mediawiki-draft-region)
+    (define-key mediawiki-mode-map [(meta r)] 'mediawiki-draft-reply)
+    (define-key mediawiki-mode-map "\C-c\C-m" 'mediawiki-draft)
+    (define-key mediawiki-mode-map "\C-c\C-b" 'mediawiki-draft-region)
+    (define-key mediawiki-mode-map "\C-c\C-d" 'mediawiki-draft-buffer)
+    (define-key mediawiki-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
+    (define-key mediawiki-mode-map "\C-c\C-p" 'mediawiki-draft-copy-page-to-register)
+    (define-key mediawiki-mode-map "\C-c\C-c" 'mediawiki-draft-send-to-mozex)
+    (define-key mediawiki-mode-map "\C-c\C-s" 'mediawiki-draft-yank-page-to-register)
+
+    (define-key mediawiki-mode-map [(control meta prior)] 'mediawiki-enhance-indent)
+    (define-key mediawiki-mode-map [(control meta next)] 'mediawiki-yank-prefix)
+    (define-key mediawiki-mode-map [(meta return)] 'mediawiki-insert-enumerate)
+    (define-key mediawiki-mode-map [(meta control return)] 'mediawiki-insert-enumerate-nonewline)
+    ;; private setting
+    (define-key mediawiki-mode-map [(shift return)] 'newline-and-indent)
+    (define-key mediawiki-mode-map "\C-\\" 'mediawiki-insert-itemize)
+    (define-key mediawiki-mode-map [(control return)] 'mediawiki-insert-itemize)
+    (define-key mediawiki-mode-map "\C-ca" 'auto-capitalize-mode)
+    (define-key mediawiki-mode-map "\C-ci" 'set-input-method)
+    (define-key mediawiki-mode-map "\C-ct" 'toggle-input-method)
 
     (define-key mediawiki-mode-map [(backtab)] 'mediawiki-goto-prev-link)
     (define-key mediawiki-mode-map [(tab)]     'mediawiki-goto-next-link)
