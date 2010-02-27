@@ -2,7 +2,8 @@
 
 ;; Copyright (C) 2004  Free Software Foundation, Inc.
 
-;; Author: Jerry <unidevel@yahoo.com.cn>
+;; Original Author: Jerry <unidevel@yahoo.com.cn>
+;; Updated for Emacs22 url.el: Mark A. Hershberger <mah@everybody.org>
 ;; Keywords: extensions, convenience, lisp
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -24,43 +25,235 @@
 
 ;; Howto: 
 ;;  (add-to-list 'load-path "path to mediawiki.el")
-;;  (setq mediawiki-url "http://localhost/wiki/index.php")
 ;;  (require 'mediawiki)
-;; Open a wiki server:  C-c C-u
-;; Open a wiki file:    C-c C-o
+;;  M-x customize-group RET mediawiki RET
+;;  *dink* *dink*
+;;  M-x mediawiki-site RET Wikipedia RET
+;;
 ;; Open a wiki file:    M-x mediawiki-open 
 ;; Save a wiki buffer:  C-x C-s 
 ;; Save a wiki buffer with a different name:  C-x C-w
 
-;; Todo:
-;;   add username and password support
-
-;; Note:
-;;   part of this code port from pmwiki.el
-
-;; Bug report:
-;;   unidevel@yahoo.com.cn
-;;   http://zhdotemacs.sourceforge.net
+;; TODO:
+;;  * pcomplete for site alist
+;;  * Optionally use org-mode formatting for editing and translate that to mw
 
 ;; Latest version can be found at
-;;     http://sourceforge.net/projects/zhdotemacs
-;; or  http://meta.wikimedia.org/wiki/mediawiki.el
-;; ^_^
+;;   http://meta.wikimedia.org/wiki/mediawiki.el
+;;   http://www.emacswiki.org/cgi-bin/emacs/mediawiki.el
 
 ;;; Code:
 
-(require 'http-get)
-(require 'http-post)
+(require 'url-http)
 
-(defcustom mediawiki-url nil
-  "Supply mediawiki-url for example:
-http://mediawiki.sf.net/index.php
-")
+(when (not (fboundp 'url-hexify-string))
+  (defconst url-unreserved-chars
+    '(
+      ?a ?b ?c ?d ?e ?f ?g ?h ?i ?j ?k ?l ?m ?n ?o ?p ?q ?r ?s ?t ?u ?v ?w ?x ?y ?z
+      ?A ?B ?C ?D ?E ?F ?G ?H ?I ?J ?K ?L ?M ?N ?O ?P ?Q ?R ?S ?T ?U ?V ?W ?X ?Y ?Z
+      ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9
+      ?- ?_ ?. ?! ?~ ?* ?' ?\( ?\))
+    "A list of characters that are _NOT_ reserved in the URL spec.
+This is taken from RFC 2396.")
 
-(defcustom mediawiki-argument-pattern "?title=%s&action=%s"
-  "Supply mediawiki-url for example:
-?title=%s&action=%s
-")
+  (defun url-hexify-string (string)
+  "Return a new string that is STRING URI-encoded.
+First, STRING is converted to utf-8, if necessary.  Then, for each
+character in the utf-8 string, those found in `url-unreserved-chars'
+are left as-is, all others are represented as a three-character
+string: \"%\" followed by two lowercase hex digits."
+  ;; To go faster and avoid a lot of consing, we could do:
+  ;; 
+  ;; (defconst url-hexify-table
+  ;;   (let ((map (make-vector 256 nil)))
+  ;;     (dotimes (byte 256) (aset map byte
+  ;;                               (if (memq byte url-unreserved-chars)
+  ;;                                   (char-to-string byte)
+  ;;                                 (format "%%%02x" byte))))
+  ;;     map))
+  ;;
+  ;; (mapconcat (curry 'aref url-hexify-table) ...)
+  (mapconcat (lambda (byte)
+               (if (memq byte url-unreserved-chars)
+                   (char-to-string byte)
+                 (format "%%%02x" byte)))
+             (string-to-list string)
+             "")))
+
+(defun url-http-get (url &optional headers bufname callback cbargs)
+  "Convenience method to use method 'GET' to retrieve URL"
+  (let* ((url-request-extra-headers (if headers headers
+                                      (if url-request-extra-headers url-request-extra-headers
+                                        (cons nil nil))))
+         (buf (if bufname bufname
+                (current-buffer)))
+         (url-request-method "GET"))
+
+    (url-retrieve
+     url
+     'url-http-get-post-process
+     (list buf callback cbargs))))
+
+(defun url-http-get-post-process (status bufname callback cbargs)
+  "Post process an HTTP GET."
+  (when bufname
+    (goto-char url-http-end-of-headers)
+    (let ((old-buf (current-buffer))
+          (str (decode-coding-string
+                (buffer-substring-no-properties
+                 (point) (point-max))
+                'utf-8)))
+      (kill-buffer old-buf)
+      (with-current-buffer bufname
+        (insert-string str)
+        (when callback
+          (apply callback cbargs))))))
+
+
+(require 'mml)
+(require 'mm-url)
+
+(defvar url-http-post-post-process 'url-http-post-post-process)
+(defun url-http-post (url parameters &optional multipart headers bufname
+                          callback cbargs)
+  "Convenience method to use method 'POST' to retrieve URL"
+
+  (let* ((url-request-extra-headers (if headers headers
+                                      (if url-request-extra-headers url-request-extra-headers
+                                        (cons nil nil))))
+         (boundary (int-to-string (random)))
+         (cs 'utf-8)
+         (content-type (if multipart
+                           (concat "multipart/form-data, boundary=" boundary)
+                         (format "application/x-www-form-urlencoded; charset=%s" cs)))
+         (url-request-method "POST")
+         (url-request-coding-system cs)
+         (url-request-data (if multipart
+                               (mm-url-encode-multipart-form-data parameters boundary)
+                             (mm-url-encode-www-form-urlencoded parameters))))
+    (mapcar
+     (lambda (pair)
+       (let ((key (car pair))
+             (val (cdr pair)))
+         (if (assoc key url-request-extra-headers)
+             (setcdr (assoc key url-request-extra-headers) val)
+           (add-to-list 'url-request-extra-headers
+                        (cons key val)))))
+     (list 
+      (cons "Connection" "close")
+      (cons "Content-Type" content-type)))
+
+    (url-retrieve
+     url
+     url-http-post-post-process
+     (list bufname callback cbargs))))
+
+(defun url-http-post-post-process (status bufname &optional callback cbargs)
+  "Post process on HTTP POST."
+  (let ((kill-this-buffer (current-buffer)))
+    (when (and (integerp status) (not (< status 300)))
+      (kill-buffer kill-this-buffer)
+      (error "Oops! Invalid status: %d" status))
+
+    (when (not url-http-end-of-headers)
+      (kill-buffer kill-this-buffer)
+      (error "Oops! Don't see end of headers!"))
+
+    (goto-char url-http-end-of-headers)
+    (let ((str (decode-coding-string
+                (buffer-substring-no-properties (point) (point-max))
+                'utf-8)))
+      (kill-buffer (current-buffer))
+      (if (not bufname)
+          (when callback
+            (apply callback (list str cbargs)))
+        (set-buffer bufname)
+        (insert-string str)
+        (set-buffer-modified-p nil)
+        (pop-to-buffer bufname)))))
+
+(defun mm-url-encode-multipart-form-data (pairs &optional boundary)
+  "Return PAIRS encoded in multipart/form-data."
+  ;; RFC1867
+
+  ;; Get a good boundary
+  (unless boundary
+    (setq boundary (mml-compute-boundary '())))
+      
+  (concat
+
+   ;; Start with the boundary
+   "--" boundary "\r\n"
+
+   ;; Create name value pairs
+   (mapconcat
+
+    ;; Delete any returned items that are empty
+    (delq nil
+          (lambda (data)
+            (when (car data)
+              ;; For each pair
+              (concat
+
+               ;; Encode the name
+               "Content-Disposition: form-data; name=\"" (car data) "\"\r\n"
+               "Content-Type: text/plain; charset=utf-8\r\n"
+               "Content-Transfer-Encoding: binary\r\n\r\n"
+
+               (cond ((stringp (cdr data))
+                      (cdr data))
+                     ((integerp (cdr data))
+                      (int-to-string (cdr data))))
+
+               "\r\n"))))
+
+    ;; use the boundary as a separator
+    pairs (concat "--" boundary "\r\n"))
+
+   ;; put a boundary at the end.
+   "--" boundary "--\r\n"))
+
+(defgroup mediawiki nil
+  "A mode for editting pages on MediaWiki sites."
+  :tag "MediaWiki")
+
+(defcustom mediawiki-site-default "Wikipedia"
+  "The default mediawiki site to point to.  Set here for the
+default and use `mediawiki-site' to set it per-session
+later."
+  :type 'string
+  :tag "MediaWiki Site Default"
+  :group 'mediawiki)
+
+(defcustom mediawiki-site-alist '(("Wikipedia"
+                                   "http://en.wikipedia.org/wiki/index.php"
+                                   "username"
+                                   "password"))
+  "A list of MediaWiki websites."
+  :group 'mediawiki
+  :type '(alist :tag "Site Name"
+                :key-type (string :tag "Site Name")
+                :value-type (list :tag "Parameters"
+                                  (string :tag "URL")
+                                  (string :tag "Username")
+                                  (string :tag "Password")
+                                  (string :tag "First Page"
+                                          :description "First page to open when `mediawiki-site' is called for this site"))))
+
+(defvar mediawiki-login-success "You are now logged in"
+  "A string that should be present on login success on all
+mediawiki sites.")
+
+(defvar mediawiki-permission-denied "The action you have requested is limited"
+  "A string that will indicate permission has been denied.")
+
+(defvar mediawiki-site nil
+  "The current mediawiki site from `mediawiki-site-alist'.  If
+not set, defaults to `mediawiki-site-default'.")
+
+(defvar mediawiki-argument-pattern "?title=%s&action=%s"
+  "Format of the string to append to URLs.  Two string arguments
+are expected: first is a title and then an action.")
 
 (defvar mediawiki-URI-pattern
   "http://\\([^/:]+\\)\\(:\\([0-9]+\\)\\)?/"
@@ -68,209 +261,328 @@ http://mediawiki.sf.net/index.php
 	http://mediawiki.sf.net/index.php
 Password not support yet")
 
-(defvar mediawiki-password-URI-pattern
-  "http://\\(.*?:.*?\\)@\\([^/:]+\\)\\(:\\([0-9]+\\)\\)?/\\(.*/\\)?\\([^:]*\\)"
-  "Pattern matching a URI like this:
-	http://mediawiki.sf.net/index.php/WikiSandbox
-Password not support yet")
-
 (defvar mediawiki-page-uri nil
   "The URI of the page corresponding to the current buffer, thus defining
 the base URI of the wiki engine as well as group and page name.")
 
-(defvar mediawiki-encoded-password nil
-  "The password when authorization is required")
-
 (defvar mediawiki-page-title nil
   "The title of the page corresponding to the current buffer")
 
-(defvar mediawiki-page-timestamp nil
-  "The timestamp of the page corresponding to the current buffer")
+(defvar mediawiki-url nil
+  "The URL of the current Mediawiki site for the current buffer")
+
+(defvar mediawiki-page-ring nil
+  "Ring that holds names of buffers we navigate through.")
+
+(defvar mediawiki-page-ring-index 0)
 
 (defun mediawiki-set-url (&optional url)
   (interactive "sURL: ")
   (if (string-match mediawiki-URI-pattern url) 
       (setq mediawiki-url url)
-    (message (concat "Error: [" url "] is not a valid mediawiki url.")))
-  )
+    (error (concat "Error: [" url "] is not a valid mediawiki url."))))
 
 (defun mediawiki-make-url (title action)
   (format (concat mediawiki-url mediawiki-argument-pattern)
-	  (http-url-encode title 'utf-8)
-	  action)
-  )
-
+	  (url-hexify-string title)
+	  action))
 
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine"
-  (interactive "sWikiName: ")
-  (mediawiki-edit name "raw")
-  (mediawiki-mode t)
-  ;;(use-local-map mediawiki-mode-map)
-  )
+  (interactive "sWiki Page: ")
+  (when (or (not (stringp name))
+            (string-equal "" name))
+    (error "Need to specify a name."))
+  (when (not mediawiki-url)
+    (mediawiki-set-url))
+  (mediawiki-edit name "raw"))
 
 (defun mediawiki-reload ()
   (interactive)
   (let ((title mediawiki-page-title))
     (if title
 	(mediawiki-open title)
-      (minibuffer-message (concat "Error: " (buffer-name) " is not a mediawiki document."))
-      )
-    ))
+      (error "Error: %s is not a mediawiki document." (buffer-name)))))
 
 
-(defun mediawiki-edit (title action &optional goto-end http-ver content-type)
+(defun mediawiki-edit (title action)
   "Edit wiki file with the name of title"
-  ;;(unless content-type (setq content-type 'iso-8859-1))
-  (mediawiki-get (mediawiki-make-url title action) (concat "MediaWiki: " title)
-		 goto-end http-ver content-type)
-  (mediawiki-mode t)
-  ;;(use-local-map mediawiki-mode-map)
-  )
+  (when (not (ring-p mediawiki-page-ring))
+    (setq mediawiki-page-ring (make-ring 30)))
 
-(defun mediawiki-get-internal (title bufname)
-  (mediawiki-get (mediawiki-make-url title "raw") bufname)
-  )
+  (ring-insert mediawiki-page-ring
+               (get-buffer-create
+                (concat mediawiki-site ": " title)))
+  (mediawiki-get title (ring-ref mediawiki-page-ring 0)))
 
-(defun mediawiki-get (url bufname &optional goto-end http-ver content-type)
-  ;;(unless content-type (setq content-type 'iso-8859-1))
-  (let ((page-uri url)
-	(page-timestamp nil)
-	(doc-timestamp nil)
-	(proc nil)
-	(headers '(("Connection" . "close")))
-        (headers '(("User-Agent" . "Emacs")))
-	(userAndPassword nil))
-	(when (string-match mediawiki-password-URI-pattern page-uri)
-	  (setq userAndPassword (base64-encode-string
-				 (match-string 1 page-uri)))
-	  (setq page-uri (replace-regexp-in-string
-			  "http://.*?:.*?@" "http://" page-uri))
-	  (add-to-list 'headers (list "Authorization"
-				      (concat "Basic " userAndPassword))))
-	(set 'proc
-	     (http-get page-uri         ; Source URI
-		       headers		; headers
-		       nil		; ?
-		       http-ver		; nil -> 1.0
-		       bufname          ; output buffer
-		       content-type)	) ; typically nil
-	(emacs-wiki-mode)
-	(set-buffer-file-coding-system 'utf-8)
-	;;(set-fill-column pmwiki-fill-column)
-	(make-local-variable 'mediawiki-page-timestamp)
-	(setq mediawiki-page-timestamp nil)
-	(set (make-local-variable 'mediawiki-page-title) title)
-	(set (make-local-variable 'mediawiki-page-uri) page-uri)
-	(set (make-local-variable 'mediawiki-encoded-password) userAndPassword)
-	(unless goto-end
-	  (while (string-equal (process-status proc) "open") (sleep-for 0.050))
-	  (goto-char 1))
-	(not-modified)
-	proc))
+(defvar mediawiki-edit-form-vars nil)
+(defun mediawiki-get-edit-form-vars (bufname)
+  "Extract the form variables from a page.  This should only be
+called from a buffer in mediawiki-mode as the variables it sets
+there will be local to that buffer."
+
+  ;; Assume UTF-8, put contents in str
+  (let ((str (decode-coding-string
+              (buffer-substring-no-properties (point) (point-max))
+              'utf-8))
+        form (start 0))
+
+    ;; Find the form
+    (if (string-match "<form [^>]*id=[\"']editform['\"][^>]*>\\(\\(.\\|\n\\)*?\\)</form>" str)
+
+        (progn
+          (setq form (match-string 1 str))
+
+          ;; find the first input element in the form
+          (setq start (string-match "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>" form start))
+
+          ;; clear the list of (buffer-local) form variables. Have to
+          ;; switch like this because we're in a buffer containing the
+          ;; results of the post.
+          (with-current-buffer bufname
+            (setq mediawiki-edit-form-vars '(nil)))
+
+          ;; Continue until we can't find any more input elements
+          (while start
+
+            ;; First, capture the place where we'll start next.  Have
+            ;; to do this here since match-end doesn't seem to let you
+            ;; specify the string you were matching against, unlike
+            ;; match-string
+            (setq start (match-end 0))
+
+            ;; Capture the string that defines this element
+            (let ((el (match-string 1 form))
+                  ;; get the element name
+                  (el-name (match-string 2 form)))
+
+              ;; figure out if this is a submit button and skip it if it is.
+              (unless (string-match "type=[\"']submit['\"]" el)
+                (string-match "value=[\"']\\([^\"']*\\)['\"]" el)
+
+                ;; set the buffer-local form variables
+                (with-current-buffer bufname
+                  (add-to-list 'mediawiki-edit-form-vars
+                               (cons el-name (match-string 1 el))))))
+            (setq start (string-match
+                         "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
+                                      form start))))
+      (if (string-match mediawiki-permission-denied str)
+          (if (mediawiki-logged-in-p)
+              (error "Permission Denied.")
+            (error "Log in first and try again.")
+          (error "Permission Denied. Login and try again")
+        (error "No edit form found!"))))))
+
+(defun mediawiki-logged-in-p ()
+  "Returns t if we are logged in already."
+  (not (eq nil mediawiki-site)))         ; FIXME should check cookies
+
+(defun mediawiki-get (title bufname)
+  (let ((page-uri (mediawiki-make-url title "raw")))
+
+    (with-current-buffer bufname
+      (delete-region (point-min) (point-max))
+      (mediawiki-mode)
+      (setq mediawiki-page-title title)
+      (setq mediawiki-page-uri page-uri)
+
+      (setq url-request-extra-headers 
+            (list (cons "Connection" "close"))))
+
+    (url-http-get page-uri         ; Source URI
+                  nil              ; headers
+                  bufname          ; output buffer
+                  ;; callback on result buf
+                  'mediawiki-setup-buffer-for-edit
+                  (list title))))
+
+(defun mediawiki-setup-buffer-for-edit (title)
+  (url-http-get
+   (mediawiki-make-url title "edit")
+   nil (get-buffer-create " *mediawiki-form*")
+   'mediawiki-get-edit-form-vars
+   (list (current-buffer)))
+  (set-buffer-file-coding-system 'utf-8)
+  (goto-char (point-min))
+  (pop-to-buffer bufname)
+  (set-buffer-modified-p nil)
+  (setq buffer-undo-list t)
+  (buffer-enable-undo bufname))
 
 (defun mediawiki-save (&optional summary)
   (interactive "sSummary: ")
-  (let ((title mediawiki-page-title)
-	(content (buffer-string)))
-    (if title
-	(mediawiki-save-page title content summary)
-      (minibuffer-message (concat "Error: " (buffer-name) " is not a mediawiki document."))
-      )
-    ))
+  (if mediawiki-page-title
+      (mediawiki-save-page
+       mediawiki-page-title
+       summary
+       (buffer-substring-no-properties (point-min) (point-max)))
+    (error "Error: %s is not a mediawiki document." (buffer-name))))
 
 (defun mediawiki-save-as (&optional title summary)
-  (interactive "sTitle: \nsSummay: ")
-  (if (and title (not (string= title "")))
-      (progn
-	(mediawiki-save-page title  (buffer-string) summary)
-	(mediawiki-open title)
-	)
-    ))
+  (interactive "sTitle: "
+               "sSummary: ")
+  (when (and title (not (string= title "")))
+    (mediawiki-save-page title summary (buffer-string-no-properties))
+    (mediawiki-open title)))
 
-(defun mediawiki-save-page (title content &optional summary)
-  "Save the current page to a PmWiki wiki."
-  (let ((cur-buffer (buffer-name))
-	(temp-buffer (concat "* " (buffer-name) " *"))
-	(page-uri (mediawiki-make-url title "submit"))
-	(page-timestamp mediawiki-page-timestamp)
-	(doc-timestamp mediawiki-page-timestamp)
-	(password mediawiki-encoded-password)
-	(headers nil))
-    (mediawiki-get-internal title temp-buffer)
-    (delete-region (point-min) (point-max))
-    (goto-char (point-min))
-    (insert-string content)
-    (if password
-	(setq headers
-	      (list (list "Authorization" (concat "Basic " password)))))
-    (if (not page-timestamp)
-	(setq page-timestamp
-	      (cdr (assoc "last-modified" http-headers))))
-    (if (not page-timestamp)
-	(setq page-timestamp
-	      (cdr (assoc "date" http-headers))))
-    (if (not page-timestamp)
-	(setq page-timestamp
-	      (current-time-string)))
-    (setq doc-timestamp (format-time-string "%Y%m%d%H%M%S" 
-					    (date-to-time page-timestamp) t))
-    (minibuffer-message (concat "Any output is in " 
-				(buffer-name 
-				 (process-buffer
-				  (http-post
-				   page-uri  ;; Get destination
-				   (list (cons "wpSection" "")
-					 (cons "wpEdittime" doc-timestamp)
-					 (cons "wpSave" "Save")
-					 (if summary (cons "wpSummary" summary))
-					 (cons "wpTextbox1" (buffer-string)))
-				   buffer-file-coding-system
-				   (list (cons "User-Agent" "Emacs")))))))
-    (setq page-timestamp 
-	  (format "%s" (cdr (assoc "date" http-headers))))
-    (kill-buffer temp-buffer)
-    (switch-to-buffer cur-buffer)
-    (make-local-variable 'mediawiki-page-timestamp)
-    (setq mediawiki-page-timestamp nil)
-    (not-modified)
-    ))
+(defun mediawiki-site-extract (sitename index)
+  (nil-blank-string (nth index (assoc sitename mediawiki-site-alist))))
+
+(defun mediawiki-site-url (sitename)
+  "Get the url for a given site."
+  (mediawiki-site-extract sitename 1))
+
+(defun mediawiki-site-username (sitename)
+  "Get the username for a given site."
+  (mediawiki-site-extract sitename 2))
+
+(defun mediawiki-site-password (sitename)
+  "Get the password for a given site."
+  (mediawiki-site-extract sitename 3))
+
+(defun mediawiki-site-first-page (sitename)
+  "Get the password for a given site."
+  (mediawiki-site-extract sitename 4))
+
+(defun mediawiki-do-login (sitename &optional username password)
+  "Use USERNAME and PASSWORD to log into the MediaWiki site and
+get a cookie."
+  (interactive "sSitename: ")
+
+  (setq mediawiki-site nil)             ; This wil be set once we are logged in
+
+  ;; Possibly save info once we have it, eh?
+  (let ((url (or (mediawiki-site-url sitename)
+                 (read-string "URL: ")))
+        (user (or (mediawiki-site-username sitename)
+                  username
+                  (read-string "Username: ")))
+        (pass (or (mediawiki-site-password sitename)
+                  password
+                  (read-passwd "Password: "))))
+    (mediawiki-set-url url)
+
+    ;; Set the wpName and wpPassword on the proper submit page.
+    (url-http-post (mediawiki-make-url "Special:Userlogin" "submitlogin")
+                   (list (cons "wpName" user)
+                         (cons "wpPassword" pass))
+                   nil nil nil
+                   'mediawiki-check-login
+                   (list sitename))))
+
+(defun mediawiki-check-login (str args)
+  "Check that the password was accepted."
+  (if (not (string-match mediawiki-login-success str))
+      (error "Invalid Login!")
+    (setq mediawiki-site (car args))
+    (message (format "Login to MediaWiki site '%s' successful." (car args)))
+    (when (mediawiki-site-first-page mediawiki-site)
+      (mediawiki-open (mediawiki-site-first-page mediawiki-site)))))
+
+(defun mediawiki-save-page (&optional title summary content)
+  "Save the current page to a MediaWiki wiki."
+  (let ((page-uri (mediawiki-make-url title "submit&externaledit=true"))
+        (document (if content content
+                      (buffer-substring)))
+        (args mediawiki-edit-form-vars))
+
+    (mapcar
+     (lambda (pair)
+       (let ((key (car pair))
+             (val (cdr pair)))
+         (if (assoc key args)
+             (setcdr (assoc key args) val)
+           (add-to-list 'args
+                        (cons key val)))))
+     (list (cons "wpSummary" summary)
+           (cons "wpTextbox1" content)
+           (cons "wpSave" 1)))
+
+    (setq url-request-extra-headers 
+          (list (cons "Connection" "Close")))
+
+    (url-http-post
+     page-uri  ;; Get destination
+     args      ;; Form elements
+     t)        ;; This is multipart
+
+    (set-buffer-modified-p nil)))
 
 (defun mediawiki-browse (&optional buf)
   "Open the buffer BUF in a browser. If BUF is not given,
 the current buffer is used."
   (interactive)
   (if mediawiki-page-title 
-      (browse-url (mediawiki-make-url mediawiki-page-title "view"))
-    )
-  )
+      (browse-url (mediawiki-make-url mediawiki-page-title "view"))))
 
+(defun mediawiki-site (&optional site)
+  "Set up mediawiki.el for a site.  Without an argument, use
+`mediawiki-site-default'.  Interactively, prompt for a site."
+  (interactive "sSitename: ")
+  (when (or (eq nil mediawiki-site)
+            (not (string-equal site mediawiki-site)))
+    (mediawiki-do-login site)))
 
-(defvar mediawiki-mode-map nil
-  "Keymap for mediawiki mode.")
+(defun mediawiki-open-page-at-point ()
+  "Open a new buffer with the page at point."
+  (interactive)
+  (mediawiki-open (mediawiki-page-at-point)))
 
-(defvar mediawiki-mode nil
-  "nil disables mediawiki, non-nil enables.")
+(defun mediawiki-page-at-point ()
+  "Return the page name under point.  Typically, this means
+anything enclosed in [[PAGE]]."
+  (let ((pos (point))
+        (eol (point-at-eol))
+        (bol (point-at-bol))
+        page)
+    (save-excursion
+      (let ((end   (search-forward  "]]" eol t))
+            (start (search-backward "[[" bol t)))
+        (when (and 
+               (not (eq nil start))
+               (not (eq nil end))
+               (<= pos end)
+               (>= pos start))
+          (buffer-substring-no-properties
+           (+ start 2) (- end 2)))))))
 
-(make-variable-buffer-local 'mediawiki-mode)
+(defmacro mediawiki-goto-relative-page (direction)
+  `(let ((buff (ring-ref mediawiki-page-ring
+                        (setq mediawiki-page-ring-index
+                              (,direction mediawiki-page-ring-index 1)))))
+     (while (not (buffer-live-p buff))
+       (setq buff (ring-ref mediawiki-page-ring
+                            (setq mediawiki-page-ring-index
+                                  (,direction mediawiki-page-ring-index 1)))))
+     (pop-to-buffer buff)))
 
-(if mediawiki-mode-map
-    nil
-  (setq mediawiki-mode-map (make-keymap))
-  ;;(suppress-keymap mediawiki-mode-map)
-  (define-key mediawiki-mode-map "\C-x\C-s"   'mediawiki-save)
-  ;;(define-key mediawiki-mode-map "\C-x\C-w"   'mediawiki-save-as)
-  )
-(global-set-key "\C-c\C-w"   'mediawiki-save-as)
-(global-set-key "\C-c\C-o"   'mediawiki-open)
-(global-set-key "\C-c\C-u"   'mediawiki-set-url)
+(defun mediawiki-goto-previous-page ()
+  "Pop up the previous page being editted."
+  (interactive)
+  (mediawiki-goto-relative-page -))
 
-(define-minor-mode mediawiki-mode 
-  "Minor mode for using mediawiki"
-  t
-  " mediawiki"
-  mediawiki-mode-map
-  )
+(defun mediawiki-goto-next-page ()
+  "Pop up the previous page being editted."
+  (interactive)
+  (mediawiki-goto-relative-page +))
+
+(define-derived-mode mediawiki-mode text-mode "MediaWiki Mode"
+  (progn
+    (make-variable-buffer-local 'mediawiki-page-title)
+    (make-variable-buffer-local 'mediawiki-site)
+    (make-variable-buffer-local 'mediawiki-url)
+    (make-variable-buffer-local 'mediawiki-edit-form-vars)
+
+    (define-key mediawiki-mode-map "\M-g"     'mediawiki-reload)
+    (define-key mediawiki-mode-map "\C-x\C-s" 'mediawiki-save)
+    (define-key mediawiki-mode-map "\C-c\C-c" 'mediawiki-save-and-bury)
+    (define-key mediawiki-mode-map "\C-x\C-w" 'mediawiki-save-as)
+    (define-key mediawiki-mode-map "\C-c\C-o" 'mediawiki-open)
+    (define-key mediawiki-mode-map "\M-p"     'mediawiki-goto-previous-page)
+    (define-key mediawiki-mode-map "\M-n"     'mediawiki-goto-next-page)
+    (define-key mediawiki-mode-map [(control return)]
+      'mediawiki-open-page-at-point)))
 
 (provide 'mediawiki)
 
