@@ -156,7 +156,7 @@ string: \"%\" followed by two lowercase hex digits."
     (let ((str (decode-coding-string
                 (buffer-substring-no-properties (point) (point-max))
                 'utf-8)))
-;      (kill-buffer (current-buffer))
+      (kill-buffer (current-buffer))
       (when bufname
         (set-buffer bufname)
         (insert-string str)
