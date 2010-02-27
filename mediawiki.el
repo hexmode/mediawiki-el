@@ -8,7 +8,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-27 15:55:45 mah>
+;; Last Modified: <2010-02-27 16:05:49 mah>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -1029,6 +1029,35 @@ paragraph but *,# will be ignored; if the current paragraph is colon
     (if (not indent-chars) (newline)
       (insert indent-chars))))
 
+
+(defun mediawiki-link-fill-nobreak-p ()
+  "When filling, don't break the line for preformatted (fixed-width)
+text or inside a Wiki link.  See `fill-nobreak-predicate'."
+  (save-excursion
+    (let ((pos (point)))
+      (or (eq (char-after (line-beginning-position)) ? )
+          (if (re-search-backward "\\[\\[" (line-beginning-position) t)
+              ;; Break if the link is really really long.
+              ;; You often get this with captioned images.
+              (null (or (> (- pos (point)) fill-column)
+                        (re-search-forward "\\]\\]" pos t))))))))
+
+(defun mediawiki-fill-article ()
+  "Fill the entire article."
+  (interactive)
+  (save-excursion
+    (fill-region (point-min) (point-max))))
+
+(defun mediawiki-unfill-article ()
+  "Undo filling, deleting stand-alone newlines (newlines that do not
+end paragraphs, list entries, etc.)"
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward ".\\(\n\\)\\([^# *;:|!\n]\\|----\\)" nil t)
+      (replace-match " " nil nil nil 1)))
+  (message "Stand-alone newlines deleted"))
+
 (defun mediawiki-draft-reply ()
   "Open a temporary buffer in mediawiki mode for editing an
 mediawiki draft, with an arbitrary piece of data. After finishing
@@ -1615,7 +1644,6 @@ is set off."
     (when (equal mediawiki-draft-buffer (buffer-name))
 	  (kill-buffer (current-buffer)))
 	(switch-to-buffer target-buffer))))
-
 
 (define-derived-mode mediawiki-draft-mode text-mode "MW-Draft"
   "Major mode for output from \\[mediawiki-draft].
