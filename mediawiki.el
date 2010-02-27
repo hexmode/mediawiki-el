@@ -8,7 +8,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-27 15:47:06 mah>
+;; Last Modified: <2010-02-27 15:55:45 mah>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -25,8 +25,11 @@
 
 ;;; Commentary:
 
-;; This mode uses
-;; Note that this requires the latest version of url.el,
+;; This version of mediawiki.el represents a merging of
+;; wikipedia-mode.el (maintained by Uwe Brauer <oub at mat.ucm.es>)
+;; from http://www.emacswiki.org/emacs/wikipedia-mode.el for its
+;; font-lock code, menu, draft mode, replying and convenience
+;; functions to produce mediawiki.el 2.0.
 
 ;;; Installation
 
@@ -52,14 +55,12 @@
 ;;    that to mw
 ;;  * Move url-* methods to url-http
 ;;  * Use the MW API to support searching, etc.
+;;  * Clean up and thoroughly test imported wikimedia.el code
+;;  * Improve language support.  Currently there is a toggle for
+;;    English or German.  This should probably just be replaced with
+;;    customizable words given MediaWiki's wide language support.
 
 ;;; History
-
-;; This version of mediawiki.el represents a merging of
-;; wikipedia-mode.el (maintained by Uwe Brauer <oub at mat.ucm.es>)
-;; from http://www.emacswiki.org/emacs/wikipedia-mode.el for its
-;; font-lock code, menu, draft mode, replying and convenience
-;; functions to produce mediawiki.el 2.0.
 
 ;; From the News section of wikipedia.el comes this bit, kept here for
 ;; reference later.
