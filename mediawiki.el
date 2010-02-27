@@ -2,13 +2,13 @@
 
 ;; Copyright (C) 2008, 2009, 2010 Mark A. Hershberger
 
-;; Original Author: Jerry <unidevel@yahoo.com.cn>
-;; Author: Mark A. Hershberger <mhershberger@intrahealth.org>
-;; Version: 1.1
+;; Original Authors: Jerry <unidevel@yahoo.com.cn>, Chong Yidong <cyd at stupidchicken com> for wikipedia.el
+;; Author: Mark A. Hershberger <mah@everybody.org>
+;; Version: 2.0
 ;; Created: Sep 17 2004
-;; Keywords: mediawiki wikipedia network
+;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-27 15:15:15 mah>
+;; Last Modified: <2010-02-27 15:47:06 mah>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -50,10 +50,71 @@
 ;;; TODO:
 ;;  * Optionally use org-mode formatting for editing and translate
 ;;    that to mw
-;;  * Re-login at loss of session data "Sorry! We could not process
-;;    your edit due to a loss of session data."
 ;;  * Move url-* methods to url-http
 ;;  * Use the MW API to support searching, etc.
+
+;;; History
+
+;; This version of mediawiki.el represents a merging of
+;; wikipedia-mode.el (maintained by Uwe Brauer <oub at mat.ucm.es>)
+;; from http://www.emacswiki.org/emacs/wikipedia-mode.el for its
+;; font-lock code, menu, draft mode, replying and convenience
+;; functions to produce mediawiki.el 2.0.
+
+;; From the News section of wikipedia.el comes this bit, kept here for
+;; reference later.
+;;     (4) "Draft", "send" and "reply" (for discussion pages)
+;;         abilities `based' on ideas of John Wigleys remember.el: see
+;;         the functions wikipedia-draft-*
+;;         RATIONALE: This comes handy in 2 situations
+;;            1. You are editing articles which various authors (this I
+;;               think is the usual case), you then want not to submit
+;;               your edit immediately but want to copy it somewhere and
+;;               to continue later. You can use the following functions
+;;               for doing that:
+;;               wikipedia-draft-buffer \C-c\C-b
+;;               wikipedia-draft-region \C-c\C-r
+;;               then the buffer/region will be appended to the
+;;               wikipedia-draft-data-file (default is
+;;               "~/Wiki/discussions/draft.wiki", which you can visit via
+;;               wikipedia-draft-view-draft) and it will be
+;;               surrounded by the ^L marks in order to set a page.
+;;               moreover on top on that a section header == will be
+;;               inserted, which consists of the Word Draft, a subject
+;;               you are asked for and a date stamp.
+;;
+;;               Another possibility consists in using the function
+;;               wikipedia-draft, bound to \C-c \C-m then a new buffer
+;;               will opened already in wikipedia mode. You edit and then
+;;               either can send the content of the buffer to the
+;;               wikipedia-draft-data-file in the same manner as
+;;               described above using the function
+;;               wikipedia-draft-buffer (bound to \C-c\C-k)
+;;
+;;               BACK: In order to copy/send the content of temporary
+;;               buffer or of a page in the wikipedia-draft-data-file
+;;               back in to your wikipedia file, use the function
+;;               wikipedia-send-draft-to-mozex bound to "\C-c\C-c". You
+;;               will be asked to which buffer to copy your text!
+;;
+;;
+;;            2. You want to reply  in a discussion page to a specific
+;;               contribution, you can use either the function
+;;
+;;               \\[wikipedia-reply-at-point-simple] bound to [(meta shift r)]
+;;               which inserts a newline, a hline, and the signature of
+;;               the author. Or can use
+;;               \\[wikipedia-draft-reply] bound  [(meta r)]
+;;               which does the same as wikipedia-reply-at-point-simple
+;;               but in a temporary draft buffer.
+;;
+;;               BACK: In order to copy/send the content of that buffer
+;;               back in to your wikipedia file, use the function
+;;               \\[wikipedia-send-draft-to-mozex] bound to "\C-c\C-c". You
+;;               will be asked to which buffer to copy your text! If
+;;               you want a copy to be send to your draft file, use
+;;               the variable  wikipedia-draft-send-archive
+;;
 
 ;;; Code:
 
@@ -946,7 +1007,7 @@ paragraph will be indented in the same way."
                    ((eq (point) (point-min)) nil)
                    ((progn (forward-line -1) t)))
         t))
-    (newline) (if (not indent-chars) (newline) 
+    (newline) (if (not indent-chars) (newline)
 		(insert indent-chars))))
 
 (defun mediawiki-terminate-paragraph-and-indent ()
@@ -1324,6 +1385,7 @@ starting point. Generalise to make `previous-long-line'."
     (if (functionp 'filladapt-mode)
         (filladapt-mode nil))))
 
+;; See http://staff.science.uva.nl/~dominik/Tools/outline-magic.el
 (defun mediawiki-outline-magic-keys ()
   (interactive)
   (unless  (featurep 'xemacs)
@@ -1427,8 +1489,8 @@ draft file. It might be better if longlines-mode is off."
   "Open a temporary buffer in wikipedia mode for editing an wikipedia
  draft, which an arbitrary piece of data. After finishing the editing
  either use C-c C-k \\[mediawiki-draft-buffer] to send the data into
- the mediawiki-draft-data-file, or send  the buffer using C-c C-c
-\\[mediawiki-draft-send-to-mozex]  and insert it later into a wikipedia article."
+ the mediawiki-draft-data-file, or send  the buffer using C-x C-s
+\\[mediawiki-save]  and insert it later into a wikipedia article."
   (interactive)
   (window-configuration-to-register mediawiki-draft-register)
   (let ((buf (get-buffer-create mediawiki-draft-buffer)))
@@ -1516,6 +1578,44 @@ application."
   (interactive)
   (insert-register mediawiki-draft-page nil))
 
+(defun mediawiki-draft-send (target-buffer)
+  "Copy the current page from the mediawiki draft file to
+TARGET-BUFFER.  Check the variable mediawiki-draft-send-archive.
+If it is t, then additionally the text will be archived in the
+draft.wiki file. Check longlines-mode, it might be better if it
+is set off."
+  (interactive "bTarget buffer: ")
+  (let ((src-buf (current-buffer)))
+	(mediawiki-draft-copy-page-to-register)
+	(switch-to-buffer target-buffer)
+	(end-of-line 1)
+	(newline 1)
+    (mediawiki-draft-yank-page-to-register)
+	(message "The page has been sent (copied) to the mozex file!")
+	(switch-to-buffer "*MW-Draft*")
+    (when mediawiki-draft-send-archive
+	  (let ((text (buffer-string))
+			(desc (mediawiki-draft-buffer-desc)))
+		(with-temp-buffer
+		  (insert (concat "\n\n" mediawiki-draft-leader-text)
+		  (insert-register mediawiki-draft-reply-register 1)
+		  (insert (concat " " (current-time-string) " " mediawiki-draft-leader-text  "\n\n\f\n\n"
+                                  text "\n\f\n"))
+		  (if (not (bolp))
+			  (insert "\n\n"))
+		  (if (find-buffer-visiting mediawiki-draft-data-file)
+			  (let ((mediawiki-draft-text (buffer-string)))
+				(set-buffer (get-file-buffer mediawiki-draft-data-file))
+				(save-excursion
+				  (goto-char (point-max))
+				  (insert (concat "\n" mediawiki-draft-text "\n"))
+				  (save-buffer)))
+			(append-to-file (point-min) (point-max) mediawiki-draft-data-file)))))
+    (when (equal mediawiki-draft-buffer (buffer-name))
+	  (kill-buffer (current-buffer)))
+	(switch-to-buffer target-buffer))))
+
+
 (define-derived-mode mediawiki-draft-mode text-mode "MW-Draft"
   "Major mode for output from \\[mediawiki-draft].
 \\<mediawiki-draft-mode-map> This buffer is used to collect data that
@@ -1569,7 +1669,6 @@ The draft functionality
 Replying and sending functionality
 \\[mediawiki-reply-at-point-simple]
 \\[mediawiki-draft-reply]
-\\[mediawiki-send-draft-to-mozex]
 
 The register functionality
 \\[mediawiki-copy-page-to-register]
@@ -1667,7 +1766,7 @@ Some simple editing commands.
     (define-key mediawiki-mode-map "\C-c\C-d" 'mediawiki-draft-buffer)
     (define-key mediawiki-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
     (define-key mediawiki-mode-map "\C-c\C-p" 'mediawiki-draft-copy-page-to-register)
-    (define-key mediawiki-mode-map "\C-c\C-c" 'mediawiki-draft-send-to-mozex)
+    (define-key mediawiki-mode-map "\C-c\C-c" 'mediawiki-draft-send)
     (define-key mediawiki-mode-map "\C-c\C-s" 'mediawiki-draft-yank-page-to-register)
 
     (define-key mediawiki-mode-map [(control meta prior)] 'mediawiki-enhance-indent)
