@@ -7,8 +7,8 @@
 ;; Version: 1.1
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network
-;; URL: http://emacswiki.org/emacs/mediawiki.el
-;; Last Modified: <2010-02-27 05:56:46 mah>
+;; URL: http://launchpad.net/mediawiki-el
+;; Last Modified: <2010-02-27 07:01:28 mah>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -54,9 +54,6 @@
 ;;    your edit due to a loss of session data."
 ;;  * Move url-* methods to url-http
 ;;  * Use the MW API to support searching, etc.
-
-;;; Latest version can be found at
-;;    http://launchpad.net/mediawiki-el
 
 ;;; Code:
 
