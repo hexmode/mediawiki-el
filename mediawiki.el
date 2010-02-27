@@ -8,7 +8,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-27 07:01:28 mah>
+;; Last Modified: <2010-02-27 15:15:15 mah>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -1268,7 +1268,7 @@ mediawiki-english-or-german. When mark is active, surround region."
   "Unfill region, this function does NOT explicitly search for \"soft newlines\"
 as does mediawiki-unfill-region."
   (interactive)
-  (set (make-local-variable 'paragraph-start) "[ \t\n]")
+  (set (make-local-variable 'paragraph-start) "[ \t\n\f]")
   (set (make-local-variable 'paragraph-start)
        "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
   (set-fill-prefix)
@@ -1410,7 +1410,7 @@ draft file. It might be better if longlines-mode is off."
                       (read-string "Enter Subject: ") " "
                       (current-time-string) " "
                       mediawiki-draft-leader-text
-                      "\n\n\n\n" text "\n\n"))
+                      "\n\n\f\n\n" text "\n\f\n"))
       (if (not (bolp))
           (insert "\n\n"))
       (if (find-buffer-visiting mediawiki-draft-data-file)
