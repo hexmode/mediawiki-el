@@ -2,13 +2,15 @@
 
 ;; Copyright (C) 2008, 2009, 2010 Mark A. Hershberger
 
-;; Original Authors: Jerry <unidevel@yahoo.com.cn>, Chong Yidong <cyd at stupidchicken com> for wikipedia.el
+;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
+;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
+;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Version: 2.0
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-28 18:04:49 mah>
+;; Last Modified: <2010-02-28 19:05:36 mah>
 
 (defconst mediawiki-version "2.0"
   "Current version of mediawiki.el")
@@ -127,6 +129,7 @@
 (require 'url-http)
 (require 'mml)
 (require 'mm-url)
+(require 'ring)
 
 (when (not (fboundp 'url-user-for-url))
   (require 'url-parse)
@@ -235,12 +238,14 @@ string: \"%\" followed by two lowercase hex digits."
 (defun url-http-response-post-process (status &optional bufname
                                               callback cbargs)
   "Post process on HTTP response."
+  (declare (special url-http-end-of-headers))
   (let ((kill-this-buffer (current-buffer)))
     (when (and (integerp status) (not (< status 300)))
       (kill-buffer kill-this-buffer)
       (error "Oops! Invalid status: %d" status))
 
-    (when (not url-http-end-of-headers)
+    (when (or (not (boundp 'url-http-end-of-headers))
+              (not url-http-end-of-headers))
       (kill-buffer kill-this-buffer)
       (error "Oops! Don't see end of headers!"))
 
@@ -1341,12 +1346,8 @@ starting point. Generalise to make `previous-long-line'."
 (defun mediawiki-unfill-paragraph-simple ()
   "A very simple function for unfilling a paragraph."
   (interactive)
-  (if (functionp 'filladapt-mode)
-      (filladapt-mode nil))
   (let ((fill-column (point-max)))
-    (fill-paragraph nil)
-    (if (functionp 'filladapt-mode)
-        (filladapt-mode nil))))
+    (fill-paragraph nil)))
 
 ;; See http://staff.science.uva.nl/~dominik/Tools/outline-magic.el
 (defun mediawiki-outline-magic-keys ()
@@ -1664,7 +1665,8 @@ Some simple editing commands.
   ;; Support for outline-minor-mode. No key conflicts, so we'll use
   ;; the normal outline-mode prefix.
   (set (make-local-variable 'outline-regexp) "==+")
-  (set (make-local-variable 'outline-minor-mode-prefix) "\C-c\C-o")
+  (when (boundp 'outline-minor-mode-prefix)
+    (set (make-local-variable 'outline-minor-mode-prefix) "\C-c\C-o"))
 ; (set (make-local-variable 'outline-regexp) "=+")
 ; (set (make-local-variable 'outline-regexp) ":")
 
