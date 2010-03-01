@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-28 19:05:36 mah>
+;; Last Modified: <2010-02-28 20:31:45 mah>
 
 (defconst mediawiki-version "2.0"
   "Current version of mediawiki.el")
@@ -1175,8 +1175,9 @@ not work very well will longlines-mode."
   (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
           (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
       (save-excursion
+       (goto-char (region-beginning))
        (insert pre)
-       (goto-char (point))
+       (goto-char (region-end))
        (insert post))
     (insert (concat pre " " post))
     (backward-char (+ 1 (string-width post)))))
