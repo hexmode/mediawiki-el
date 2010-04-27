@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.0
+;; Version: 2.1
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-02-28 20:31:45 mah>
+;; Last Modified: <2010-04-26 20:28:24 mah>
 
-(defconst mediawiki-version "2.0"
+(defconst mediawiki-version "2.1"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -175,6 +175,23 @@ string: \"%\" followed by two lowercase hex digits."
              (string-to-list string)
              "")))
 
+(defun url-compat-retrieve (url post-process bufname callback cbargs)
+  (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
+	 (if callback
+	     (setq url-be-asynchronous t
+		   url-current-callback-data cbargs
+		   url-current-callback-func callback)
+	   (setq url-be-asynchronous nil))
+	 (url-retrieve url t)
+	 (when (not url-be-asynchronous)
+	   (let ((result (funcall post-process bufname)))
+	     result)))
+	(t (if callback
+	       (url-retrieve url post-process
+			     (list bufname callback cbargs))
+	     (with-current-buffer (url-retrieve-synchronously url)
+	       (funcall post-process bufname))))))
+
 (defvar url-http-get-post-process 'url-http-response-post-process)
 (defun url-http-get (url &optional headers bufname callback cbargs)
   "Convenience method to use method 'GET' to retrieve URL"
@@ -187,12 +204,8 @@ string: \"%\" followed by two lowercase hex digits."
     (when (url-basic-auth url)
       (add-to-list 'url-request-extra-headers
                    (cons "Authorization" (url-basic-auth url))))
-
-    (if callback
-        (url-retrieve url url-http-get-post-process
-                      (list bufname callback cbargs))
-      (with-current-buffer (url-retrieve-synchronously url)
-        (funcall url-http-get-post-process bufname)))))
+    (url-compat-retrieve url url-http-get-post-process
+			 bufname callback cbargs)))
 
 (defvar url-http-post-post-process 'url-http-response-post-process)
 (defun url-http-post (url parameters &optional multipart headers bufname
@@ -215,7 +228,7 @@ string: \"%\" followed by two lowercase hex digits."
           (if multipart
               (mm-url-encode-multipart-form-data
                parameters boundary)
-            (mm-url-encode-www-form-urlencoded parameters))))
+            (mm-url-encode-www-form-urlencoded (delq nil parameters)))))
     (mapc
      (lambda (pair)
        (let ((key (car pair))
@@ -229,11 +242,8 @@ string: \"%\" followed by two lowercase hex digits."
       (cons "Content-Type" content-type)))
 
     (message "Posting to: %s" url)
-    (if callback
-        (url-retrieve url url-http-post-post-process
-                      (list bufname callback cbargs))
-      (with-current-buffer (url-retrieve-synchronously url)
-        (funcall url-http-post-post-process bufname)))))
+    (url-compat-retrieve url url-http-post-post-process
+			 bufname callback cbargs)))
 
 (defun url-http-response-post-process (status &optional bufname
                                               callback cbargs)
@@ -247,24 +257,31 @@ string: \"%\" followed by two lowercase hex digits."
     (when (or (not (boundp 'url-http-end-of-headers))
               (not url-http-end-of-headers))
       (kill-buffer kill-this-buffer)
-      (error "Oops! Don't see end of headers!"))
+       (error "Oops! Don't see end of headers!"))
 
-    (goto-char url-http-end-of-headers)
-    (forward-line)
+    ;; FIXME: need to limit redirects
+    (if (and (listp status)
+             (eq (car status) :redirect))
+        (progn
+          (message (concat "Redirecting to " (cadr status)))
+          (url-http-get (cadr status) nil bufname callback cbargs))
 
-    (let ((str (decode-coding-string
-                (buffer-substring-no-properties (point) (point-max))
-                'utf-8)))
-      (kill-buffer (current-buffer))
-      (when bufname
-        (set-buffer bufname)
-        (insert str)
-        (goto-char (point-min))
-        (set-buffer-modified-p nil))
-      (when callback
-        (apply callback (list str cbargs)))
-      (when (not (or callback bufname))
-        str))))
+      (goto-char url-http-end-of-headers)
+      (forward-line)
+
+      (let ((str (decode-coding-string
+                  (buffer-substring-no-properties (point) (point-max))
+                  'utf-8)))
+        (kill-buffer (current-buffer))
+        (when bufname
+          (set-buffer bufname)
+          (insert str)
+          (goto-char (point-min))
+          (set-buffer-modified-p nil))
+        (when callback
+          (apply callback (list str cbargs)))
+        (when (not (or callback bufname))
+          str)))))
 
 (defun mm-url-encode-multipart-form-data (pairs &optional boundary)
   "Return PAIRS encoded in multipart/form-data."
@@ -677,7 +694,9 @@ the base URI of the wiki engine as well as group and page name.")
 
 (defun mediawiki-make-url (title action &optional sitename)
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
-                  mediawiki-argument-pattern)
+                  (if action
+                      mediawiki-argument-pattern
+                    "?title=%s"))
 	  (url-hexify-string title)
 	  action))
 
@@ -686,7 +705,7 @@ the base URI of the wiki engine as well as group and page name.")
   (interactive "sWiki Page: ")
   (when (or (not (stringp name))
             (string-equal "" name))
-    (error "Need to specify a name."))
+    (error "Need to specify a name"))
   (mediawiki-edit name))
 
 (defun mediawiki-reload ()
@@ -694,7 +713,7 @@ the base URI of the wiki engine as well as group and page name.")
   (let ((title mediawiki-page-title))
     (if title
 	(mediawiki-open title)
-      (error "Error: %s is not a mediawiki document." (buffer-name)))))
+      (error "Error: %s is not a mediawiki document" (buffer-name)))))
 
 (defun mediawiki-edit (title)
   "Edit wiki file with the name of title"
@@ -711,57 +730,58 @@ the base URI of the wiki engine as well as group and page name.")
 called from a buffer in mediawiki-mode as the variables it sets
 there will be local to that buffer."
 
-  ;; Find the form
-  (if (string-match
-       "<form [^>]*id=[\"']editform['\"][^>]*>" str)
-
-      (let* ((start-form (match-end 0))
-             (end-form (when (string-match "</form>" str start-form)
-                         (match-beginning 0)))
-             (form (substring str start-form end-form))
-             (start (string-match
-                     "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
-                     form)))
-
-        ;; clear the list of (buffer-local) form variables. Have to
-        ;; switch like this because we're in a buffer containing the
-        ;; results of the post.
+  (let ((args (mediawiki-get-form-vars str "id" "editform")))
+    (if args
         (with-current-buffer bufname
-          (setq mediawiki-edit-form-vars '(nil)))
+          (setq mediawiki-edit-form-vars args))
+      (if (string-match mediawiki-permission-denied str)
+          (if (mediawiki-logged-in-p)
+              (error "Permission Denied")
+            (error "Log in first and try again"))
+        (error "Permission Denied. Login and try again"))
+      (error "No edit form found!"))))
 
-        ;; Continue until we can't find any more input elements
-        (while start
+(defun mediawiki-get-form-vars (str attr val)
+  ;; Find the form
+  (when (string-match
+         (concat "<form [^>]*" attr "=[\"']" val "['\"][^>]*>")
+         str)
 
-          ;; First, capture the place where we'll start next.  Have
-          ;; to do this here since match-end doesn't seem to let you
-          ;; specify the string you were matching against, unlike
-          ;; match-string
-          (setq start (match-end 0))
+    (let* ((start-form (match-end 0))
+           (end-form (when (string-match "</form>" str start-form)
+                       (match-beginning 0)))
+           (form (substring str start-form end-form))
+           (start (string-match
+                   "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
+                   form))
+           (vars '(nil)))
 
-          ;; Capture the string that defines this element
-          (let ((el (match-string 1 form))
-                ;; get the element name
-                (el-name (match-string 2 form)))
+      ;; Continue until we can't find any more input elements
+      (while start
 
-            ;; figure out if this is a submit button and skip it if it is.
-            (if (and (not (string-match "type=[\"']submit['\"]" el))
-                     (string-match "value=[\"']\\([^\"']*\\)['\"]" el))
+        ;; First, capture the place where we'll start next.  Have
+        ;; to do this here since match-end doesn't seem to let you
+        ;; specify the string you were matching against, unlike
+        ;; match-string
+        (setq start (match-end 0))
+
+        ;; Capture the string that defines this element
+        (let ((el (match-string 1 form))
+              ;; get the element name
+              (el-name (match-string 2 form)))
+
+          ;; figure out if this is a submit button and skip it if it is.
+          (if (and (not (string-match "type=[\"']submit['\"]" el))
+                   (string-match "value=[\"']\\([^\"']*\\)['\"]" el))
 
               ;; set the buffer-local form variables
-              (with-current-buffer bufname
-                (add-to-list 'mediawiki-edit-form-vars
-                             (cons el-name (match-string 1 el))))))
-          (setq start
-                (string-match
-                 "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
-                 form start)))
-        (pop-to-buffer bufname))
-    (if (string-match mediawiki-permission-denied str)
-        (if (mediawiki-logged-in-p)
-            (error "Permission Denied.")
-          (error "Log in first and try again."))
-      (error "Permission Denied. Login and try again"))
-    (error "No edit form found!")))
+              (add-to-list 'vars
+                           (cons el-name (match-string 1 el)))))
+        (setq start
+              (string-match
+               "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
+               form start)))
+      vars)))
 
 (defun mediawiki-logged-in-p ()
   "Returns t if we are logged in already."
@@ -805,7 +825,7 @@ there will be local to that buffer."
        mediawiki-page-title
        summary
        (buffer-substring-no-properties (point-min) (point-max)))
-    (error "Error: %s is not a mediawiki document." (buffer-name))))
+    (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-save-and-bury (&optional summary)
   (interactive "sSummary: ")
@@ -861,22 +881,28 @@ get a cookie."
                                         ; logged in
 
   ;; Possibly save info once we have it, eh?
-  (let ((user (or (mediawiki-site-username sitename)
+  (lexical-let ((user (or (mediawiki-site-username sitename)
                   username
                   (read-string "Username: ")))
-        (pass (or (mediawiki-site-password sitename)
-                  password
-                  (read-passwd "Password: "))))
+                (pass (or (mediawiki-site-password sitename)
+                          password
+                          (read-passwd "Password: ")))
+                (sitename sitename))
+    (url-http-get
+     (mediawiki-make-url "Special:Userlogin" nil sitename)
+     nil (get-buffer-create " *mediawiki-form*")
+     (lambda (str args)
+       (let ((args (mediawiki-get-form-vars str "name" "userlogin")))
 
-    ;; Set the wpName and wpPassword on the proper submit page.
-    (url-http-post (mediawiki-make-url
-                    "Special:Userlogin" "submitlogin" sitename)
-                   (list (cons "wpName" user)
-                         (cons "wpLoginattempt" "Log in")
-                         (cons "wpPassword" pass))
-                   nil nil nil
-                   'mediawiki-check-login
-                   (list sitename))))
+         (setcdr (assoc-string "wpName" args t) user)
+         (setcdr (assoc-string "wpPassword" args t) pass)
+
+         ;; Set the wpName and wpPassword on the proper submit page.
+         (url-http-post (mediawiki-make-url
+                         "Special:Userlogin" "submitlogin" sitename)
+                        args nil nil nil
+                        'mediawiki-check-login
+                        (list sitename)))))))
 
 (defun mediawiki-check-login (str args)
   "Check that the password was accepted."
@@ -963,14 +989,18 @@ anything enclosed in [[PAGE]]."
              (middle (progn
                        (goto-char start)
                        (when (search-forward  "|" end t)
-                         (1- (point))))))
-        (when (and
-               (not (eq nil start))
-               (not (eq nil end))
-               (<= pos end)
-               (>= pos start))
-          (buffer-substring-no-properties
-           start (or middle end)))))))
+                         (1- (point)))))
+             (pagename (when (and
+                              (not (eq nil start))
+                              (not (eq nil end))
+                              (<= pos end)
+                              (>= pos start))
+                         (buffer-substring-no-properties
+                          start (or middle end)))))
+        (if (string= "/"
+                     (substring pagename 0 1))
+            (concat mediawiki-page-title pagename)
+          pagename)))))
 
 (defmacro mediawiki-goto-relative-page (direction)
   `(let ((buff (ring-ref mediawiki-page-ring
@@ -1710,13 +1740,13 @@ Some simple editing commands.
     (define-key mediawiki-mode-map "\C-c\C-f\C-s" 'mediawiki-insert-strong-emphasis)
     (define-key mediawiki-mode-map "\C-c\C-f\C-b" 'mediawiki-insert-bold)
     (define-key mediawiki-mode-map "\C-c\C-f\C-i" 'mediawiki-insert-italics)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-h" 'mediawiki-insert-header)
+    (define-key mediawiki-mode-map "\C-c\C-f\C-e" 'mediawiki-insert-header)
     (define-key mediawiki-mode-map "\C-c\C-f\C-l" 'mediawiki-insert-link)
     (define-key mediawiki-mode-map "\C-c\C-f\C-u" 'mediawiki-insert-user)
     (define-key mediawiki-mode-map "\C-c\C-f\C-q" 'mediawiki-insert-quotation)
     (define-key mediawiki-mode-map "\C-c\C-f\C-v" 'mediawiki-insert-bible-verse-template)
     (define-key mediawiki-mode-map "\C-c\C-w" 'mediawiki-insert-signature)
-    (define-key mediawiki-mode-map "\C-c\C-h" 'mediawiki-insert-hline)
+    (define-key mediawiki-mode-map "\C-c\C-l" 'mediawiki-insert-hline)
     (define-key mediawiki-mode-map [(meta f7)] 'mediawiki-draft)
     (define-key mediawiki-mode-map [(meta f8)] 'mediawiki-reply-at-point-simple)
     (define-key mediawiki-mode-map [(meta f9)] 'mediawiki-draft-view-draft)

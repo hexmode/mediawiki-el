@@ -1,0 +1,17 @@
+2010-04-26  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el (url-compat-retrieve): Add help function so this
+	works with older versions of url.el like those found in Xemacs.
+	(url-http-get): Use url-compat-retrieve.
+	(url-http-post): Delete any nil parameters.  Use url-compat-retrieve.
+	(url-http-response-post-process): Follow redirects.  Need to add a
+	redirect limit.
+	(mediawiki-make-url): Make the URL properly if there is no action parameter.
+	(mediawiki-get-edit-form-vars): Refactor generic form-reading
+	functionality to mediawiki-get-form-vars.
+	(mediawiki-get-form-vars): New function.
+	(mediawiki-do-login): Rewrite so that new MW token parameter is
+	used for login.
+	(mediawiki-page-at-point): Identify and qualify sub-pages.
+	(mediawiki-mode): Remove any bindings that use C-h.
+
