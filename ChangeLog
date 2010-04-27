@@ -14,4 +14,5 @@
 	used for login.
 	(mediawiki-page-at-point): Identify and qualify sub-pages.
 	(mediawiki-mode): Remove any bindings that use C-h.
+	(mediawiki-insert): Fix mediawiki-insert using adopted patch from Bug#563127
 

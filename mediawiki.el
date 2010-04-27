@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.1
+;; Version: 2.1.1
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-04-26 20:28:24 mah>
+;; Last Modified: <2010-04-26 21:29:21 mah>
 
-(defconst mediawiki-version "2.1"
+(defconst mediawiki-version "2.1.1"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -1204,11 +1204,13 @@ not work very well will longlines-mode."
 (defun mediawiki-insert (pre post)
   (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
           (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
-      (save-excursion
-       (goto-char (region-beginning))
-       (insert pre)
-       (goto-char (region-end))
-       (insert post))
+      (let ((beg (region-beginning))
+            (end (region-end)))
+        (save-excursion
+          (goto-char beg)
+          (insert pre)
+          (goto-char (+ end (string-width pre)))
+          (insert post)))
     (insert (concat pre " " post))
     (backward-char (+ 1 (string-width post)))))
 
