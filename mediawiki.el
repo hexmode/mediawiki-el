@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.1.1
+;; Version: 2.1.3
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-04-26 21:29:21 mah>
+;; Last Modified: <2010-06-23 21:19:18 mah>
 
-(defconst mediawiki-version "2.1.1"
+(defconst mediawiki-version "2.1.3"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -130,8 +130,10 @@
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
+(eval-when-compile (require 'cl))
 
-(when (not (fboundp 'url-user-for-url))
+;; As of 2010-06-22, these functions are in Emacs
+(unless (fboundp 'url-user-for-url)
   (require 'url-parse)
   (defmacro url-bit-for-url (method lookfor url)
     (when (fboundp 'auth-source-user-or-password)
@@ -153,27 +155,55 @@
     "Attempt to use .authinfo to find a password for this URL."
     (url-bit-for-url 'url-password "password" url)))
 
-(when (not (fboundp 'url-hexify-string))
-  (defconst url-unreserved-chars '( ?a ?b ?c ?d ?e ?f ?g ?h ?i ?j
-    ?k ?l ?m ?n ?o ?p ?q ?r ?s ?t ?u ?v ?w ?x ?y ?z ?A ?B ?C ?D
-    ?E ?F ?G ?H ?I ?J ?K ?L ?M ?N ?O ?P ?Q ?R ?S ?T ?U ?V ?W ?X
-    ?Y ?Z ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?- ?_ ?. ?! ?~ ?* ?' ?\(
-    ?\))
-    "A list of characters that are _NOT_ reserved in the URL spec.
-This is taken from RFC 2396.")
+(unless (fboundp 'mm-url-encode-multipart-form-data)
+  (defun mm-url-encode-multipart-form-data (pairs &optional boundary)
+    "Return PAIRS encoded in multipart/form-data."
+    ;; RFC1867
 
-  (defun url-hexify-string (string)
-  "Return a new string that is STRING URI-encoded.
-First, STRING is converted to utf-8, if necessary.  Then, for each
-character in the utf-8 string, those found in `url-unreserved-chars'
-are left as-is, all others are represented as a three-character
-string: \"%\" followed by two lowercase hex digits."
-  (mapconcat (lambda (byte)
-               (if (memq byte url-unreserved-chars)
-                   (char-to-string byte)
-                 (format "%%%02x" byte)))
-             (string-to-list string)
-             "")))
+    ;; Get a good boundary
+    (unless boundary
+      (setq boundary (mml-compute-boundary '())))
+
+    (concat
+
+     ;; Start with the boundary
+     "--" boundary "\r\n"
+
+     ;; Create name value pairs
+     (mapconcat
+      'identity
+      ;; Delete any returned items that are empty
+      (delq nil
+            (mapcar (lambda (data)
+                      (when (car data)
+                        ;; For each pair
+                        (concat
+
+                         ;; Encode the name
+                         "Content-Disposition: form-data; name=\""
+                         (car data) "\"\r\n"
+                         "Content-Type: text/plain; charset=utf-8\r\n"
+                         "Content-Transfer-Encoding: binary\r\n\r\n"
+
+                         (cond ((stringp (cdr data))
+                                (cdr data))
+                               ((integerp (cdr data))
+                                (int-to-string (cdr data))))
+
+                         "\r\n")))
+                    pairs))
+      ;; use the boundary as a separator
+      (concat "--" boundary "\r\n"))
+
+     ;; put a boundary at the end.
+     "--" boundary "--\r\n")))
+
+;; Not defined in my Xemacs
+(unless (fboundp 'assoc-string)
+  (defun assoc-string (key list &optional case-fold)
+    (if case-fold
+	(assoc-ignore-case key list)
+      (assoc key list))))
 
 (defun url-compat-retrieve (url post-process bufname callback cbargs)
   (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
@@ -282,48 +312,6 @@ string: \"%\" followed by two lowercase hex digits."
           (apply callback (list str cbargs)))
         (when (not (or callback bufname))
           str)))))
-
-(defun mm-url-encode-multipart-form-data (pairs &optional boundary)
-  "Return PAIRS encoded in multipart/form-data."
-  ;; RFC1867
-
-  ;; Get a good boundary
-  (unless boundary
-    (setq boundary (mml-compute-boundary '())))
-
-  (concat
-
-   ;; Start with the boundary
-   "--" boundary "\r\n"
-
-   ;; Create name value pairs
-   (mapconcat
-
-    ;; Delete any returned items that are empty
-    (delq nil
-          (lambda (data)
-            (when (car data)
-              ;; For each pair
-              (concat
-
-               ;; Encode the name
-               "Content-Disposition: form-data; name=\""
-               (car data) "\"\r\n"
-               "Content-Type: text/plain; charset=utf-8\r\n"
-               "Content-Transfer-Encoding: binary\r\n\r\n"
-
-               (cond ((stringp (cdr data))
-                      (cdr data))
-                     ((integerp (cdr data))
-                      (int-to-string (cdr data))))
-
-               "\r\n"))))
-
-    ;; use the boundary as a separator
-    pairs (concat "--" boundary "\r\n"))
-
-   ;; put a boundary at the end.
-   "--" boundary "--\r\n"))
 
 (defgroup mediawiki nil
   "A mode for editting pages on MediaWiki sites."
@@ -435,6 +423,11 @@ mediawiki sites.")
   "A string that will indicate permission has been denied, Note
 that it should not match the mediawiki.el file itself since it
 is sometimes put on MediaWiki sites.")
+
+(defvar mediawiki-view-source
+  "ca-viewsource"
+  "A string that will indicate you can only view source on this
+page.")
 
 (defvar mediawiki-site nil
   "The current mediawiki site from `mediawiki-site-alist'.  If
@@ -697,7 +690,7 @@ the base URI of the wiki engine as well as group and page name.")
                   (if action
                       mediawiki-argument-pattern
                     "?title=%s"))
-	  (url-hexify-string title)
+	  (mm-url-form-encode-xwfu title)
 	  action))
 
 (defun mediawiki-open (name)
@@ -732,14 +725,13 @@ there will be local to that buffer."
 
   (let ((args (mediawiki-get-form-vars str "id" "editform")))
     (if args
-        (with-current-buffer bufname
-          (setq mediawiki-edit-form-vars args))
-      (if (string-match mediawiki-permission-denied str)
-          (if (mediawiki-logged-in-p)
-              (error "Permission Denied")
-            (error "Log in first and try again"))
-        (error "Permission Denied. Login and try again"))
-      (error "No edit form found!"))))
+	(with-current-buffer bufname
+	  (setq mediawiki-edit-form-vars args))
+      (cond
+       ((string-match mediawiki-permission-denied str)
+	(message "Permission Denied"))
+       ((string-match mediawiki-view-source str)
+	(message "Editing of this page is disabled, here is the source"))))))
 
 (defun mediawiki-get-form-vars (str attr val)
   ;; Find the form
@@ -857,7 +849,7 @@ there will be local to that buffer."
 (defun mediawiki-site-password (sitename)
   "Get the password for a given site."
   (or (mediawiki-site-extract sitename 3)
-      (url-user-for-url (mediawiki-site-url sitename))))
+      (url-password-for-url (mediawiki-site-url sitename))))
 
 (defun mediawiki-site-first-page (sitename)
   "Get the password for a given site."
@@ -893,6 +885,9 @@ get a cookie."
      nil (get-buffer-create " *mediawiki-form*")
      (lambda (str args)
        (let ((args (mediawiki-get-form-vars str "name" "userlogin")))
+
+         (unless (assoc-string "wpName" args t)
+           (error "No login form found"))
 
          (setcdr (assoc-string "wpName" args t) user)
          (setcdr (assoc-string "wpPassword" args t) pass)
@@ -958,7 +953,6 @@ the current buffer is used."
     (if (string= "" answer)
         mediawiki-site
       answer)))
-
 
 (defun mediawiki-site (&optional site)
   "Set up mediawiki.el for a site.  Without an argument, use

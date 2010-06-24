@@ -1,3 +1,18 @@
+2010-06-23  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el: Clean up byte compilation warnings.
+	(mediawiki-make-url): Remove url-hexify-string in favor of
+	mm-url-form-encode-xwfu.
+	(mediawiki-get-edit-form-vars): Clean up and simplify permission
+	checking.  Use (message) instead of error to make messages less
+	confusing.
+	(mediawiki-site-password): Typo meant we weren't really getting
+	the password.
+	(mediawiki-do-login): Check to make sure we actually have a form
+	variable.
+	(mediawiki-view-source): New variable to show when we're viewing
+	source.
+
 2010-04-26  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el (url-compat-retrieve): Add help function so this
