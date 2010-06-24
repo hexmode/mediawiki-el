@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-06-23 21:19:18 mah>
+;; Last Modified: <2010-06-23 21:55:22 mah>
 
 (defconst mediawiki-version "2.1.3"
   "Current version of mediawiki.el")
@@ -341,6 +341,13 @@ later."
                                   (string :tag "Password")
                                   (string :tag "First Page"
                                           :description "First page to open when `mediawiki-site' is called for this site"))))
+
+(defcustom mediawiki-pop-buffer-hook '()
+  "List of functions to execute after popping to a buffer.  Can
+be used to to open the whole buffer."
+  :options '(delete-other-windows)
+  :type 'hook
+  :group 'mediawiki)
 
 (defvar mediawiki-enumerate-with-terminate-paragraph nil
 "*Before insert enumerate/itemize do \\[mediawiki-terminate-paragraph].")
@@ -779,6 +786,11 @@ there will be local to that buffer."
   "Returns t if we are logged in already."
   (not (eq nil mediawiki-site)))         ; FIXME should check cookies
 
+(defun mediawiki-pop-to-buffer (bufname)
+  "Pop to buffer and then execute a hook."
+  (pop-to-buffer bufname)
+  (run-hooks 'mediawiki-pop-buffer-hook))
+
 (defun mediawiki-get (title bufname site)
   (let ((page-uri (mediawiki-make-url title "raw")))
 
@@ -804,7 +816,7 @@ there will be local to that buffer."
                      (current-buffer))
                     (set-buffer-file-coding-system 'utf-8)
                     (goto-char (point-min))
-                    (pop-to-buffer bufname)
+                    (mediawiki-pop-to-buffer bufname)
                     (set-buffer-modified-p nil)
                     (setq buffer-undo-list t)
                     (buffer-enable-undo))
@@ -1005,7 +1017,7 @@ anything enclosed in [[PAGE]]."
              (ring-ref mediawiki-page-ring
                        (setq mediawiki-page-ring-index
                              (,direction mediawiki-page-ring-index 1)))))
-     (pop-to-buffer buff)))
+     (mediawiki-pop-to-buffer buff)))
 
 (defun mediawiki-next-header ()
   "Move point to the end of the next section header."

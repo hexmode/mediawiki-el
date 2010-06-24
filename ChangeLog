@@ -12,6 +12,9 @@
 	variable.
 	(mediawiki-view-source): New variable to show when we're viewing
 	source.
+	(mediawiki-pop-buffer-hook): New hook.
+	(mediawiki-pop-to-buffer): New functon to run hook on buffer.xo
+	(mediawiki-get, mediawiki-goto-relative-page): Use hook.
 
 2010-04-26  Mark A. Hershberger  <mah@everybody.org>
 
