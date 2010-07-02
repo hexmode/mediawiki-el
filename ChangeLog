@@ -1,3 +1,33 @@
+2010-07-02  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el (url-http-create-request): Work around bug in url.el.
+	(mediawiki-edittoken, mediawiki-starttimestamp)
+	(mediawiki-basetimestamp): New buffer-local variables to enable
+	the API.
+	(mediawiki-make-api-url, mediawiki-api-call): New functions to
+	enable the API
+	(mediawiki-open): Update use of mediawiki-edit
+	(mediawiki-edit): Rewrite to use API and make it function
+	uniformly for all calls.  Remove dependency on buffer-local
+	mediawiki-site.
+	(mediawiki-get-form-vars): Simplify + make it handle <input>
+	elements without value attributes.
+	(mediawiki-save-page): Rewrite to use API.
+	(mediawiki-site): Use API.  Remove callbacks aren't used.
+	(mediawiki-site-extract): Trigger error for non-existant site.
+	(mediawiki-api-param): New utility function for setting parameters
+	like the MW API wants.
+	(mediawiki-page-get-title): New utility function to extract a
+	title from a page in the pagelist structure that the MW API
+	returns.
+	(mediawiki-page-get-revision): New utility function to extract a
+	revision from a the pagelist structure.
+	(mediawiki-pagelist-find-page): New utility function to extract
+	the entire page structure from a pagelist structure
+	(mediawiki-api-query-title): New function. Query the API and get
+	the current revision of the page.
+	(mediawiki-do-logout, mediawiki-do-login): Use the API.
+
 2010-06-23  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el: Clean up byte compilation warnings.
