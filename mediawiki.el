@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-02 11:54:05 mah>
+;; Last Modified: <2010-07-06 23:10:05 mah>
 
 (defconst mediawiki-version "2.2"
   "Current version of mediawiki.el")
@@ -1142,8 +1142,10 @@ get a cookie."
                                         (cons "text" content)
                                         (cons "summary" summary)
                                         (cons "token" mediawiki-edittoken)
-                                        (cons "basetimestamp" mediawiki-basetimestamp)
-                                        (cons "starttimestamp" mediawiki-starttimestamp)))
+                                        (cons "basetimestamp"
+                                              (or mediawiki-basetimestamp ""))
+                                        (cons "starttimestamp"
+                                              (or mediawiki-starttimestamp ""))))
   (set-buffer-modified-p nil))
 
 (defun mediawiki-browse (&optional buf)
