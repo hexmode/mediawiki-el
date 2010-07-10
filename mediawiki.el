@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-10 17:03:06 mah>
+;; Last Modified: <2010-07-10 17:31:02 mah>
 
 (defconst mediawiki-version "2.2.1"
   "Current version of mediawiki.el")
@@ -1210,17 +1210,6 @@ anything enclosed in [[PAGE]]."
             (concat mediawiki-page-title pagename)
           pagename)))))
 
-(defmacro mediawiki-goto-relative-page (direction)
-  `(let ((buff (ring-ref mediawiki-page-ring
-                        (setq mediawiki-page-ring-index
-                              (,direction mediawiki-page-ring-index 1)))))
-     (while (not (buffer-live-p buff))
-       (setq buff
-             (ring-ref mediawiki-page-ring
-                       (setq mediawiki-page-ring-index
-                             (,direction mediawiki-page-ring-index 1)))))
-     (mediawiki-pop-to-buffer buff)))
-
 (defun mediawiki-next-header ()
   "Move point to the end of the next section header."
   (interactive)
@@ -1356,6 +1345,17 @@ the point around the signature, then the functions inserts the following
       (insert "|]]''' ")
     (insert "]]''' ")))
 
+(defmacro mediawiki-goto-relative-page (direction)
+  `(let ((buff (ring-ref mediawiki-page-ring
+                        (setq mediawiki-page-ring-index
+                              (,direction mediawiki-page-ring-index 1)))))
+     (while (not (buffer-live-p buff))
+       (setq buff
+             (ring-ref mediawiki-page-ring
+                       (setq mediawiki-page-ring-index
+                             (,direction mediawiki-page-ring-index 1)))))
+     (mediawiki-pop-to-buffer buff)))
+
 (defun mediawiki-goto-previous-page ()
   "Pop up the previous page being editted."
   (interactive)
@@ -1366,19 +1366,24 @@ the point around the signature, then the functions inserts the following
   (interactive)
   (mediawiki-goto-relative-page +))
 
+(defun mediawiki-goto-relative-link (&optional backward)
+  "Move point to a link.  If backward is t, will search backwards."
+  (let* ((search (if backward 're-search-backward
+                   're-search-forward))
+         (limitfunc (if backward 'point-min
+                      'point-max))
+         (point (funcall search "\\[\\[.+\\]\\]" (funcall limitfunc) t)))
+    (when point
+      (let ((point (match-beginning 0)))
+        (goto-char (+ point 2))))))
+
 (defun mediawiki-goto-next-link ()
   (interactive)
-  (let ((end (re-search-forward "\\[\\[.+\\]\\]")))
-    (when end
-      (let ((start (match-beginning 0)))
-        (goto-char (+ start 2))))))
+  (mediawiki-goto-relative-link))
 
 (defun mediawiki-goto-prev-link ()
   (interactive)
-  (let ((start (re-search-backward "\\[\\[.+\\]\\]")))
-    (when start
-      (let ((start (match-beginning 0)))
-        (goto-char (+ start 2))))))
+  (mediawiki-goto-relative-link t))
 
 (defvar wikipedia-enumerate-with-terminate-paragraph nil
 "*Before insert enumerate/itemize do \\[wikipedia-terminate-paragraph].")

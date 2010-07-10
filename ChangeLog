@@ -2,6 +2,10 @@
 
 	* mediawiki.el (mediawiki-edit): Force point to beginning of
 	buffer. (LP#546851)
+	(mediawiki-goto-relative-link): New function.  Use noerror
+	argument. (LP#604045)
+	(mediawiki-goto-prev-link, mediawiki-goto-next-link):
+	Use new mediawiki-goto-relative-link.
 
 2010-07-02  Mark A. Hershberger  <mah@everybody.org>
 
