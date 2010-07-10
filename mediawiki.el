@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2
+;; Version: 2.2.1
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-06 23:10:05 mah>
+;; Last Modified: <2010-07-10 17:03:06 mah>
 
-(defconst mediawiki-version "2.2"
+(defconst mediawiki-version "2.2.1"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -920,7 +920,8 @@ the base URI of the wiki engine as well as group and page name.")
     (set-buffer-modified-p nil)
     (setq buffer-undo-list t)
     (buffer-enable-undo)
-    (mediawiki-pop-to-buffer (current-buffer))))
+    (mediawiki-pop-to-buffer (current-buffer))
+    (goto-char (point-min))))
 
 (defun mediawiki-get-edit-form-vars (str bufname)
   "Extract the form variables from a page.  This should only be
