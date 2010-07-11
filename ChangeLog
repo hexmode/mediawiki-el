@@ -1,3 +1,9 @@
+2010-07-11  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el (mediawiki-edit, mediawiki-mode): Make sure the
+	buffer page title is set and mediawiki-page-title is
+	buffer-local. (LP#603262, LP#603265)
+
 2010-07-10  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el (mediawiki-edit): Force point to beginning of

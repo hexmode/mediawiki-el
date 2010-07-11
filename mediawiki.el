@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-10 17:31:02 mah>
+;; Last Modified: <2010-07-10 17:51:14 mah>
 
 (defconst mediawiki-version "2.2.1"
   "Current version of mediawiki.el")
@@ -921,6 +921,7 @@ the base URI of the wiki engine as well as group and page name.")
     (setq buffer-undo-list t)
     (buffer-enable-undo)
     (mediawiki-pop-to-buffer (current-buffer))
+    (setq mediawiki-page-title title)
     (goto-char (point-min))))
 
 (defun mediawiki-get-edit-form-vars (str bufname)
@@ -1895,6 +1896,7 @@ Some simple editing commands.
   (make-local-variable 'mediawiki-basetimestamp)
   (make-local-variable 'mediawiki-site)
   (make-local-variable 'mediawiki-edit-form-vars)
+  (make-local-variable 'mediawiki-page-title)
   (set (make-local-variable 'adaptive-fill-regexp) "[ ]*")
   (set (make-local-variable 'comment-start-skip) "\\(?:<!\\)?-- *")
   (set (make-local-variable 'comment-end-skip) " *--\\([ \n]*>\\)?")
