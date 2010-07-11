@@ -3,6 +3,10 @@
 	* mediawiki.el (mediawiki-edit, mediawiki-mode): Make sure the
 	buffer page title is set and mediawiki-page-title is
 	buffer-local. (LP#603262, LP#603265)
+	(mediawiki-font-lock-keywords): Add support for semantic relations
+	and semantic variable replacement. (LP#604051)
+	(mediawiki-site-extract): Change error message when sitename is
+	nil. (LP#604044)
 
 2010-07-10  Mark A. Hershberger  <mah@everybody.org>
 

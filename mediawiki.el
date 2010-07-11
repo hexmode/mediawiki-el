@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-10 17:51:14 mah>
+;; Last Modified: <2010-07-11 03:32:12 mah>
 
 (defconst mediawiki-version "2.2.1"
   "Current version of mediawiki.el")
@@ -827,8 +827,24 @@ the base URI of the wiki engine as well as group and page name.")
      (4 font-lock-keyword-face t t)
      (5 font-lock-builtin-face t t))
 
+   ;; Semantic relations
+   '("\\(\\[\\[\\)\\([^]\n|]*\\)\\(::\\)\\([^]\n|]*\\)\\(|?\\)\\([^]\n]*\\)\\(\\]\\]\\)"
+     (1 font-lock-builtin-face t t)
+     (2 font-lock-variable-name-face t t)
+     (3 font-lock-builtin-face t t)
+     (4 font-lock-constant-face t t)
+     (5 font-lock-builtin-face t t)
+     (6 font-lock-keyword-face t t)
+     (7 font-lock-builtin-face t t))
+
    ;; Wiki variables
    '("\\({{\\)\\(.+?\\)\\(}}\\)"
+     (1 font-lock-builtin-face t t)
+     (2 font-lock-variable-name-face t t)
+     (3 font-lock-builtin-face t t))
+
+   ;; Semantic variables
+   '("\\({{{\\)\\(.+?\\)\\(}}}\\)"
      (1 font-lock-builtin-face t t)
      (2 font-lock-variable-name-face t t)
      (3 font-lock-builtin-face t t))
@@ -1078,6 +1094,8 @@ into a string, or just return the string"
 (defun mediawiki-site-extract (sitename index)
   (let ((bit (nth index (assoc sitename mediawiki-site-alist))))
     (cond
+     ((eq nil sitename)
+      (error "Sitename isn't set"))
      ((eq nil bit)
       (error "Couldn't find a site named: %s" sitename))
      ((string-match "[^ \t\n]" bit) bit)
