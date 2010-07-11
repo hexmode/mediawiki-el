@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-11 03:32:12 mah>
+;; Last Modified: <2010-07-11 04:02:16 mah>
 
 (defconst mediawiki-version "2.2.1"
   "Current version of mediawiki.el")
@@ -894,7 +894,7 @@ the base URI of the wiki engine as well as group and page name.")
           (unless action-res
             (error "Didn't see action name in the result list"))
 
-          (cddr action-res))
+          action-res)
       t)))
 
 (defun mediawiki-make-url (title action &optional sitename)
@@ -1017,13 +1017,13 @@ into a string, or just return the string"
 
 (defun mediawiki-api-query-revisions (site titles props &optional limit)
   "Get a list of revisions and properties for a given page."
-  (mediawiki-api-call site "query"
+  (cddr (mediawiki-api-call site "query"
                       (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
                             (cons "intoken" (mediawiki-api-param "edit"))
                             (cons "titles" (mediawiki-api-param titles))
                             (when limit
                               (cons "rvlimit" (mediawiki-api-param limit)))
-                            (cons "rvprop" (mediawiki-api-param props)))))
+                            (cons "rvprop" (mediawiki-api-param props))))))
 
 (defun mediawiki-page-get-title (page)
   "Given a page from a pagelist structure, extract the title."
@@ -1139,13 +1139,14 @@ get a cookie."
                  (sitename sitename)
                  (args (list (cons "lgname" user)
                              (cons "lgpassword" pass)))
-                 (result (mediawiki-api-call sitename "login" args)))
+                 (result (cadr (mediawiki-api-call sitename "login" args))))
     (when (string= (cdr (assq 'result result)) "NeedToken")
       (setq result
-            (mediawiki-api-call sitename "login"
-                                (append args
-                                        (list (cons "lgtoken"
-                                                    (cdr (assq 'token result))))))))
+            (cadr (mediawiki-api-call
+                   sitename "login"
+                   (append
+                    args (list (cons "lgtoken"
+                                     (cdr (assq 'token result)))))))))
     result))
 
 (defun mediawiki-do-logout (&optional sitename)
@@ -1158,6 +1159,7 @@ get a cookie."
 
 (defun mediawiki-save-page (site title summary content)
   "Save the current page to a MediaWiki wiki."
+  ;; FIXME error checking, conflicts!
   (mediawiki-api-call site "edit" (list (cons "title" title)
                                         (cons "text" content)
                                         (cons "summary" summary)

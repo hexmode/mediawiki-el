@@ -7,6 +7,10 @@
 	and semantic variable replacement. (LP#604051)
 	(mediawiki-site-extract): Change error message when sitename is
 	nil. (LP#604044)
+	(mediawiki-api-call): Don't strip the call result down to just the
+	XML attribs.  (LP#604042)
+	(mediawiki-do-login, mediawiki-api-query-revisions): Extract
+	necessary bits with adjusted api-call. (LP#604042)
 
 2010-07-10  Mark A. Hershberger  <mah@everybody.org>
 
