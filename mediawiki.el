@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.1
+;; Version: 2.2.2
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-07-11 04:02:16 mah>
+;; Last Modified: <2010-11-15 13:29:50 mah>
 
-(defconst mediawiki-version "2.2.1"
+(defconst mediawiki-version "2.2.2"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -130,22 +130,30 @@
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
-(eval-when-compile (require 'cl))
+(when (locate-library "auth-source")
+  (require 'auth-source))
+(eval-when-compile (progn
+                     (require 'cl)
+                     ;; Below copied from url-http to avoid compilation warnings
+                     (defvar url-http-extra-headers)
+                     (defvar url-http-target-url)
+                     (defvar url-http-proxy)
+                     (defvar url-http-connection-opened)
+                     ;; This should only be used in xemacs, anyway
+                     (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case))))
 
 ;; As of 2010-06-22, these functions are in Emacs
 (unless (fboundp 'url-user-for-url)
-  (require 'url-parse)
-  (defmacro url-bit-for-url (method lookfor url)
+  (defun url-bit-for-url (method lookfor url)
     (when (fboundp 'auth-source-user-or-password)
-      `(let* ((urlobj (url-generic-parse-url url))
-              (bit (funcall ,method urlobj))
-              (methods (list 'url-recreate-url
-                             'url-host)))
-         (while (and (not bit) (> (length methods) 0))
-           (setq bit
-                 (auth-source-user-or-password
-                  ,lookfor (funcall (pop methods) urlobj) (url-type urlobj))))
-         bit)))
+      (let* ((urlobj (url-generic-parse-url url))
+             (bit (funcall method urlobj))
+             (methods (list 'url-recreate-url
+                            'url-host)))
+        (if (and (not bit) (> (length methods) 0))
+            (auth-source-user-or-password
+             lookfor (funcall (pop methods) urlobj) (url-type urlobj))
+          bit))))
 
   (defun url-user-for-url (url)
     "Attempt to use .authinfo to find a user for this URL."
@@ -155,154 +163,155 @@
     "Attempt to use .authinfo to find a password for this URL."
     (url-bit-for-url 'url-password "password" url)))
 
-(if (string= "GET / HTTP/1.0\nMIME-Version: 1.0\nConnection: close\nHost: example.com\nAccept: */*\nUser-Agent: URL/Emacs\nContent-length: 4\n\ntest"
-        (let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
-              (url-http-data "test") (url-http-version "1.0")
-              url-http-method url-http-attempt-keepalives url-extensions-header
-              url-http-extra-headers url-http-proxy url-mime-charset-string)
-         (url-http-create-request)))
-    (defun url-http-create-request (&optional ref-url)
-      "Create an HTTP request for `url-http-target-url', referred to by REF-URL."
-      (declare (special proxy-info
-                        url-http-method url-http-data
-                        url-http-extra-headers))
-      (let* ((extra-headers)
-             (request nil)
-             (no-cache (cdr-safe (assoc "Pragma" url-http-extra-headers)))
-             (using-proxy url-http-proxy)
-             (proxy-auth (if (or (cdr-safe (assoc "Proxy-Authorization"
-                                                  url-http-extra-headers))
-                                 (not using-proxy))
-                             nil
-                           (let ((url-basic-auth-storage
-                                  'url-http-proxy-basic-auth-storage))
-                             (url-get-authentication url-http-target-url nil 'any nil))))
-             (real-fname (concat (url-filename url-http-target-url)
-                                 (url-recreate-url-attributes url-http-target-url)))
-             (host (url-host url-http-target-url))
-             (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
-                       nil
-                     (url-get-authentication (or
-                                              (and (boundp 'proxy-info)
-                                                   proxy-info)
-                                              url-http-target-url) nil 'any nil))))
-        (if (equal "" real-fname)
-            (setq real-fname "/"))
-        (setq no-cache (and no-cache (string-match "no-cache" no-cache)))
-        (if auth
-            (setq auth (concat "Authorization: " auth "\r\n")))
-        (if proxy-auth
-            (setq proxy-auth (concat "Proxy-Authorization: " proxy-auth "\r\n")))
+(when (fboundp 'url-http-create-request)
+  (if (string= "GET / HTTP/1.0\nMIME-Version: 1.0\nConnection: close\nHost: example.com\nAccept: */*\nUser-Agent: URL/Emacs\nContent-length: 4\n\ntest"
+	       (let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
+		     (url-http-data "test") (url-http-version "1.0")
+		     url-http-method url-http-attempt-keepalives url-extensions-header
+		     url-http-extra-headers url-http-proxy url-mime-charset-string)
+		 (url-http-create-request)))
+      (defun url-http-create-request (&optional ref-url)
+	"Create an HTTP request for `url-http-target-url', referred to by REF-URL."
+	(declare (special proxy-info
+			  url-http-method url-http-data
+			  url-http-extra-headers))
+	(let* ((extra-headers)
+	       (request nil)
+	       (no-cache (cdr-safe (assoc "Pragma" url-http-extra-headers)))
+	       (using-proxy url-http-proxy)
+	       (proxy-auth (if (or (cdr-safe (assoc "Proxy-Authorization"
+						    url-http-extra-headers))
+				   (not using-proxy))
+			       nil
+			     (let ((url-basic-auth-storage
+				    'url-http-proxy-basic-auth-storage))
+			       (url-get-authentication url-http-target-url nil 'any nil))))
+	       (real-fname (concat (url-filename url-http-target-url)
+				   (url-recreate-url-attributes url-http-target-url)))
+	       (host (url-host url-http-target-url))
+	       (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
+			 nil
+		       (url-get-authentication (or
+						(and (boundp 'proxy-info)
+						     proxy-info)
+						url-http-target-url) nil 'any nil))))
+	  (if (equal "" real-fname)
+	      (setq real-fname "/"))
+	  (setq no-cache (and no-cache (string-match "no-cache" no-cache)))
+	  (if auth
+	      (setq auth (concat "Authorization: " auth "\r\n")))
+	  (if proxy-auth
+	      (setq proxy-auth (concat "Proxy-Authorization: " proxy-auth "\r\n")))
 
-        ;; Protection against stupid values in the referer
-        (if (and ref-url (stringp ref-url) (or (string= ref-url "file:nil")
-                                               (string= ref-url "")))
-            (setq ref-url nil))
+	  ;; Protection against stupid values in the referer
+	  (if (and ref-url (stringp ref-url) (or (string= ref-url "file:nil")
+						 (string= ref-url "")))
+	      (setq ref-url nil))
 
-        ;; We do not want to expose the referer if the user is paranoid.
-        (if (or (memq url-privacy-level '(low high paranoid))
-                (and (listp url-privacy-level)
-                     (memq 'lastloc url-privacy-level)))
-            (setq ref-url nil))
+	  ;; We do not want to expose the referer if the user is paranoid.
+	  (if (or (memq url-privacy-level '(low high paranoid))
+		  (and (listp url-privacy-level)
+		       (memq 'lastloc url-privacy-level)))
+	      (setq ref-url nil))
 
-        ;; url-http-extra-headers contains an assoc-list of
-        ;; header/value pairs that we need to put into the request.
-        (setq extra-headers (mapconcat
-                             (lambda (x)
-                               (concat (car x) ": " (cdr x)))
-                             url-http-extra-headers "\r\n"))
-        (if (not (equal extra-headers ""))
-            (setq extra-headers (concat extra-headers "\r\n")))
+	  ;; url-http-extra-headers contains an assoc-list of
+	  ;; header/value pairs that we need to put into the request.
+	  (setq extra-headers (mapconcat
+			       (lambda (x)
+				 (concat (car x) ": " (cdr x)))
+			       url-http-extra-headers "\r\n"))
+	  (if (not (equal extra-headers ""))
+	      (setq extra-headers (concat extra-headers "\r\n")))
 
-        ;; This was done with a call to `format'.  Concatting parts has
-        ;; the advantage of keeping the parts of each header together and
-        ;; allows us to elide null lines directly, at the cost of making
-        ;; the layout less clear.
-        (setq request
-              ;; We used to concat directly, but if one of the strings happens
-              ;; to being multibyte (even if it only contains pure ASCII) then
-              ;; every string gets converted with `string-MAKE-multibyte' which
-              ;; turns the 127-255 codes into things like latin-1 accented chars
-              ;; (it would work right if it used `string-TO-multibyte' instead).
-              ;; So to avoid the problem we force every string to be unibyte.
-              (mapconcat
-               ;; FIXME: Instead of `string-AS-unibyte' we'd want
-               ;; `string-to-unibyte', so as to properly signal an error if one
-               ;; of the strings contains a multibyte char.
-               'string-as-unibyte
-               (delq nil
-                     (list
-                      ;; The request
-                      (or url-http-method "GET") " "
-                      (if using-proxy (url-recreate-url url-http-target-url) real-fname)
-                      " HTTP/" url-http-version "\r\n"
-                      ;; Version of MIME we speak
-                      "MIME-Version: 1.0\r\n"
-                      ;; (maybe) Try to keep the connection open
-                      "Connection: " (if (or using-proxy
-                                             (not url-http-attempt-keepalives))
-                                         "close" "keep-alive") "\r\n"
-                                         ;; HTTP extensions we support
-                                         (if url-extensions-header
-                                             (format
-                                              "Extension: %s\r\n" url-extensions-header))
-                                         ;; Who we want to talk to
-                                         (if (/= (url-port url-http-target-url)
-                                                 (url-scheme-get-property
-                                                  (url-type url-http-target-url) 'default-port))
-                                             (format
-                                              "Host: %s:%d\r\n" host (url-port url-http-target-url))
-                                           (format "Host: %s\r\n" host))
-                                         ;; Who its from
-                                         (if url-personal-mail-address
-                                             (concat
-                                              "From: " url-personal-mail-address "\r\n"))
-                                         ;; Encodings we understand
-                                         (if url-mime-encoding-string
-                                             (concat
-                                              "Accept-encoding: " url-mime-encoding-string "\r\n"))
-                                         (if url-mime-charset-string
-                                             (concat
-                                              "Accept-charset: " url-mime-charset-string "\r\n"))
-                                         ;; Languages we understand
-                                         (if url-mime-language-string
-                                             (concat
-                                              "Accept-language: " url-mime-language-string "\r\n"))
-                                         ;; Types we understand
-                                         "Accept: " (or url-mime-accept-string "*/*") "\r\n"
-                                         ;; User agent
-                                         (url-http-user-agent-string)
-                                         ;; Proxy Authorization
-                                         proxy-auth
-                                         ;; Authorization
-                                         auth
-                                         ;; Cookies
-                                         (url-cookie-generate-header-lines host real-fname
-                                                                           (equal "https" (url-type url-http-target-url)))
-                                         ;; If-modified-since
-                                         (if (and (not no-cache)
-                                                  (member url-http-method '("GET" nil)))
-                                             (let ((tm (url-is-cached url-http-target-url)))
-                                               (if tm
-                                                   (concat "If-modified-since: "
-                                                           (url-get-normalized-date tm) "\r\n"))))
-                                         ;; Whence we came
-                                         (if ref-url (concat
-                                                      "Referer: " ref-url "\r\n"))
-                                         extra-headers
-                                         ;; Length of data
-                                         (if url-http-data
-                                             (concat
-                                              "Content-length: " (number-to-string
-                                                                  (length url-http-data))
-                                              "\r\n"))
-                                         ;; End request
-                                         "\r\n"
-                                         ;; Any data
-                                         url-http-data "\r\n"))
-               ""))
-        (url-http-debug "Request is: \n%s" request)
-        request)))
+	  ;; This was done with a call to `format'.  Concatting parts has
+	  ;; the advantage of keeping the parts of each header together and
+	  ;; allows us to elide null lines directly, at the cost of making
+	  ;; the layout less clear.
+	  (setq request
+		;; We used to concat directly, but if one of the strings happens
+		;; to being multibyte (even if it only contains pure ASCII) then
+		;; every string gets converted with `string-MAKE-multibyte' which
+		;; turns the 127-255 codes into things like latin-1 accented chars
+		;; (it would work right if it used `string-TO-multibyte' instead).
+		;; So to avoid the problem we force every string to be unibyte.
+		(mapconcat
+		 ;; FIXME: Instead of `string-AS-unibyte' we'd want
+		 ;; `string-to-unibyte', so as to properly signal an error if one
+		 ;; of the strings contains a multibyte char.
+		 'string-as-unibyte
+		 (delq nil
+		       (list
+			;; The request
+			(or url-http-method "GET") " "
+			(if using-proxy (url-recreate-url url-http-target-url) real-fname)
+			" HTTP/" url-http-version "\r\n"
+			;; Version of MIME we speak
+			"MIME-Version: 1.0\r\n"
+			;; (maybe) Try to keep the connection open
+			"Connection: " (if (or using-proxy
+					       (not url-http-attempt-keepalives))
+					   "close" "keep-alive") "\r\n"
+					   ;; HTTP extensions we support
+			(if url-extensions-header
+			    (format
+			     "Extension: %s\r\n" url-extensions-header))
+			;; Who we want to talk to
+			(if (/= (url-port url-http-target-url)
+				(url-scheme-get-property
+				 (url-type url-http-target-url) 'default-port))
+			    (format
+			     "Host: %s:%d\r\n" host (url-port url-http-target-url))
+			  (format "Host: %s\r\n" host))
+			;; Who its from
+			(if url-personal-mail-address
+			    (concat
+			     "From: " url-personal-mail-address "\r\n"))
+			;; Encodings we understand
+			(if url-mime-encoding-string
+			    (concat
+			     "Accept-encoding: " url-mime-encoding-string "\r\n"))
+			(if url-mime-charset-string
+			    (concat
+			     "Accept-charset: " url-mime-charset-string "\r\n"))
+			;; Languages we understand
+			(if url-mime-language-string
+			    (concat
+			     "Accept-language: " url-mime-language-string "\r\n"))
+			;; Types we understand
+			"Accept: " (or url-mime-accept-string "*/*") "\r\n"
+			;; User agent
+			(url-http-user-agent-string)
+			;; Proxy Authorization
+			proxy-auth
+			;; Authorization
+			auth
+			;; Cookies
+			(url-cookie-generate-header-lines host real-fname
+							  (equal "https" (url-type url-http-target-url)))
+			;; If-modified-since
+			(if (and (not no-cache)
+				 (member url-http-method '("GET" nil)))
+			    (let ((tm (url-is-cached url-http-target-url)))
+			      (if tm
+				  (concat "If-modified-since: "
+					  (url-get-normalized-date tm) "\r\n"))))
+			;; Whence we came
+			(if ref-url (concat
+				     "Referer: " ref-url "\r\n"))
+			extra-headers
+			;; Length of data
+			(if url-http-data
+			    (concat
+			     "Content-length: " (number-to-string
+						 (length url-http-data))
+			     "\r\n"))
+			;; End request
+			"\r\n"
+			;; Any data
+			url-http-data "\r\n"))
+		 ""))
+	  (url-http-debug "Request is: \n%s" request)
+	  request))))
 
 (unless (fboundp 'mm-url-encode-multipart-form-data)
   (defun mm-url-encode-multipart-form-data (pairs &optional boundary)
@@ -351,15 +360,13 @@
 (unless (fboundp 'assoc-string)
   (defun assoc-string (key list &optional case-fold)
     (if case-fold
-	(assoc-ignore-case key list)
+        (assoc-ignore-case key list)
       (assoc key list))))
 
 (defun url-compat-retrieve (url post-process bufname callback cbargs)
   (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
 	 (if callback
-	     (setq url-be-asynchronous t
-		   url-current-callback-data cbargs
-		   url-current-callback-func callback)
+	     (setq url-be-asynchronous t)
 	   (setq url-be-asynchronous nil))
 	 (url-retrieve url t)
 	 (when (not url-be-asynchronous)
@@ -1974,7 +1981,7 @@ Some simple editing commands.
 
     (define-key mediawiki-mode-map "\C-c\C-q" 'mediawiki-unfill-article)
     (define-key mediawiki-mode-map "\C-c\M-q" 'mediawiki-fill-article)
-    (define-key mediawiki-mode-map "\M-u" 'mediawiki-unfill-paragraph-or-region)
+    (define-key mediawiki-mode-map "\C-c\M-u" 'mediawiki-unfill-paragraph-or-region)
     (define-key mediawiki-mode-map "\C-c\C-u" 'mediawiki-unfill-paragraph-simple)
     (define-key mediawiki-mode-map "\C-c\C-f\C-s" 'mediawiki-insert-strong-emphasis)
     (define-key mediawiki-mode-map "\C-c\C-f\C-b" 'mediawiki-insert-bold)
