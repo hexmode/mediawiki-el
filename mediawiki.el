@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-11-15 13:29:50 mah>
+;; Last Modified: <2010-11-15 16:01:50 mah>
 
 (defconst mediawiki-version "2.2.2"
   "Current version of mediawiki.el")
@@ -1089,6 +1089,16 @@ into a string, or just return the string"
       (mediawiki-save-page
        mediawiki-site
        mediawiki-page-title
+       summary
+       (buffer-substring-no-properties (point-min) (point-max)))
+    (error "Error: %s is not a mediawiki document" (buffer-name))))
+
+(defun mediawiki-save-as (&optional name summary)
+  (interactive "sSave As: \nsSummary: ")
+  (if mediawiki-page-title
+      (mediawiki-save-page
+       mediawiki-site
+       name
        summary
        (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
