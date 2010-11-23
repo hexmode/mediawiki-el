@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-11-15 16:01:50 mah>
+;; Last Modified: <2010-11-23 17:31:04 mah>
 
 (defconst mediawiki-version "2.2.2"
   "Current version of mediawiki.el")
@@ -130,8 +130,6 @@
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
-(when (locate-library "auth-source")
-  (require 'auth-source))
 (eval-when-compile (progn
                      (require 'cl)
                      ;; Below copied from url-http to avoid compilation warnings
@@ -143,8 +141,8 @@
                      (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case))))
 
 ;; As of 2010-06-22, these functions are in Emacs
-(unless (fboundp 'url-user-for-url)
-  (defun url-bit-for-url (method lookfor url)
+
+(defun url-bit-for-url (method lookfor url)
     (when (fboundp 'auth-source-user-or-password)
       (let* ((urlobj (url-generic-parse-url url))
              (bit (funcall method urlobj))
@@ -155,13 +153,13 @@
              lookfor (funcall (pop methods) urlobj) (url-type urlobj))
           bit))))
 
-  (defun url-user-for-url (url)
+(defun url-user-for-url (url)
     "Attempt to use .authinfo to find a user for this URL."
     (url-bit-for-url 'url-user "login" url))
 
-  (defun url-password-for-url (url)
+(defun url-password-for-url (url)
     "Attempt to use .authinfo to find a password for this URL."
-    (url-bit-for-url 'url-password "password" url)))
+    (url-bit-for-url 'url-password "password" url))
 
 (when (fboundp 'url-http-create-request)
   (if (string= "GET / HTTP/1.0\nMIME-Version: 1.0\nConnection: close\nHost: example.com\nAccept: */*\nUser-Agent: URL/Emacs\nContent-length: 4\n\ntest"
@@ -871,6 +869,11 @@ the base URI of the wiki engine as well as group and page name.")
 
 (defvar mediawiki-draft-mode-map ())
 
+(defun mediawiki-translate-pagename (name)
+  "Given NAME, returns the typical name that MediaWiki would use.
+Right now, this only means replacing \"_\" with \" \"."
+  (mapconcat 'identity (split-string name "_" t) " "))
+
 (defun mediawiki-make-api-url (&optional sitename)
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
                   "api.php")))
@@ -909,7 +912,8 @@ the base URI of the wiki engine as well as group and page name.")
                   (if action
                       mediawiki-argument-pattern
                     "?title=%s"))
-	  (mm-url-form-encode-xwfu title)
+	  (mm-url-form-encode-xwfu
+           (mediawiki-translate-pagename title))
 	  action))
 
 (defun mediawiki-open (name)
@@ -932,20 +936,21 @@ the base URI of the wiki engine as well as group and page name.")
   (when (not (ring-p mediawiki-page-ring))
     (setq mediawiki-page-ring (make-ring 30)))
 
-  (with-current-buffer (get-buffer-create
-                        (concat site ": " title))
-    (ring-insert mediawiki-page-ring (current-buffer))
-    (delete-region (point-min) (point-max))
-    (mediawiki-mode)
-    (set-buffer-file-coding-system 'utf-8)
-    (insert (or (mediawiki-get site title) ""))
+  (let ((pagetitle (mediawiki-translate-pagename title)))
+    (with-current-buffer (get-buffer-create
+                          (concat site ": " pagetitle))
+      (ring-insert mediawiki-page-ring (current-buffer))
+      (delete-region (point-min) (point-max))
+      (mediawiki-mode)
+      (set-buffer-file-coding-system 'utf-8)
+      (insert (or (mediawiki-get site pagetitle) ""))
 
-    (set-buffer-modified-p nil)
-    (setq buffer-undo-list t)
-    (buffer-enable-undo)
-    (mediawiki-pop-to-buffer (current-buffer))
-    (setq mediawiki-page-title title)
-    (goto-char (point-min))))
+      (set-buffer-modified-p nil)
+      (setq buffer-undo-list t)
+      (buffer-enable-undo)
+      (mediawiki-pop-to-buffer (current-buffer))
+      (setq mediawiki-page-title pagetitle)
+      (goto-char (point-min)))))
 
 (defun mediawiki-get-edit-form-vars (str bufname)
   "Extract the form variables from a page.  This should only be
@@ -1047,13 +1052,15 @@ into a string, or just return the string"
      (t rev))))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
-  "Extract a page from a pagelist returned by mediawiki"
+  "Extract a page TITLE from a PAGELIST returned by mediawiki"
   (let ((pl (cddr (assq 'pages pagelist)))
         page current)
     (while (and (not page)
                 (setq current (pop pl)))
+      ;; This fails when underbars are here instead of spaces,
+      ;; so we make sure that it has the mediawiki pagename
       (when (string= (mediawiki-page-get-title current)
-                     title)
+                     (mediawiki-translate-pagename title))
         (setq page current)))
     page))
 
@@ -1093,9 +1100,35 @@ into a string, or just return the string"
        (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
+(defun mediawiki-prompt-for-page ()
+    (let* ((prompt (concat "Page"
+                         (when mediawiki-page-title
+                           (format " (default %s)" mediawiki-page-title))
+                         ": "))
+         (answer (completing-read prompt '())))
+    (if (string= "" answer)
+        mediawiki-page-title
+      answer)))
+
+(defun mediawiki-prompt-for-summary ()
+    (completing-read  "Summary: " '()))
+
+(defun mediawiki-save-on (&optional site name summary)
+  (interactive)
+  (when (not site)
+    (setq site (mediawiki-prompt-for-site)))
+  (when (not name)
+    (setq name (mediawiki-translate-pagename (mediawiki-prompt-for-page))))
+  (when (not summary)
+    (setq summary (mediawiki-prompt-for-summary)))
+
+  (setq mediawiki-site (mediawiki-do-login site))
+  (mediawiki-get mediawiki-site name)
+  (mediawiki-save-as name summary))
+
 (defun mediawiki-save-as (&optional name summary)
   (interactive "sSave As: \nsSummary: ")
-  (if mediawiki-page-title
+  (if name
       (mediawiki-save-page
        mediawiki-site
        name
@@ -1164,7 +1197,8 @@ get a cookie."
                    (append
                     args (list (cons "lgtoken"
                                      (cdr (assq 'token result)))))))))
-    result))
+    (when (string= "Success" (cdr (assoc 'result t/mwresult)))
+      sitename)))
 
 (defun mediawiki-do-logout (&optional sitename)
   (interactive)
@@ -1177,7 +1211,8 @@ get a cookie."
 (defun mediawiki-save-page (site title summary content)
   "Save the current page to a MediaWiki wiki."
   ;; FIXME error checking, conflicts!
-  (mediawiki-api-call site "edit" (list (cons "title" title)
+  (mediawiki-api-call site "edit" (list (cons "title"
+                                              (mediawiki-translate-pagename title))
                                         (cons "text" content)
                                         (cons "summary" summary)
                                         (cons "token" mediawiki-edittoken)
@@ -1212,8 +1247,7 @@ the current buffer is used."
     (setq site (mediawiki-prompt-for-site)))
   (when (or (eq nil mediawiki-site)
             (not (string-equal site mediawiki-site)))
-    (mediawiki-do-login site)
-    (setq mediawiki-site site))
+    (setq mediawiki-site (mediawiki-do-login site)))
   (mediawiki-edit site (mediawiki-site-first-page site)))
 
 (defun mediawiki-open-page-at-point ()
