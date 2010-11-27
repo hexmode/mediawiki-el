@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-11-23 17:31:04 mah>
+;; Last Modified: <2010-11-25 03:23:26 mah>
 
 (defconst mediawiki-version "2.2.2"
   "Current version of mediawiki.el")
@@ -1197,7 +1197,7 @@ get a cookie."
                    (append
                     args (list (cons "lgtoken"
                                      (cdr (assq 'token result)))))))))
-    (when (string= "Success" (cdr (assoc 'result t/mwresult)))
+    (when (string= "Success" (cdr (assoc 'result result)))
       sitename)))
 
 (defun mediawiki-do-logout (&optional sitename)
