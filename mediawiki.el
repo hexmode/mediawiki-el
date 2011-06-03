@@ -1,6 +1,6 @@
 ;;; mediawiki.el --- mediawiki frontend
 
-;; Copyright (C) 2008, 2009, 2010 Mark A. Hershberger
+;; Copyright (C) 2008, 2009, 2010, 2011 Mark A. Hershberger
 
 ;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2010-11-25 03:23:26 mah>
+;; Last Modified: <2011-06-03 09:01:24 mah>
 
 (defconst mediawiki-version "2.2.2"
   "Current version of mediawiki.el")
@@ -872,7 +872,9 @@ the base URI of the wiki engine as well as group and page name.")
 (defun mediawiki-translate-pagename (name)
   "Given NAME, returns the typical name that MediaWiki would use.
 Right now, this only means replacing \"_\" with \" \"."
-  (mapconcat 'identity (split-string name "_" t) " "))
+  (if (not name)
+      "Main Page"
+    (mapconcat 'identity (split-string name "_" t) " ")))
 
 (defun mediawiki-make-api-url (&optional sitename)
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
@@ -2060,8 +2062,8 @@ Some simple editing commands.
     (define-key mediawiki-mode-map "\C-\\" 'mediawiki-insert-itemize)
     (define-key mediawiki-mode-map [(control return)] 'mediawiki-insert-itemize)
     (define-key mediawiki-mode-map "\C-ca" 'auto-capitalize-mode)
-    (define-key mediawiki-mode-map "\C-ci" 'set-input-method)
-    (define-key mediawiki-mode-map "\C-ct" 'toggle-input-method)
+;    (define-key mediawiki-mode-map "\C-ci" 'set-input-method)
+;    (define-key mediawiki-mode-map "\C-ct" 'toggle-input-method)
 
     (define-key mediawiki-mode-map [(backtab)] 'mediawiki-goto-prev-link)
     (define-key mediawiki-mode-map [(tab)]     'mediawiki-goto-next-link)
