@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.2
+;; Version: 2.2.3
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2011-06-03 09:01:24 mah>
+;; Last Modified: <2011-07-21 15:42:49 mah>
 
-(defconst mediawiki-version "2.2.2"
+(defconst mediawiki-version "2.2.3"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -503,6 +503,9 @@ be used to to open the whole buffer."
   :type 'hook
   :group 'mediawiki)
 
+(defvar mediawiki-page-history '()
+  "Assoc list of visited pages on this MW site.")
+
 (defvar mediawiki-enumerate-with-terminate-paragraph nil
 "*Before insert enumerate/itemize do \\[mediawiki-terminate-paragraph].")
 
@@ -920,7 +923,9 @@ Right now, this only means replacing \"_\" with \" \"."
 
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine"
-  (interactive "sWiki Page: ")
+  (interactive
+   (let ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
+     (list (read-string "Wiki Page: " nil 'hist))))
   (when (or (not (stringp name))
             (string-equal "" name))
     (error "Need to specify a name"))
@@ -933,12 +938,20 @@ Right now, this only means replacing \"_\" with \" \"."
 	(mediawiki-open title)
       (error "Error: %s is not a mediawiki document" (buffer-name)))))
 
+(defun mediawiki-add-page-history (site title)
+  (let ((hist (cdr (assoc-string site mediawiki-page-history))))
+    (unless hist
+      (add-to-list 'mediawiki-page-history (cons site "")))
+    (setcdr (assoc-string site mediawiki-page-history) (append (list title) hist))))
+
 (defun mediawiki-edit (site title)
   "Edit wiki file with the name of title"
   (when (not (ring-p mediawiki-page-ring))
     (setq mediawiki-page-ring (make-ring 30)))
 
   (let ((pagetitle (mediawiki-translate-pagename title)))
+
+    (mediawiki-add-page-history site title)
     (with-current-buffer (get-buffer-create
                           (concat site ": " pagetitle))
       (ring-insert mediawiki-page-ring (current-buffer))
