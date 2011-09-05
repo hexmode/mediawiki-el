@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2011-07-21 15:42:49 mah>
+;; Last Modified: <2011-09-05 11:59:55 mah>
 
 (defconst mediawiki-version "2.2.3"
   "Current version of mediawiki.el")
@@ -954,6 +954,9 @@ Right now, this only means replacing \"_\" with \" \"."
     (mediawiki-add-page-history site title)
     (with-current-buffer (get-buffer-create
                           (concat site ": " pagetitle))
+      (unless (mediawiki-logged-in-p site)
+        (mediawiki-do-login site)
+        (setq mediawiki-site site))
       (ring-insert mediawiki-page-ring (current-buffer))
       (delete-region (point-min) (point-max))
       (mediawiki-mode)
@@ -965,7 +968,8 @@ Right now, this only means replacing \"_\" with \" \"."
       (buffer-enable-undo)
       (mediawiki-pop-to-buffer (current-buffer))
       (setq mediawiki-page-title pagetitle)
-      (goto-char (point-min)))))
+      (goto-char (point-min))
+      (current-buffer))))
 
 (defun mediawiki-get-edit-form-vars (str bufname)
   "Extract the form variables from a page.  This should only be
@@ -1024,9 +1028,14 @@ there will be local to that buffer."
                form start)))
       vars)))
 
-(defun mediawiki-logged-in-p ()
-  "Returns t if we are logged in already."
-  (not (eq nil mediawiki-site)))         ; FIXME should check cookies
+(defun mediawiki-logged-in-p (&optional site)
+  "Returns t if we are we have cookies for the site."
+  (let ((urlobj (url-generic-parse-url
+                 (mediawiki-site-url (or site mediawiki-site)))))
+    (url-cookie-retrieve
+     (url-host urlobj)
+     (url-filename urlobj)
+     nil))) ; FIXME need to say if it is secure
 
 (defun mediawiki-pop-to-buffer (bufname)
   "Pop to buffer and then execute a hook."

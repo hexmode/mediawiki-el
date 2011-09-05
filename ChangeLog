@@ -1,3 +1,10 @@
+2011-09-05  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el (mediawiki-logged-in-p): Update test to check if
+	cookes exist instead of just checking if mediawiki-site is set.
+	(mediawiki-edit): return buffer that was just
+	opened.  Log in if cookies don't exist yet.
+
 2010-07-11  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el (mediawiki-edit, mediawiki-mode): Make sure the
