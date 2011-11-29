@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2011-09-05 11:59:55 mah>
+;; Last Modified: <2011-11-28 22:55:57 mah>
 
 (defconst mediawiki-version "2.2.3"
   "Current version of mediawiki.el")
@@ -141,8 +141,8 @@
                      (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case))))
 
 ;; As of 2010-06-22, these functions are in Emacs
-
-(defun url-bit-for-url (method lookfor url)
+(unless (fboundp 'url-bit-for-url)
+  (defun url-bit-for-url (method lookfor url)
     (when (fboundp 'auth-source-user-or-password)
       (let* ((urlobj (url-generic-parse-url url))
              (bit (funcall method urlobj))
@@ -151,15 +151,17 @@
         (if (and (not bit) (> (length methods) 0))
             (auth-source-user-or-password
              lookfor (funcall (pop methods) urlobj) (url-type urlobj))
-          bit))))
+          bit)))))
 
-(defun url-user-for-url (url)
+(unless (fboundp 'url-url-for-url)
+  (defun url-user-for-url (url)
     "Attempt to use .authinfo to find a user for this URL."
-    (url-bit-for-url 'url-user "login" url))
+    (url-bit-for-url 'url-user "login" url)))
 
-(defun url-password-for-url (url)
+(unless (fboundp 'url-password-for-url)
+  (defun url-password-for-url (url)
     "Attempt to use .authinfo to find a password for this URL."
-    (url-bit-for-url 'url-password "password" url))
+    (url-bit-for-url 'url-password "password" url)))
 
 (when (fboundp 'url-http-create-request)
   (if (string= "GET / HTTP/1.0\nMIME-Version: 1.0\nConnection: close\nHost: example.com\nAccept: */*\nUser-Agent: URL/Emacs\nContent-length: 4\n\ntest"
@@ -331,10 +333,26 @@
       ;; Delete any returned items that are empty
       (delq nil
             (mapcar (lambda (data)
-                      (when (car data)
-                        ;; For each pair
-                        (concat
 
+                      (cond
+                       ((consp (car data))
+                        (let ((fieldname (cadar data))
+                              (filename  (caadar data))
+                              (mimetype  (car (caadar data)))
+                              (content   (caar (caadar data))))
+
+                          (concat
+                           ;; Encode the name
+                           "Content-Disposition: form-data; name=\"" fieldname "\"\r\n"
+                           "Content-Type: " mimetype "\r\n"
+                           "Content-Transfer-Encoding: binary\r\n\r\n"
+                           content
+                           "\r\n")))
+
+                       ((stringp (car data))
+                                ;; For each pair
+
+                        (concat
                          ;; Encode the name
                          "Content-Disposition: form-data; name=\""
                          (car data) "\"\r\n"
@@ -346,7 +364,8 @@
                                ((integerp (cdr data))
                                 (int-to-string (cdr data))))
 
-                         "\r\n")))
+                         "\r\n"))
+                       (t (error "I don't handle this."))))
                     pairs))
       ;; use the boundary as a separator
       (concat "--" boundary "\r\n"))
@@ -398,8 +417,7 @@
 
   (let* ((url-request-extra-headers
           (if headers headers
-            (if url-request-extra-headers url-request-extra-headers
-              (cons nil nil))))
+            (when url-request-extra-headers url-request-extra-headers)))
          (boundary (int-to-string (random)))
          (cs 'utf-8)
          (content-type
@@ -885,11 +903,10 @@ Right now, this only means replacing \"_\" with \" \"."
 
 (defun mediawiki-api-call (sitename action args)
   (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
-;;               (concat (mediawiki-make-api-url sitename) "?"
-;;                       (mm-url-encode-www-form-urlencoded
                         (delq nil
                               (append args (list (cons "format" "xml")
-                                                 (cons "action" action))))))
+                                                 (cons "action" action))))
+                        (string= action "upload")))
          (result (assoc 'api
                             (with-temp-buffer
                               (insert raw)
@@ -1035,7 +1052,7 @@ there will be local to that buffer."
     (url-cookie-retrieve
      (url-host urlobj)
      (url-filename urlobj)
-     nil))) ; FIXME need to say if it is secure
+     (equal "https" (url-type urlobj)))))
 
 (defun mediawiki-pop-to-buffer (bufname)
   "Pop to buffer and then execute a hook."
@@ -1245,6 +1262,13 @@ get a cookie."
                                         (cons "starttimestamp"
                                               (or mediawiki-starttimestamp ""))))
   (set-buffer-modified-p nil))
+
+;; (cdr (assoc 'edittoken (cadr (caddr (caddr (mediawiki-api-call "mw-svn" "query"
+;;                                                                (list '("prop" . "info")
+;;                                                                      '("intoken" . "edit")
+;;                                                                      '("titles" . (concat "File:" filename)))))))))
+;
+;(mediawiki-api-call "mw-svn" "upload" (list '("filename" . "info.exe") '("file" . "edit") '("token" . token)))
 
 (defun mediawiki-browse (&optional buf)
   "Open the buffer BUF in a browser. If BUF is not given,

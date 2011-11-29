@@ -1,3 +1,11 @@
+2011-11-28  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el (url-bit-for-url, url-url-for-url)
+	(url-password-for-url): Define only if undefined.  Perhaps some
+	others.
+	(mediawiki-logged-in-p): specify secure or not.
+	(url-http-post): Start to add support for multipart-form-data.
+
 2011-09-05  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el (mediawiki-logged-in-p): Update test to check if
