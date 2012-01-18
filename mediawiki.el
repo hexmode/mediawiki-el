@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2011-11-28 22:55:57 mah>
+;; Last Modified: <2012-01-18 13:06:02 mah>
 
 (defconst mediawiki-version "2.2.3"
   "Current version of mediawiki.el")
@@ -1252,16 +1252,18 @@ get a cookie."
 (defun mediawiki-save-page (site title summary content)
   "Save the current page to a MediaWiki wiki."
   ;; FIXME error checking, conflicts!
-  (mediawiki-api-call site "edit" (list (cons "title"
-                                              (mediawiki-translate-pagename title))
-                                        (cons "text" content)
-                                        (cons "summary" summary)
-                                        (cons "token" mediawiki-edittoken)
-                                        (cons "basetimestamp"
-                                              (or mediawiki-basetimestamp ""))
-                                        (cons "starttimestamp"
-                                              (or mediawiki-starttimestamp ""))))
-  (set-buffer-modified-p nil))
+  (if (not mediawiki-edittoken)
+      (error "Need an edit token!")
+    (mediawiki-api-call site "edit" (list (cons "title"
+                                                (mediawiki-translate-pagename title))
+                                          (cons "text" content)
+                                          (cons "summary" summary)
+                                          (cons "token" mediawiki-edittoken)
+                                          (cons "basetimestamp"
+                                                (or mediawiki-basetimestamp ""))
+                                          (cons "starttimestamp"
+                                                (or mediawiki-starttimestamp ""))))
+    (set-buffer-modified-p nil)))
 
 ;; (cdr (assoc 'edittoken (cadr (caddr (caddr (mediawiki-api-call "mw-svn" "query"
 ;;                                                                (list '("prop" . "info")
