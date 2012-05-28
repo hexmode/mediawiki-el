@@ -10,9 +10,9 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2012-01-18 13:06:02 mah>
+;; Last Modified: <2012-05-27 22:06:10 mah>
 
-(defconst mediawiki-version "2.2.3"
+(defconst mediawiki-version "2.2.4"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -453,12 +453,12 @@
   (declare (special url-http-end-of-headers))
   (let ((kill-this-buffer (current-buffer)))
     (when (and (integerp status) (not (< status 300)))
-      (kill-buffer kill-this-buffer)
+      (when (not mediawiki-debug) (kill-buffer kill-this-buffer))
       (error "Oops! Invalid status: %d" status))
 
     (when (or (not (boundp 'url-http-end-of-headers))
               (not url-http-end-of-headers))
-      (kill-buffer kill-this-buffer)
+      (when (not mediawiki-debug) (kill-buffer kill-this-buffer))
       (error "Oops! Don't see end of headers!"))
 
     ;; FIXME: need to limit redirects
@@ -474,7 +474,7 @@
       (let ((str (decode-coding-string
                   (buffer-substring-no-properties (point) (point-max))
                   'utf-8)))
-        (kill-buffer (current-buffer))
+        (when (not mediawiki-debug) (kill-buffer (current-buffer)))
         (when bufname
           (set-buffer bufname)
           (insert str)
@@ -496,6 +496,12 @@ default and use `mediawiki-site' to set it per-session
 later."
   :type 'string
   :tag "MediaWiki Site Default"
+  :group 'mediawiki)
+
+(defcustom mediawiki-debug nil
+  "Turn on debugging (non-nil)"
+  :type 'boolean
+  :tag "MediaWiki Debugging"
   :group 'mediawiki)
 
 (defcustom mediawiki-site-alist '(("Wikipedia"
@@ -1848,7 +1854,7 @@ region, will be mediawiki-drafted."
       (narrow-to-region b e)
       (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)
     (when (equal mediawiki-draft-buffer (buffer-name))
-      (kill-buffer (current-buffer))
+      (when (not mediawiki-debug) (kill-buffer (current-buffer)))
       (jump-to-register mediawiki-draft-register)))))
 
 ;;;###autoload
@@ -1941,7 +1947,7 @@ is set off."
 		  (append-to-file (point-min) (point-max)
 				  mediawiki-draft-data-file)))))
     (when (equal mediawiki-draft-buffer (buffer-name))
-      (kill-buffer (current-buffer)))
+      (when (not mediawiki-debug) (kill-buffer (current-buffer))))
     (switch-to-buffer target-buffer)))
 
 (define-derived-mode mediawiki-draft-mode text-mode "MW-Draft"
