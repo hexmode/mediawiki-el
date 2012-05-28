@@ -1,3 +1,7 @@
+2012-05-27  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el (mediawiki-debug): Add (and use) debugging customization.
+
 2012-01-18  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el (mediawiki-save-page): Update for enwiki blackout
