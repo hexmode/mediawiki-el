@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.4
+;; Version: 2.2.4.1
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2012-12-31 15:35:15 mah>
+;; Last Modified: <2012-12-31 15:54:27 mah>
 
-(defconst mediawiki-version "2.2.4"
+(defconst mediawiki-version "2.2.4.1"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -57,7 +57,8 @@
 ;; Save a wiki buffer:  C-x C-s
 ;; Save a wiki buffer with a different name:  C-x C-w
 
-;;; TODO:
+;;; TODO
+
 ;;  * Optionally use org-mode formatting for editing and translate
 ;;    that to mw
 ;;  * Move url-* methods to url-http
@@ -66,6 +67,13 @@
 ;;  * Improve language support.  Currently there is a toggle for
 ;;    English or German.  This should probably just be replaced with
 ;;    customizable words given MediaWiki's wide language support.
+
+;;; Changes
+
+;; Since 2.2.4:
+;;  * Made it clearer where debugging information is found when
+;;    mediawiki-debug is non-nil by adding messages to the message
+;;    buffer when debug buffers are killed.
 
 ;;; History
 
