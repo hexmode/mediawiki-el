@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.4.1
+;; Version: 2.2.4.2
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2012-12-31 15:54:27 mah>
+;; Last Modified: <2013-02-23 14:41:05 mah>
 
-(defconst mediawiki-version "2.2.4.1"
+(defconst mediawiki-version "2.2.4.2"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -69,6 +69,9 @@
 ;;    customizable words given MediaWiki's wide language support.
 
 ;;; Changes
+
+;; Since 2.2.4.1:
+;; * Add the forgotten customizable mediawiki-debug.
 
 ;; Since 2.2.4:
 ;;  * Made it clearer where debugging information is found when
@@ -553,6 +556,11 @@ fonts and other makeup.")
   :group 'mediawiki)
 
 ;;; User Variables:
+
+(defcustom mediawiki-debug nil
+  "Keep buffers around for debugging purposes."
+  :type 'boolean
+  :group 'mediawiki)
 
 (defcustom mediawiki-draft-mode-hook nil
   "*Functions run upon entering mediawiki-draft-mode."
@@ -1281,9 +1289,9 @@ get a cookie."
     (mediawiki-api-call site "edit" (list (cons "title"
                                                 (mediawiki-translate-pagename title))
                                           (cons "text" content)
-                                          (cons "summary" summary)
-                                          (cons "token" mediawiki-edittoken)
-                                          (cons "basetimestamp"
+                                        (cons "summary" summary)
+                                        (cons "token" mediawiki-edittoken)
+                                        (cons "basetimestamp"
                                                 (or mediawiki-basetimestamp ""))
                                           (cons "starttimestamp"
                                                 (or mediawiki-starttimestamp ""))))
@@ -1950,7 +1958,7 @@ is set off."
       (with-temp-buffer
 	(insert (concat "\n\n" mediawiki-draft-leader-text)
 		(insert-register mediawiki-draft-reply-register 1)
-		(insert (concat " " (current-time-string) " "
+		(insert (concat " " (current-time-string) " " 
 				mediawiki-draft-leader-text  "\n\n\f\n\n"
 				text "\n\f\n"))
 		(if (not (bolp))
