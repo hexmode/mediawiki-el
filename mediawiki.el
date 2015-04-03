@@ -9,8 +9,8 @@
 ;; Version: 2.2.5
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
-;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2015-04-03 17:50:59 mah>
+;; URL: http://github.com/hexmode/mediawiki-el
+;; Last Modified: <2015-04-03 18:08:35 mah>
 
 (defconst mediawiki-version "2.2.5"
   "Current version of mediawiki.el.")

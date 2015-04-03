@@ -1,3 +1,10 @@
+2015-04-03  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el: Various cleanups for flycheck.  Move to github and
+	git from Launchpad and bzr.  Clean up last bits of wikimedia.el.
+	* README.mediawiki: README file for github.  Use mediawiki markup
+	instead of Markdown since it just seems right.
+
 2012-05-27  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el (mediawiki-debug): Add (and use) debugging customization.

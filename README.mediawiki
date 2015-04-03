@@ -1,4 +1,4 @@
-== mediawiki.el -- a front-end for mediawiki sites from emacs ==
+== mediawiki.el -- Edit mediawiki sites from emacs ==
 
 This version of mediawiki.el represents a merging of
 wikipedia-mode.el (maintained by Uwe Brauer <oub at mat.ucm.es>)
@@ -36,4 +36,4 @@ If mediawiki sees that the password is empty, then it will use [https://www.gnu.
 * Move url-* methods to url-http
 * Use the MW API to support searching, etc.
 * Clean up and thoroughly test imported wikimedia.el code
-* Improve language support.  Currently there is a toggle for English or German.  This should probably just be replaced with customizable words given MediaWiki's wide language support.
+* Improve language support.  Currently there is a toggle for English or German.  This should probably just be replaced with the ability to use MediaWiki's i18n files in json format.
