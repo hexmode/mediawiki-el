@@ -26,7 +26,7 @@ Save a wiki buffer with a different name:  C-x C-w
 
 Although there is a place to put your password when you customize this package, there is no need to store your password in plain text.
 
-If mediawiki sees that the password is empty, then it will use [https://www.gnu.org/software/emacs/manual/html_mono/auth.html the auth-source library] to retrieve the password.
+If mediawiki sees that the password is empty, then it will use [https://www.gnu.org/software/emacs/manual/html_mono/auth.html the auth-source library] to retrieve the password.  This will allow you to use encryption to store your passwords.
 
 
 === TODO ===

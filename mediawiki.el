@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.4.2
+;; Version: 2.2.5
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2013-02-23 14:41:05 mah>
+;; Last Modified: <2015-04-03 14:08:15 mah>
 
-(defconst mediawiki-version "2.2.4.2"
+(defconst mediawiki-version "2.2.5"
   "Current version of mediawiki.el")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -40,9 +40,9 @@
 
 ;;; Installation
 
-;; If you use ELPA (http://tromey.com/elpa), you can install via the
-;; M-x package-list-packages interface. This is preferrable as you
-;; will have access to updates automatically.
+;; If you use ELPA, you can install via the M-x package-list-packages
+;; interface. This is preferrable as you will have access to updates
+;; automatically.
 
 ;; Otherwise, just make sure this file is in your load-path (usually
 ;; ~/.emacs.d is included) and put (require 'mediawiki.el) in your
@@ -69,6 +69,10 @@
 ;;    customizable words given MediaWiki's wide language support.
 
 ;;; Changes
+
+;; Since 2.2.4.2
+;; * Move to github
+;; * Added Readme.mediawiki to with information about security.
 
 ;; Since 2.2.4.1:
 ;; * Add the forgotten customizable mediawiki-debug.
