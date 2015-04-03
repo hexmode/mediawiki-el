@@ -1,6 +1,6 @@
 ;;; mediawiki.el --- mediawiki frontend
 
-;; Copyright (C) 2008, 2009, 2010, 2011 Mark A. Hershberger
+;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
 
 ;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
@@ -10,10 +10,10 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://launchpad.net/mediawiki-el
-;; Last Modified: <2015-04-03 14:08:15 mah>
+;; Last Modified: <2015-04-03 17:50:59 mah>
 
 (defconst mediawiki-version "2.2.5"
-  "Current version of mediawiki.el")
+  "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
 
@@ -145,15 +145,15 @@
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
-(eval-when-compile (progn
-                     (require 'cl)
-                     ;; Below copied from url-http to avoid compilation warnings
-                     (defvar url-http-extra-headers)
-                     (defvar url-http-target-url)
-                     (defvar url-http-proxy)
-                     (defvar url-http-connection-opened)
-                     ;; This should only be used in xemacs, anyway
-                     (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case))))
+(eval-when-compile
+  (require 'cl)
+  ;; Below copied from url-http to avoid compilation warnings
+  (defvar url-http-extra-headers)
+  (defvar url-http-target-url)
+  (defvar url-http-proxy)
+  (defvar url-http-connection-opened)
+  ;; This should only be used in xemacs, anyway
+  (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case)))
 
 ;; As of 2010-06-22, these functions are in Emacs
 (unless (fboundp 'url-bit-for-url)
@@ -202,7 +202,8 @@
 				    'url-http-proxy-basic-auth-storage))
 			       (url-get-authentication url-http-target-url nil 'any nil))))
 	       (real-fname (concat (url-filename url-http-target-url)
-				   (url-recreate-url-attributes url-http-target-url)))
+				   (with-no-warnings
+                                     (url-recreate-url-attributes url-http-target-url))))
 	       (host (url-host url-http-target-url))
 	       (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
 			 nil
@@ -328,6 +329,9 @@
 	  (url-http-debug "Request is: \n%s" request)
 	  request))))
 
+;; There are some versions of emacs that don't have
+;; mm-url-encode-multipart-form-data.
+;; See https://lists.gnu.org/archive/html/emacs-diffs/2014-11/msg00167.html
 (unless (fboundp 'mm-url-encode-multipart-form-data)
   (defun mm-url-encode-multipart-form-data (pairs &optional boundary)
     "Return PAIRS encoded in multipart/form-data."
@@ -380,7 +384,7 @@
                                 (int-to-string (cdr data))))
 
                          "\r\n"))
-                       (t (error "I don't handle this."))))
+                       (t (error "I don't handle this"))))
                     pairs))
       ;; use the boundary as a separator
       (concat "--" boundary "\r\n"))
@@ -395,24 +399,32 @@
         (assoc-ignore-case key list)
       (assoc key list))))
 
-(defun url-compat-retrieve (url post-process bufname callback cbargs)
+(defun url-compat-retrieve (url post-process buffer callback cbargs)
+  "Function to compatibly retrieve a URL.
+Some provision is made for different versions of Emacs version.
+POST-PROCESS is the function to call for post-processing.
+BUFFER is the buffer to store the result in.  CALLBACK will be
+called in BUFFER with CBARGS, if given."
   (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
 	 (if callback
 	     (setq url-be-asynchronous t)
 	   (setq url-be-asynchronous nil))
 	 (url-retrieve url t)
 	 (when (not url-be-asynchronous)
-	   (let ((result (funcall post-process bufname)))
+	   (let ((result (funcall post-process buffer)))
 	     result)))
 	(t (if callback
 	       (url-retrieve url post-process
-			     (list bufname callback cbargs))
+			     (list buffer callback cbargs))
 	     (with-current-buffer (url-retrieve-synchronously url)
-	       (funcall post-process bufname))))))
+	       (funcall post-process buffer))))))
 
 (defvar url-http-get-post-process 'url-http-response-post-process)
-(defun url-http-get (url &optional headers bufname callback cbargs)
-  "Convenience method to use method 'GET' to retrieve URL"
+(defun url-http-get (url &optional headers buffer callback cbargs)
+  "Convenience method to use method 'GET' to retrieve URL.
+HEADERS is the optional headers to send.  BUFFER is where the
+result will be stored.  CALLBACK will be called in BUFFER with
+CBARGS, if given."
   (let* ((url-request-extra-headers (if headers headers
                                       (if url-request-extra-headers
                                           url-request-extra-headers
@@ -423,12 +435,18 @@
       (add-to-list 'url-request-extra-headers
                    (cons "Authorization" (url-basic-auth url))))
     (url-compat-retrieve url url-http-get-post-process
-			 bufname callback cbargs)))
+			 buffer callback cbargs)))
 
 (defvar url-http-post-post-process 'url-http-response-post-process)
-(defun url-http-post (url parameters &optional multipart headers bufname
+(defun url-http-post (url parameters &optional multipart headers buffer
                           callback cbargs)
-  "Convenience method to use method 'POST' to retrieve URL"
+  "Convenience method to use method 'POST' to retrieve URL.
+PARAMETERS are the parameters to put the the body.  If MULTIPART
+is t, then multipart/form-data will be used.  Otherwise,
+applicaton/x-www-form-urlencoded is used.  HEADERS is the
+optional headers to send.  BUFFER is where the result will be
+stored.  CALLBACK will be called in BUFFER with CBARGS, if
+given."
 
   (let* ((url-request-extra-headers
           (if headers headers
@@ -460,11 +478,13 @@
 
     (message "Posting to: %s" url)
     (url-compat-retrieve url url-http-post-post-process
-			 bufname callback cbargs)))
+			 buffer callback cbargs)))
 
-(defun url-http-response-post-process (status &optional bufname
+(defun url-http-response-post-process (status &optional buffer
                                               callback cbargs)
-  "Post process on HTTP response."
+  "Default post-processor for an HTTP POST request response.
+STATUS is the HTTP status code.  BUFFER, CALLBACK, and CBARGS are
+passed as well from the original POST request."
   (declare (special url-http-end-of-headers))
   (let ((kill-this-buffer (current-buffer)))
     (when (and (integerp status) (not (< status 300)))
@@ -481,7 +501,7 @@
              (eq (car status) :redirect))
         (progn
           (message (concat "Redirecting to " (cadr status)))
-          (url-http-get (cadr status) nil bufname callback cbargs))
+          (url-http-get (cadr status) nil buffer callback cbargs))
 
       (goto-char url-http-end-of-headers)
       (forward-line)
@@ -490,14 +510,14 @@
                   (buffer-substring-no-properties (point) (point-max))
                   'utf-8)))
         (mediawiki-debug (current-buffer) "url-http-response-post-process:3")
-        (when bufname
-          (set-buffer bufname)
+        (when buffer
+          (set-buffer buffer)
           (insert str)
           (goto-char (point-min))
           (set-buffer-modified-p nil))
         (when callback
           (apply callback (list str cbargs)))
-        (when (not (or callback bufname))
+        (when (not (or callback buffer))
           str)))))
 
 (defgroup mediawiki nil
@@ -506,15 +526,15 @@
   :group 'applications)
 
 (defcustom mediawiki-site-default "Wikipedia"
-  "The default mediawiki site to point to.  Set here for the
-default and use `mediawiki-site' to set it per-session
-later."
+  "The default mediawiki site to point to.
+Set here for the default and use `mediawiki-site' to set it
+per-session later."
   :type 'string
   :tag "MediaWiki Site Default"
   :group 'mediawiki)
 
 (defcustom mediawiki-debug nil
-  "Turn on debugging (non-nil)"
+  "Turn on debugging (non-nil)."
   :type 'boolean
   :tag "MediaWiki Debugging"
   :group 'mediawiki)
@@ -536,8 +556,8 @@ later."
                                           :description "First page to open when `mediawiki-site' is called for this site"))))
 
 (defcustom mediawiki-pop-buffer-hook '()
-  "List of functions to execute after popping to a buffer.  Can
-be used to to open the whole buffer."
+  "List of functions to execute after popping to a buffer.
+Can be used to to open the whole buffer."
   :options '(delete-other-windows)
   :type 'hook
   :group 'mediawiki)
@@ -551,9 +571,10 @@ be used to to open the whole buffer."
 (defvar mediawiki-english-or-german t
   "*Variable in order to set the english (t) or german (nil) environment.")
 
-(defvar mediawiki-user-simplify-signature t
-  "*Simple varible in order to threat complicated signatures of users, which uses
-fonts and other makeup.")
+(defcustom mediawiki-user-simplify-signature t
+  "Simplify other user's signatures."
+  :type 'boolean
+  :group 'mediawiki)
 
 (defgroup mediawiki-draft nil
   "A mode to mediawiki-draft information."
@@ -587,7 +608,7 @@ All functions are run in the mediawiki-draft buffer."
 Each function is called with the current buffer narrowed to what the
 user wants mediawiki-drafted.
 If any function returns non-nil, the data is assumed to have been
-recorded somewhere by that function. "
+recorded somewhere by that function."
   :type 'hook
   :group 'mediawiki-draft)
 
@@ -623,40 +644,42 @@ recorded somewhere by that function. "
   "Imenu expression for `mediawiki-mode'.  See `imenu-generic-expression'.")
 
 (defvar mediawiki-login-success "pt-logout"
-  "A string that should be present on login success on all
-mediawiki sites.")
+  "String to look for in HTML response.
+This will be used to verify a successful login.")
 
 (defvar mediawiki-permission-denied
   "[^;]The action you have requested is limited"
-  "A string that will indicate permission has been denied, Note
-that it should not match the mediawiki.el file itself since it
-is sometimes put on MediaWiki sites.")
+  "String that indicates permission has been denied.
+Note that it should not match the mediawiki.el file itself since
+it is sometimes put on MediaWiki sites.")
 
 (defvar mediawiki-view-source
   "ca-viewsource"
-  "A string that will indicate you can only view source on this
-page.")
+  "String that indicates you cannot edit this page.")
 
 (defvar mediawiki-site nil
-  "The current mediawiki site from `mediawiki-site-alist'.  If
-not set, defaults to `mediawiki-site-default'.")
+  "The current mediawiki site from `mediawiki-site-alist'.
+If not set, defaults to `mediawiki-site-default'.")
 
 (defvar mediawiki-argument-pattern "?title=%s&action=%s"
-  "Format of the string to append to URLs.  Two string arguments
-are expected: first is a title and then an action.")
+  "Format of the string to append to URLs.
+Two string arguments are expected: first is a title and then an
+action.")
 
 (defvar mediawiki-URI-pattern
   "http://\\([^/:]+\\)\\(:\\([0-9]+\\)\\)?/"
-  "Pattern matching a URI like this:
+  "Pattern match for a URI.
+Expected to match something like this:
 	http://mediawiki.sf.net/index.php
-Password not support yet")
+Passwords in the URL are not supported yet")
 
 (defvar mediawiki-page-uri nil
-  "The URI of the page corresponding to the current buffer, thus defining
-the base URI of the wiki engine as well as group and page name.")
+  "The URI of the page corresponding to the current buffer.
+This is used to determine the base URI of the wiki engine as well
+as group and page name.")
 
 (defvar mediawiki-page-title nil
-  "The title of the page corresponding to the current buffer")
+  "The title of the page corresponding to the current buffer.")
 
 (defvar mediawiki-edittoken nil
   "The edit token for this page.")
@@ -917,8 +940,10 @@ the base URI of the wiki engine as well as group and page name.")
 (defvar mediawiki-draft-mode-map ())
 
 (defun mediawiki-debug (buffer function)
-  "When debugging is turned on, log the name of the buffer so it
-can be examined. If debugging is off, just kill the buffer.  This
+  "The debug handler.
+When debugging is turned on, log the name of the BUFFER with the
+FUNCTION that called the debugging function, so it can be
+examined.  If debugging is off, just kill the buffer.  This
 allows you to see what is being sent to and from the server."
   (if (not mediawiki-debug)
       (kill-buffer buffer)
@@ -927,17 +952,20 @@ allows you to see what is being sent to and from the server."
              function)))
 
 (defun mediawiki-translate-pagename (name)
-  "Given NAME, returns the typical name that MediaWiki would use.
+  "Given NAME, return the typical name that MediaWiki would use.
 Right now, this only means replacing \"_\" with \" \"."
   (if (not name)
       "Main Page"
     (mapconcat 'identity (split-string name "_" t) " ")))
 
 (defun mediawiki-make-api-url (&optional sitename)
+  "Translate SITENAME (or MEDIAWIKI-SITE if not given) to a URL."
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
                   "api.php")))
 
 (defun mediawiki-api-call (sitename action args)
+  "Wrapper for making an API call to SITENAME.
+ACTION is the API action.  ARGS is a list of arguments."
   (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
                         (delq nil
                               (append args (list (cons "format" "xml")
@@ -966,6 +994,7 @@ Right now, this only means replacing \"_\" with \" \"."
       t)))
 
 (defun mediawiki-make-url (title action &optional sitename)
+  "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
                   (if action
                       mediawiki-argument-pattern
@@ -975,7 +1004,7 @@ Right now, this only means replacing \"_\" with \" \"."
 	  action))
 
 (defun mediawiki-open (name)
-  "Open a wiki page specified by NAME from the mediawiki engine"
+  "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
    (let ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
      (list (read-string "Wiki Page: " nil 'hist))))
@@ -985,36 +1014,38 @@ Right now, this only means replacing \"_\" with \" \"."
   (mediawiki-edit mediawiki-site name))
 
 (defun mediawiki-reload ()
+  "Reload the page from the server."
   (interactive)
   (let ((title mediawiki-page-title))
     (if title
 	(mediawiki-open title)
       (error "Error: %s is not a mediawiki document" (buffer-name)))))
 
-(defun mediawiki-add-page-history (site title)
-  (let ((hist (cdr (assoc-string site mediawiki-page-history))))
+(defun mediawiki-add-page-history (sitename title)
+  "Update SITENAME's page history with TITLE."
+  (let ((hist (cdr (assoc-string sitename mediawiki-page-history))))
     (unless hist
-      (add-to-list 'mediawiki-page-history (cons site "")))
-    (setcdr (assoc-string site mediawiki-page-history) (append (list title) hist))))
+      (add-to-list 'mediawiki-page-history (cons sitename "")))
+    (setcdr (assoc-string sitename mediawiki-page-history) (append (list title) hist))))
 
-(defun mediawiki-edit (site title)
-  "Edit wiki file with the name of title"
+(defun mediawiki-edit (sitename title)
+  "Edit wiki page on SITENAME named TITLE."
   (when (not (ring-p mediawiki-page-ring))
     (setq mediawiki-page-ring (make-ring 30)))
 
   (let ((pagetitle (mediawiki-translate-pagename title)))
 
-    (mediawiki-add-page-history site title)
+    (mediawiki-add-page-history sitename title)
     (with-current-buffer (get-buffer-create
-                          (concat site ": " pagetitle))
-      (unless (mediawiki-logged-in-p site)
-        (mediawiki-do-login site)
-        (setq mediawiki-site site))
+                          (concat sitename ": " pagetitle))
+      (unless (mediawiki-logged-in-p sitename)
+        (mediawiki-do-login sitename)
+        (setq mediawiki-site sitename))
       (ring-insert mediawiki-page-ring (current-buffer))
       (delete-region (point-min) (point-max))
       (mediawiki-mode)
       (set-buffer-file-coding-system 'utf-8)
-      (insert (or (mediawiki-get site pagetitle) ""))
+      (insert (or (mediawiki-get sitename pagetitle) ""))
 
       (set-buffer-modified-p nil)
       (setq buffer-undo-list t)
@@ -1024,25 +1055,29 @@ Right now, this only means replacing \"_\" with \" \"."
       (goto-char (point-min))
       (current-buffer))))
 
-(defun mediawiki-get-edit-form-vars (str bufname)
-  "Extract the form variables from a page.  This should only be
-called from a buffer in mediawiki-mode as the variables it sets
-there will be local to that buffer."
+(defun mediawiki-get-edit-form-vars (buffer)
+  "Extract the form variables from a page.
+Messages are displayed if permission is denied in some way.
+This should only be called from a BUFFER in mediawiki-mode as the
+variables it sets there will be local to that buffer."
 
-  (let ((args (mediawiki-get-form-vars str "id" "editform")))
+  (let* ((str (with-current-buffer buffer (buffer-string)))
+         (args (mediawiki-get-form-vars str "id" "editform")))
     (if args
-	(with-current-buffer bufname
+	(with-current-buffer buffer
 	  (setq mediawiki-edit-form-vars args))
       (cond
        ((string-match mediawiki-permission-denied str)
 	(message "Permission Denied"))
        ((string-match mediawiki-view-source str)
+        ;; FIXME set read-only flag
 	(message "Editing of this page is disabled, here is the source"))))))
 
-(defun mediawiki-get-form-vars (str attr val)
+(defun mediawiki-get-form-vars (str attribute value)
+  "Look in STR for form element with ATTRIBUTE set to VALUE."
   ;; Find the form
   (when (string-match
-         (concat "<form [^>]*" attr "=[\"']" val "['\"][^>]*>")
+         (concat "<form [^>]*" attribute "=[\"']" value "['\"][^>]*>")
          str)
 
     (let* ((start-form (match-end 0))
@@ -1081,55 +1116,63 @@ there will be local to that buffer."
                form start)))
       vars)))
 
-(defun mediawiki-logged-in-p (&optional site)
-  "Returns t if we are we have cookies for the site."
+(defun mediawiki-logged-in-p (&optional sitename)
+  "Return t if we have cookies for the SITENAME."
   (let ((urlobj (url-generic-parse-url
-                 (mediawiki-site-url (or site mediawiki-site)))))
+                 (mediawiki-site-url (or sitename mediawiki-site)))))
     (url-cookie-retrieve
      (url-host urlobj)
      (url-filename urlobj)
      (equal "https" (url-type urlobj)))))
 
-(defun mediawiki-pop-to-buffer (bufname)
-  "Pop to buffer and then execute a hook."
-  (pop-to-buffer bufname)
+(defun mediawiki-pop-to-buffer (buffer)
+  "Pop to BUFFER and then execute a hook."
+  (pop-to-buffer buffer)
   (run-hooks 'mediawiki-pop-buffer-hook))
 
-(defun mediawiki-api-param (v)
-  "Concat a list into a bar-separated string, turn an integer
-into a string, or just return the string"
+(defun mediawiki-api-param (value)
+  "Convert VALUE into a usable form for the MediaWiki API.
+* Concat a list into a bar-separated string,
+* Turn an integer into a string, or
+* Just return the string"
   (cond
-   ((integerp v) (int-to-string v))
-   ((stringp v) v)
-   ((listp v) (mapconcat 'identity v "|"))
-   (t (error "Don't know what to do with %s" v))))
+   ((integerp value) (int-to-string value))
+   ((stringp value) value)
+   ((listp value) (mapconcat 'identity value "|"))
+   (t (error "Don't know what to do with %s" value))))
 
-(defun mediawiki-api-query-revisions (site titles props &optional limit)
-  "Get a list of revisions and properties for a given page."
-  (cddr (mediawiki-api-call site "query"
+(defun mediawiki-api-query-revisions (sitename title props &optional limit)
+  "Get a list of revisions and properties for a given page.
+SITENAME is the site to use.  TITLE is a string containing one
+title or a list of titles.  PROPS are the revision properites to
+fetch.  LIMIT is the upper bound on the number of results to give."
+  (cddr (mediawiki-api-call sitename "query"
                       (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
                             (cons "intoken" (mediawiki-api-param "edit"))
-                            (cons "titles" (mediawiki-api-param titles))
+                            (cons "titles" (mediawiki-api-param title))
                             (when limit
                               (cons "rvlimit" (mediawiki-api-param limit)))
                             (cons "rvprop" (mediawiki-api-param props))))))
 
 (defun mediawiki-page-get-title (page)
-  "Given a page from a pagelist structure, extract the title."
+  "Given a PAGE from a pagelist structure, extract the title."
   (cdr (assq 'title (cadr page))))
 
-(defun mediawiki-page-get-revision (page rev &optional bit)
-  "Extract a revision from the pagelist structure."
-  (let ((rev (cdr (nth rev (cddr (assq 'revisions (cddr page)))))))
+(defun mediawiki-page-get-revision (page revision &optional bit)
+  "Given a PAGE, extract a REVISION from the pagelist structure.
+If BIT is 'content, then return the content only.  Otherwise,
+return only the items that BIT matches.  If BIT isn't given,
+return the whole revision structure."
+  (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
     (cond
      ((eq bit 'content)
-      (cadr rev))
-     ((assoc bit (car rev))
-      (cdr (assoc bit (car rev))))
-     (t rev))))
+      (cadr revision))
+     ((assoc bit (car revision))
+      (cdr (assoc bit (car revision))))
+     (t revision))))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
-  "Extract a page TITLE from a PAGELIST returned by mediawiki"
+  "Given PAGELIST, extract the informaton for TITLE."
   (let ((pl (cddr (assq 'pages pagelist)))
         page current)
     (while (and (not page)
@@ -1141,23 +1184,26 @@ into a string, or just return the string"
         (setq page current)))
     page))
 
-(defun mediawiki-api-query-title (site title)
-  "Retrieve the current content of the page."
+(defun mediawiki-api-query-title (sitename title)
+  "Query SITENAME for TITLE."
   (let* ((pagelist (mediawiki-api-query-revisions
-                    site title
+                    sitename title
                     (list "ids" "timestamp" "flags" "comment" "user" "content"))))
     (mediawiki-pagelist-find-page pagelist title)))
 
-(defun mediawiki-get (site title)
-  (let ((page (mediawiki-api-query-title site title)))
-    (mediawiki-save-metadata site page)
+(defun mediawiki-get (sitename title)
+  "Query SITENAME for the content of TITLE."
+  (let ((page (mediawiki-api-query-title sitename title)))
+    (mediawiki-save-metadata sitename page)
     (mediawiki-page-get-revision page 0 'content)))
 
 (defun mediawiki-page-get-metadata (page item)
+  "Using PAGE, extract ITEM."
   (cdr (assoc item (cadr page))))
 
-(defun mediawiki-save-metadata (site page)
-  (setq mediawiki-site site)
+(defun mediawiki-save-metadata (sitename page)
+  "Set per-buffer variables for all the SITENAME data for PAGE."
+  (setq mediawiki-site sitename)
   (setq mediawiki-page-title
         (mediawiki-page-get-metadata page 'title))
   (setq mediawiki-edittoken
@@ -1168,7 +1214,11 @@ into a string, or just return the string"
         (mediawiki-page-get-metadata page 'starttimestamp)))
 
 (defun mediawiki-save (&optional summary)
+  "Save the current buffer as a page on the current site.
+Prompt for a SUMMARY if one isn't given."
   (interactive "sSummary: ")
+  (when (not (eq major-mode 'mediawiki-mode))
+    (error "Not a mediawiki-mode buffer"))
   (if mediawiki-page-title
       (mediawiki-save-page
        mediawiki-site
@@ -1178,7 +1228,8 @@ into a string, or just return the string"
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-prompt-for-page ()
-    (let* ((prompt (concat "Page"
+  "Prompt for a page name and return the answer."
+  (let* ((prompt (concat "Page"
                          (when mediawiki-page-title
                            (format " (default %s)" mediawiki-page-title))
                          ": "))
@@ -1188,22 +1239,25 @@ into a string, or just return the string"
       answer)))
 
 (defun mediawiki-prompt-for-summary ()
-    (completing-read  "Summary: " '()))
+  "Prompt for a summary and return the answer."
+  (completing-read  "Summary: " '()))
 
-(defun mediawiki-save-on (&optional site name summary)
+(defun mediawiki-save-on (&optional sitename name summary)
+  "On SITENAME, save a page with NAME and SUMMARY."
   (interactive)
-  (when (not site)
-    (setq site (mediawiki-prompt-for-site)))
+  (when (not sitename)
+    (setq sitename (mediawiki-prompt-for-site)))
   (when (not name)
     (setq name (mediawiki-translate-pagename (mediawiki-prompt-for-page))))
   (when (not summary)
     (setq summary (mediawiki-prompt-for-summary)))
 
-  (setq mediawiki-site (mediawiki-do-login site))
+  (setq mediawiki-site (mediawiki-do-login sitename))
   (mediawiki-get mediawiki-site name)
   (mediawiki-save-as name summary))
 
 (defun mediawiki-save-as (&optional name summary)
+  "Save a page on the current site wite NAME and SUMMARY."
   (interactive "sSave As: \nsSummary: ")
   (if name
       (mediawiki-save-page
@@ -1214,11 +1268,13 @@ into a string, or just return the string"
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-save-and-bury (&optional summary)
+  "Prompt for a SUMMARY, save the page, then bury the buffer."
   (interactive "sSummary: ")
   (mediawiki-save summary)
   (bury-buffer))
 
 (defun mediawiki-site-extract (sitename index)
+  "Using 'mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
   (let ((bit (nth index (assoc sitename mediawiki-site-alist))))
     (cond
      ((eq nil sitename)
@@ -1229,26 +1285,26 @@ into a string, or just return the string"
      (nil))))
 
 (defun mediawiki-site-url (sitename)
-  "Get the url for a given site."
+  "Get the url for a given SITENAME."
   (mediawiki-site-extract sitename 1))
 
 (defun mediawiki-site-username (sitename)
-  "Get the username for a given site."
+  "Get the username for a given SITENAME."
   (or (mediawiki-site-extract sitename 2)
       (url-user-for-url (mediawiki-site-url sitename))))
 
 (defun mediawiki-site-password (sitename)
-  "Get the password for a given site."
+  "Get the password for a given SITENAME."
   (or (mediawiki-site-extract sitename 3)
       (url-password-for-url (mediawiki-site-url sitename))))
 
 (defun mediawiki-site-first-page (sitename)
-  "Get the password for a given site."
+  "Get the password for a given SITENAME."
   (mediawiki-site-extract sitename 4))
 
 (defun mediawiki-do-login (&optional sitename username password)
-  "Use USERNAME and PASSWORD to log into the MediaWiki site and
-get a cookie."
+  "Log into SITENAME using USERNAME and PASSWORD.
+Store cookies for future authentication."
   (interactive)
   (when (not sitename)
     (setq sitename (mediawiki-prompt-for-site)))
@@ -1278,6 +1334,7 @@ get a cookie."
       sitename)))
 
 (defun mediawiki-do-logout (&optional sitename)
+  "Log out of SITENAME."
   (interactive)
   (when (not sitename)
     (setq sitename (mediawiki-prompt-for-site)))
@@ -1285,12 +1342,12 @@ get a cookie."
   (mediawiki-api-call sitename "logout" nil)
   (setq mediawiki-site nil))
 
-(defun mediawiki-save-page (site title summary content)
-  "Save the current page to a MediaWiki wiki."
+(defun mediawiki-save-page (sitename title summary content)
+  "On SITENAME, save the current page using TITLE, SUMMARY and CONTENT."
   ;; FIXME error checking, conflicts!
   (if (not mediawiki-edittoken)
       (error "Need an edit token!")
-    (mediawiki-api-call site "edit" (list (cons "title"
+    (mediawiki-api-call sitename "edit" (list (cons "title"
                                                 (mediawiki-translate-pagename title))
                                           (cons "text" content)
                                         (cons "summary" summary)
@@ -1308,14 +1365,17 @@ get a cookie."
 ;
 ;(mediawiki-api-call "mw-svn" "upload" (list '("filename" . "info.exe") '("file" . "edit") '("token" . token)))
 
-(defun mediawiki-browse (&optional buf)
-  "Open the buffer BUF in a browser. If BUF is not given,
-the current buffer is used."
+(defun mediawiki-browse (&optional buffer)
+  "Open the BUFFER in a browser.
+If BUFFER is not given, the current buffer is used."
   (interactive)
   (if mediawiki-page-title
-      (browse-url (mediawiki-make-url mediawiki-page-title "view"))))
+      (browse-url (mediawiki-make-url mediawiki-page-title "view"))
+    (with-current-buffer buffer
+      (browse-url (mediawiki-make-url mediawiki-page-title "view")))))
 
 (defun mediawiki-prompt-for-site ()
+  "Prompt the user for a site."
   (let* ((prompt (concat "Sitename"
                          (when mediawiki-site
                            (format " (default %s)" mediawiki-site))
@@ -1326,8 +1386,9 @@ the current buffer is used."
       answer)))
 
 (defun mediawiki-site (&optional site)
-  "Set up mediawiki.el for a site.  Without an argument, use
-`mediawiki-site-default'.  Interactively, prompt for a site."
+  "Set up mediawiki.el for a SITE.
+Without an argument, use `mediawiki-site-default'.
+Interactively, prompt for a SITE."
   (interactive)
   (when (not site)
     (setq site (mediawiki-prompt-for-site)))
@@ -1342,8 +1403,8 @@ the current buffer is used."
   (mediawiki-open (mediawiki-page-at-point)))
 
 (defun mediawiki-page-at-point ()
-  "Return the page name under point.  Typically, this means
-anything enclosed in [[PAGE]]."
+  "Return the page name under point.
+Typically, this means anything enclosed in [[PAGE]]."
   (let ((pos (point))
         (eol (point-at-eol))
         (bol (point-at-bol)))
@@ -1385,8 +1446,9 @@ anything enclosed in [[PAGE]]."
     (message "No section headers before point.")))
 
 (defun mediawiki-terminate-paragraph ()	;Version:1.58
-  "In a list, start a new list item. In a paragraph, start a new
-paragraph; if the current paragraph is colon indented, the new
+  "End a paragraph by any means necessary.
+In a list, start a new list item; in a paragraph, start a new paragraph;
+if the current paragraph is colon indented, the new
 paragraph will be indented in the same way."
   (interactive)
   (let (indent-chars)
@@ -1402,9 +1464,10 @@ paragraph will be indented in the same way."
 		(insert indent-chars))))
 
 (defun mediawiki-terminate-paragraph-and-indent ()
-  "In a list, start a new list item. In a paragraph, start a new
-paragraph but *,# will be ignored; if the current paragraph is colon
-; indented, the new paragraph will be indented in the same way."
+  "In a list, start a new list item.
+In a paragraph, start a new paragraph but *,# will be ignored; if
+the current paragraph is colon indented, the new paragraph will
+be indented in the same way."
   (interactive)
   (let (indent-chars)
     (save-excursion
@@ -1439,8 +1502,9 @@ text or inside a Wiki link.  See `fill-nobreak-predicate'."
     (fill-region (point-min) (point-max))))
 
 (defun mediawiki-unfill-article ()
-  "Undo filling, deleting stand-alone newlines (newlines that do not
-end paragraphs, list entries, etc.)"
+  "Undo filling, deleting stand-alone newlines.
+Stand-alone newlines are those that do not end paragraphs, list
+entries, etc."
   (interactive)
   (save-excursion
     (goto-char (point-min))
@@ -1449,12 +1513,10 @@ end paragraphs, list entries, etc.)"
   (message "Stand-alone newlines deleted"))
 
 (defun mediawiki-draft-reply ()
-  "Open a temporary buffer in mediawiki mode for editing an
-mediawiki draft, with an arbitrary piece of data. After finishing
-the editing |]]:either use \"C-c C-k\" \\[mediawiki-draft-buffer]
-to send the data into the mediawiki-draft-data-file, or send the
-buffer \"C-c\C-c\", to the current article. Check the variable
-mediawiki-draft-send-archive."
+  "Open a temporary buffer to edit a draft.
+After finishing the editing: either use 'mediawiki-draft-buffer'
+to send the data into the 'mediawiki-draft-data-file'.  Check the
+variable mediawiki-draft-send-archive."
   (interactive)
   (mediawiki-reply-at-point-simple)
   (beginning-of-line 1)
@@ -1480,8 +1542,9 @@ mediawiki-draft-send-archive."
 	  (message " C-c C-k sends to draft, C-c C-c sends to org buffer."))))
 
 (defun mediawiki-reply-at-point-simple ()
-  "Very simple function to reply to posts in the discussion forum. You have to set
-the point around the signature, then the functions inserts the following
+  "Very simple function to reply to posts in the discussion forum.
+You have to set the point around the signature, then the
+functions inserts the following
 :'''Re: [[User:foo]]'''."
   (interactive)
   (beginning-of-line 1)
@@ -1504,6 +1567,7 @@ the point around the signature, then the functions inserts the following
     (insert "]]''' ")))
 
 (defmacro mediawiki-goto-relative-page (direction)
+  "Go to the next page in DIRECTION."
   `(let ((buff (ring-ref mediawiki-page-ring
                         (setq mediawiki-page-ring-index
                               (,direction mediawiki-page-ring-index 1)))))
@@ -1525,7 +1589,8 @@ the point around the signature, then the functions inserts the following
   (mediawiki-goto-relative-page +))
 
 (defun mediawiki-goto-relative-link (&optional backward)
-  "Move point to a link.  If backward is t, will search backwards."
+  "Move point to a link.
+If BACKWARD is t, will search backwards."
   (let* ((search (if backward 're-search-backward
                    're-search-forward))
          (limitfunc (if backward 'point-min
@@ -1536,21 +1601,23 @@ the point around the signature, then the functions inserts the following
         (goto-char (+ point 2))))))
 
 (defun mediawiki-goto-next-link ()
+  "Go to the next link in the page."
   (interactive)
   (mediawiki-goto-relative-link))
 
 (defun mediawiki-goto-prev-link ()
+  "Go to the previous link in the page."
   (interactive)
   (mediawiki-goto-relative-link t))
 
-(defvar wikipedia-enumerate-with-terminate-paragraph nil
-"*Before insert enumerate/itemize do \\[wikipedia-terminate-paragraph].")
+(defvar mediawiki-enumerate-with-terminate-paragraph nil
+"*Before insert enumerate/itemize do \\[mediawiki-terminate-paragraph].")
 
 (defun mediawiki-insert-enumerate ()
-"Primitive Function for inserting enumerated items, check the
-variable wikipedia-enumerate-with-terminate-paragraph. Note however
-that the function \\[wikipedia-terminate-paragraph] does not work very
-well will longlines-mode."
+  "Primitive function for inserting enumerated items.
+Check the variable mediawiki-enumerate-with-terminate-paragraph.
+Note however that the function \\[mediawiki-terminate-paragraph]
+does not work very well will longlines-mode."
   (interactive)
   (if mediawiki-enumerate-with-terminate-paragraph
       (progn
@@ -1560,10 +1627,10 @@ well will longlines-mode."
     (insert ":#")))
 
 (defun mediawiki-insert-itemize ()
-  "Primitive Function for inserting no enumerated items, check
-the variable mediawiki-enumerate-with-terminate-paragraph. Note
-however that the function \\[mediawiki-terminate-paragraph] does
-not work very well will longlines-mode."
+  "Primitive function for inserting no enumerated items.
+Check the variable mediawiki-enumerate-with-terminate-paragraph.
+Note however that the function \\[mediawiki-terminate-paragraph]
+does not work very well will longlines-mode."
   (interactive)
   (if mediawiki-enumerate-with-terminate-paragraph
       (progn
@@ -1573,6 +1640,7 @@ not work very well will longlines-mode."
     (insert ":*")))
 
 (defun mediawiki-insert (pre post)
+  "Wrap the current region with PRE and POST."
   (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
           (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
       (let ((beg (region-beginning))
@@ -1586,39 +1654,41 @@ not work very well will longlines-mode."
     (backward-char (+ 1 (string-width post)))))
 
 (defun mediawiki-insert-strong-emphasis ()
-  "Insert strong emphasis italics via four
-apostrophes (e.g. ''''FOO''''.) When mark is active, surrounds
-region."
+  "Mark with strong emphasis italics.
+Uses four apostrophes (e.g. ''''FOO'''').  When mark is active,
+surrounds region."
   (interactive)
   (mediawiki-insert "''''" "''''"))
 
 (defun mediawiki-insert-bold ()
-  "Insert bold via three apostrophes (e.g. '''FOO'''.)
-When mark is active, surrounds region."
+  "Mark bold.
+Uses three apostrophes (e.g. '''FOO''').  When mark is active,
+surrounds region."
   (interactive)
   (mediawiki-insert "'''" "'''"))
 
 
 (defun mediawiki-insert-italics ()
-  "Insert bold via TWO apostrophes (e.g. ''FOO''.) When mark is active,
+  "Mark italics.
+Uses TWO apostrophes (e.g. ''FOO'').  When mark is active,
 surrounds region."
   (interactive)
   (mediawiki-insert "''" "''"))
 
 (defun mediawiki-insert-quotation-with-signature ()
-  "Insert bold via TWO apostrophes (e.g. ''FOO''.) When mark is active,
-surrounds region."
+  "Mark the current region as a quotation with your signature."
   (interactive)
   (mediawiki-insert "{{Quotation|}}" "{{~~~~}}"))
 
 (defun mediawiki-insert-quotation ()
-  "Quotation box of the form {{Quotation}}{{}}. When mark is active,
+  "Mark the current selection as a quote.
+Use the form {{Quotation}}{{}}.  When mark is active,
 surrounds region."
   (interactive)
   (mediawiki-insert "{{Quotation|}}{{" "}}"))
 
 (defun mediawiki-insert-bible-verse-template ()
-  "Insert a template for the quotation of bible verses."
+  "Insert a template for the quotation of Bible verses."
   (interactive)
   (insert "({{niv|")
   (let ((name    (read-string "Name: ")))
@@ -1627,17 +1697,16 @@ surrounds region."
       (insert (concat verse "|" name " " verse "}})")))))
 
 (defun mediawiki-insert-user ()
-  "Inserts, interactively a user name [[User:foo]]"
+  "Interactively insert a user name."
   (interactive)
   (if mediawiki-english-or-german
       (let ((user (read-string "Name of user: " )))
-        (insert (concat "[[User:" user "|" user "]]"))))
-  (let ((user (read-string "Name des Benutzers: " )))
-    (insert (concat "[[Benutzer:" user "|" user "]]"))))
+        (insert (concat "[[User:" user "|" user "]]")))
+    (let ((user (read-string "Name des Benutzers: " )))
+      (insert (concat "[[Benutzer:" user "|" user "]]")))))
 
 (defun mediawiki-insert-reply-prefix ()
-  "Quotation box of the form {{Quotation}}{{}}. When mark is active,
-surrounds region."
+  "Quotation box of the form {{Quotation}}{{}}."
   (interactive)
   (beginning-of-line 1)
   (search-forward "[[")
@@ -1657,48 +1726,49 @@ surrounds region."
   (end-of-line 1))
 
 (defun mediawiki-insert-header ()
-  "Insert subheader  via  == (e.g. == FOO ==.)"
+  "Insert subheader via == (e.g. == FOO ==)."
   (interactive)
   (mediawiki-insert "==" "=="))
 
 (defun mediawiki-insert-link ()
-  "Insert link via [[ (e.g. [[FOO]].) When mark is active, surround region."
+  "Insert link (e.g. [[FOO]])."
   (interactive)
   (mediawiki-insert "[[" "]]"))
 
 (defun mediawiki-insert-link-www ()
-  "Insert link via [[ (e.g. [http://FOO].) When mark is active, surround region."
+  "Insert link (e.g. [://FOO])."
   (interactive)
-  (mediawiki-insert "[http://" "]"))
+  (mediawiki-insert "[://" "]"))
 
 (defun mediawiki-insert-image ()
-  "Insert link image  [[ (e.g. [[Image:FOO]].) Check the variable
-mediawiki-english-or-german. When mark is active, surround region."
+  "Insert image link (e.g. [[Image:FOO]]).
+Checks the variable mediawiki-english-or-german."
   (interactive)
   (mediawiki-insert (if mediawiki-english-or-german
                         "[[Image:"
                       "[[Bild:") "]]"))
 
 (defun mediawiki-insert-audio ()
-  "Insert link image  [[ (e.g. [[Image:FOO]].) Check the variable
-mediawiki-english-or-german. When mark is active, surround region."
+  "Insert audio link (e.g. [[Media:FOO]])
+Checks The variable mediawiki-english-or-german."
   (interactive)
   (mediawiki-insert (if mediawiki-english-or-german
                         "[[Media:"
                       "[[Bild:") "]]"))
 
 (defun mediawiki-insert-signature ()
-  "Insert \"~~~~:\"  "
+  "Insert signature (e.g. \"~~~~:\")."
   (interactive)
   (insert "~~~~: "))
 
 (defun mediawiki-insert-hline ()
-  "Insert \"----\"  "
+  "Insert hline (e.g. \"----\")."
   (interactive)
   (insert "\n----\n"))
 
 (defun mediawiki-unfill-paragraph-or-region ()
-  "Unfill region, this function does NOT explicitly search for \"soft newlines\"
+  "Unfill region.
+This function does NOT explicitly search for \"soft newlines\"
 as does mediawiki-unfill-region."
   (interactive)
   (set (make-local-variable 'paragraph-start) "[ \t\n\f]")
@@ -1719,21 +1789,23 @@ as does mediawiki-unfill-region."
       (fill-paragraph nil))))
 
 (defun mediawiki-start-paragraph ()
+  "Start a Paragraph."
   (interactive)
   (set (make-local-variable 'paragraph-start)
        "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
 (defun mediawiki-hardlines ()
-"Set use-hard-newlines to NIL."
+  "Set 'use-hard-newlines' to NIL."
   (interactive)
   (setq use-hard-newlines nil))
 
 (defun mediawiki-next-long-line ()
-  "Move forward to the next long line with column-width greater
+  "Move forward to the next long line.
+Lines are considered long if their length is greater
 than `fill-column'.
 
-TODO: When function reaches end of buffer, save-excursion to
-starting point. Generalise to make `previous-long-line'."
+TODO: When function reaches end of buffer, 'save-excursion' to
+starting point.  Generalise to make `previous-long-line'."
   (interactive)
   ;; global-variable: fill-column
   (if (= (forward-line) 0)
@@ -1753,8 +1825,9 @@ starting point. Generalise to make `previous-long-line'."
   (let ((fill-column (point-max)))
     (fill-paragraph nil)))
 
-;; See http://staff.science.uva.nl/~dominik/Tools/outline-magic.el
 (defun mediawiki-outline-magic-keys ()
+  "Set up outline magic keys.
+See http://www.emacswiki.org/emacs/OutlineMagic"
   (interactive)
   (unless  (featurep 'xemacs)
     (local-set-key [(shift iso-lefttab)] 'outline-cycle)
@@ -1770,16 +1843,20 @@ starting point. Generalise to make `previous-long-line'."
 (add-hook 'outline-minor-mode-hook 'mediawiki-outline-magic-keys)
 
 (defun mediawiki-enhance-indent ()
+  "Indent a region using MediaWiki markup (e.g \":\")."
   (interactive)
   (string-rectangle (region-beginning) (region-end) ":"))
 
 (defun mediawiki-yank-prefix ()
+  "Remove indent markup from region.
+FIXME!!!"
   (interactive)
-  (string-rectangle (region-beginning) (region-end) ":"))
+  (string-rectangle (region-beginning) (region-end) " "))
 
 (defun mediawiki-simple-outline-promote ()
-  "Function simple deletes \"=\" and the end and the beginning of line,
-does not promote the whole tree!"
+  "Simple-minded promotion of current line.
+This function simply deletes one \"=\" from the beginning and end
+of the line.  It does not promote the whole tree!"
   (interactive)
   (save-excursion
     (beginning-of-line 1)
@@ -1790,8 +1867,9 @@ does not promote the whole tree!"
     (delete-char 1 nil)))
 
 (defun mediawiki-simple-outline-demote ()
-  "Function simple adds \"=\" and the end and the beginning of line,
-does not promote the whole tree!"
+  "Simple-minded demotion of the current line.
+This function simple adds \"=\" to the beginning and end of the
+line.  It does not promote the whole tree!"
   (interactive)
   (save-excursion
     (beginning-of-line 1)
@@ -1813,7 +1891,8 @@ does not promote the whole tree!"
      (/ (or (car (cdr (cdr time))) 0) 1000000.0)))
 
 (defsubst mediawiki-draft-mail-date (&optional rfc822-p)
-  "Return a simple date.  Nothing fancy."
+  "Return a simple date.
+If RFC822-P is passed, use RFC822 format."
   (if rfc822-p
       (format-time-string "%a, %e %b %Y %T %z" (current-time))
     (format-time-string "%c" (current-time))))
@@ -1829,8 +1908,7 @@ does not promote the whole tree!"
 		      (point))))
 
 (defun mediawiki-draft-append-to-file ()
-  "Add a header together with a subject to the text and add it to the
-draft file. It might be better if longlines-mode is off."
+  "Append a draft to the drafts file."
   (let ((text (buffer-string)))
     (with-temp-buffer
       (insert (concat "\n\n"  mediawiki-draft-leader-text "Draft: "
@@ -1851,11 +1929,11 @@ draft file. It might be better if longlines-mode is off."
 
 ;;;###autoload
 (defun mediawiki-draft ()
-  "Open a temporary buffer in wikipedia mode for editing an wikipedia
- draft, which an arbitrary piece of data. After finishing the editing
- either use C-c C-k \\[mediawiki-draft-buffer] to send the data into
- the mediawiki-draft-data-file, or send  the buffer using C-x C-s
-\\[mediawiki-save]  and insert it later into a wikipedia article."
+  "Open a temporary buffer in mediawiki-mode.
+This is for editing a draft.  After finishing the editing either
+use \\[mediawiki-draft-buffer] to send the data into the
+mediawiki-draft-data-file, or send the buffer using
+\\[mediawiki-save] and insert it later into a mediawiki article."
   (interactive)
   (window-configuration-to-register mediawiki-draft-register)
   (let ((buf (get-buffer-create mediawiki-draft-buffer)))
@@ -1865,20 +1943,21 @@ draft file. It might be better if longlines-mode is off."
 
 ;;;###autoload
 (defun mediawiki-draft-page ()
+  "Set the current buffer as a draft buffer."
   (interactive)
   (mark-page)
   (copy-region-as-kill (region-beginning) (region-end))
   (mediawiki-draft)
   (yank nil))
 
-(defun mediawiki-draft-region (&optional beg end)
-  "Mediawiki-Draft the data from BEG to END.
-If called from within the mediawiki-draft buffer, BEG and END are ignored,
+(defun mediawiki-draft-region (&optional begin end)
+  "Mediawiki-draft the data from BEGIN to END.
+If called from within the mediawiki-draft buffer, BEGIN and END are ignored,
 and the entire buffer will be mediawiki-drafted.  If called from any other
 buffer, that region, plus any context information specific to that
 region, will be mediawiki-drafted."
   (interactive)
-  (let ((b (or beg (min (point) (or (mark) (point-min)))))
+  (let ((b (or begin (min (point) (or (mark) (point-min)))))
 	(e (or end (max (point) (or (mark) (point-max))))))
     (save-restriction
       (narrow-to-region b e)
@@ -1905,7 +1984,7 @@ application."
     (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
 
 (defun mediawiki-draft-view-draft ()
-  "Simple shortcut to visit the file, which contains the wikipedia drafts."
+  "Simple shortcut to visit the drafts file."
   (interactive)
   (find-file mediawiki-draft-data-file))
 
@@ -1944,11 +2023,9 @@ application."
   (insert-register mediawiki-draft-page nil))
 
 (defun mediawiki-draft-send (target-buffer)
-  "Copy the current page from the mediawiki draft file to
-TARGET-BUFFER.  Check the variable mediawiki-draft-send-archive.
-If it is t, then additionally the text will be archived in the
-draft.wiki file. Check longlines-mode, it might be better if it
-is set off."
+  "Copy the current page in the drafts file to TARGET-BUFFER.
+If 'mediawiki-draft-send-archive' is t, then additionally the
+text will be archived in the draft.wiki file."
   (interactive "bTarget buffer: ")
   (mediawiki-draft-copy-page-to-register)
   (switch-to-buffer target-buffer)
@@ -1962,7 +2039,7 @@ is set off."
       (with-temp-buffer
 	(insert (concat "\n\n" mediawiki-draft-leader-text)
 		(insert-register mediawiki-draft-reply-register 1)
-		(insert (concat " " (current-time-string) " " 
+		(insert (concat " " (current-time-string) " "
 				mediawiki-draft-leader-text  "\n\n\f\n\n"
 				text "\n\f\n"))
 		(if (not (bolp))
@@ -1998,7 +2075,7 @@ used by Mediawiki.
 
 Wikipedia articles are usually unfilled: newline characters are not
 used for breaking paragraphs into lines. Unfortunately, Emacs does not
-handle word wrapping yet. As a workaround, wikipedia-mode turns on
+handle word wrapping yet. As a workaround, mediawiki-mode turns on
 longlines-mode automatically. In case something goes wrong, the
 following commands may come in handy:
 
