@@ -1166,10 +1166,10 @@ return the whole revision structure."
   (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
     (cond
      ((eq bit 'content)
-      (cadr revision))
-     ((assoc bit (car revision))
-      (cdr (assoc bit (car revision))))
-     (t revision))))
+      (cadr rev))
+     ((assoc bit (car rev))
+      (cdr (assoc bit (car rev))))
+     (t rev))))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
   "Given PAGELIST, extract the informaton for TITLE."
