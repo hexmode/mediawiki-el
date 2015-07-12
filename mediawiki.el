@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://github.com/hexmode/mediawiki-el
-;; Last Modified: <2015-04-03 18:08:35 mah>
+;; Last Modified: <2015-07-11 19:42:48 mah>
 
 (defconst mediawiki-version "2.2.5"
   "Current version of mediawiki.el.")
@@ -1166,10 +1166,10 @@ return the whole revision structure."
   (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
     (cond
      ((eq bit 'content)
-      (cadr revision))
-     ((assoc bit (car revision))
-      (cdr (assoc bit (car revision))))
-     (t revision))))
+      (cadr rev))
+     ((assoc bit (car rev))
+      (cdr (assoc bit (car rev))))
+     (t rev))))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
   "Given PAGELIST, extract the informaton for TITLE."
