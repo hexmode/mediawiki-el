@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.5
+;; Version: 2.2.6
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://github.com/hexmode/mediawiki-el
-;; Last Modified: <2015-07-11 19:42:48 mah>
+;; Last Modified: <2015-07-11 20:34:05 mah>
 
-(defconst mediawiki-version "2.2.5"
+(defconst mediawiki-version "2.2.6"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
