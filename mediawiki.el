@@ -543,6 +543,7 @@ per-session later."
                                    "http://en.wikipedia.org/w/"
                                    "username"
                                    "password"
+                                   ""
 				   "Main Page"))
   "A list of MediaWiki websites."
   :group 'mediawiki
@@ -552,6 +553,7 @@ per-session later."
                                   (string :tag "URL")
                                   (string :tag "Username")
                                   (string :tag "Password")
+                                  (string :tag "LDAP Domain")
                                   (string :tag "First Page"
                                           :description "First page to open when `mediawiki-site' is called for this site"))))
 
@@ -1298,12 +1300,16 @@ Prompt for a SUMMARY if one isn't given."
   (or (mediawiki-site-extract sitename 3)
       (url-password-for-url (mediawiki-site-url sitename))))
 
-(defun mediawiki-site-first-page (sitename)
-  "Get the password for a given SITENAME."
-  (mediawiki-site-extract sitename 4))
+(defun mediawiki-site-domain (sitename)
+  "Get the LDAP domain for a given SITENAME."
+  (or (mediawiki-site-extract sitename 4)))
 
-(defun mediawiki-do-login (&optional sitename username password)
-  "Log into SITENAME using USERNAME and PASSWORD.
+(defun mediawiki-site-first-page (sitename)
+  "Get the first page for a given SITENAME."
+  (mediawiki-site-extract sitename 5))
+
+(defun mediawiki-do-login (&optional sitename username password domain)
+  "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."
   (interactive)
   (when (not sitename)
@@ -1319,9 +1325,13 @@ Store cookies for future authentication."
                  (pass (or (mediawiki-site-password sitename)
                            password
                            (read-passwd "Password: ")))
+                 (dom (or (mediawiki-site-domain sitename)
+                          domain
+                          (read-string "LDAP Domain: ")))
                  (sitename sitename)
                  (args (list (cons "lgname" user)
-                             (cons "lgpassword" pass)))
+                             (cons "lgpassword" pass)
+                             (cons "lgdomain" dom)))
                  (result (cadr (mediawiki-api-call sitename "login" args))))
     (when (string= (cdr (assq 'result result)) "NeedToken")
       (setq result
