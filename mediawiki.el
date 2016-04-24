@@ -6,13 +6,13 @@
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.6
+;; Version: 2.2.7
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://github.com/hexmode/mediawiki-el
-;; Last Modified: <2015-07-11 20:34:05 mah>
+;; Last Modified: <2016-04-24 15:15:44 mah>
 
-(defconst mediawiki-version "2.2.6"
+(defconst mediawiki-version "2.2.7"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -70,12 +70,16 @@
 
 ;;; Changes
 
+;; Since 2.2.6:
+;;  * Fix buggy parsing of domain.
+;;  * Fix false failures when site isn't found.
+
 ;; Since 2.2.4.2
-;; * Move to github
-;; * Added Readme.mediawiki to with information about security.
+;;  * Move to github
+;;  * Added Readme.mediawiki to with information about security.
 
 ;; Since 2.2.4.1:
-;; * Add the forgotten customizable mediawiki-debug.
+;;  * Add the forgotten customizable mediawiki-debug.
 
 ;; Since 2.2.4:
 ;;  * Made it clearer where debugging information is found when
@@ -543,6 +547,7 @@ per-session later."
                                    "http://en.wikipedia.org/w/"
                                    "username"
                                    "password"
+                                   nil
 				   "Main Page"))
   "A list of MediaWiki websites."
   :group 'mediawiki
@@ -552,6 +557,9 @@ per-session later."
                                   (string :tag "URL")
                                   (string :tag "Username")
                                   (string :tag "Password")
+                                  (choice :tag "Provide LDAP Domain?"
+                                          (string)
+                                          (other :tag "No" nil))
                                   (string :tag "First Page"
                                           :description "First page to open when `mediawiki-site' is called for this site"))))
 
@@ -1275,13 +1283,15 @@ Prompt for a SUMMARY if one isn't given."
 
 (defun mediawiki-site-extract (sitename index)
   "Using 'mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
-  (let ((bit (nth index (assoc sitename mediawiki-site-alist))))
+  (let* ((site (assoc sitename mediawiki-site-alist))
+         (bit (nth index site)))
     (cond
      ((eq nil sitename)
       (error "Sitename isn't set"))
-     ((eq nil bit)
+     ((eq nil site)
       (error "Couldn't find a site named: %s" sitename))
-     ((string-match "[^ \t\n]" bit) bit)
+     ((stringp bit)
+      bit)
      (nil))))
 
 (defun mediawiki-site-url (sitename)
@@ -1298,12 +1308,16 @@ Prompt for a SUMMARY if one isn't given."
   (or (mediawiki-site-extract sitename 3)
       (url-password-for-url (mediawiki-site-url sitename))))
 
-(defun mediawiki-site-first-page (sitename)
-  "Get the password for a given SITENAME."
+(defun mediawiki-site-domain (sitename)
+  "Get the LDAP domain for a given SITENAME."
   (mediawiki-site-extract sitename 4))
 
-(defun mediawiki-do-login (&optional sitename username password)
-  "Log into SITENAME using USERNAME and PASSWORD.
+(defun mediawiki-site-first-page (sitename)
+  "Get the first page for a given SITENAME."
+  (mediawiki-site-extract sitename 5))
+
+(defun mediawiki-do-login (&optional sitename username password domain)
+  "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."
   (interactive)
   (when (not sitename)
@@ -1319,9 +1333,15 @@ Store cookies for future authentication."
                  (pass (or (mediawiki-site-password sitename)
                            password
                            (read-passwd "Password: ")))
+                 (dom-loaded (mediawiki-site-domain sitename))
+                 (dom (when dom-loaded
+                        (if (string= "" dom-loaded)
+                            (read-string "LDAP Domain: ")
+                          dom-loaded)))
                  (sitename sitename)
                  (args (list (cons "lgname" user)
-                             (cons "lgpassword" pass)))
+                             (cons "lgpassword" pass)
+                             (when dom (cons "lgdomain" dom))))
                  (result (cadr (mediawiki-api-call sitename "login" args))))
     (when (string= (cdr (assq 'result result)) "NeedToken")
       (setq result
