@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: http://github.com/hexmode/mediawiki-el
-;; Last Modified: <2016-04-25 09:36:24 mah>
+;; Last Modified: <2016-04-25 09:50:50 mah>
 
 (defconst mediawiki-version "2.2.7"
   "Current version of mediawiki.el.")
@@ -70,9 +70,13 @@
 
 ;;; Changes
 
-;; Since 2.2.6:
-;;  * Fix buggy parsing of domain.
+;; 2.2.7:
+;;  * Add the ability to accept the domain
 ;;  * Fix false failures when site isn't found.
+
+;; 2.2.6:
+;;  * Moved to github
+;;  * Code cleanup, flycheck
 
 ;; Since 2.2.4.2
 ;;  * Move to github
