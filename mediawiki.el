@@ -10,7 +10,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-01-13 12:49:24 mah>
+;; Last Modified: <2017-01-13 12:55:34 mah>
 
 (defconst mediawiki-version "2.2.7"
   "Current version of mediawiki.el.")
@@ -2006,7 +2006,9 @@ Most useful for mediawiki-drafting things from Netscape or other X Windows
 application."
   (interactive)
   (with-temp-buffer
-    (insert (x-get-clipboard))
+    (insert (if (fboundp 'gui-get-selection) ; Since 25.1
+                (gui-get-selection)
+              (x-get-clipboard)))
     (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
 
 (defun mediawiki-draft-view-draft ()
