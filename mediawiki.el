@@ -11,7 +11,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-04-02 11:43:35 mah>
+;; Last Modified: <2017-04-02 11:44:30 mah>
 
 (defconst mediawiki-version "2.2.7"
   "Current version of mediawiki.el.")
