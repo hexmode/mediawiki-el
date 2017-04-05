@@ -987,12 +987,12 @@ Right now, this only means replacing \"_\" with \" \"."
 ACTION is the API action.  ARGS is a list of arguments."
   (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
                              (append args (list (cons "format" "xml")
-                                                (cons "action" action))))
-              (string= action "upload")))
+                                                (cons "action" action)))
+                             (string= action "upload")))
          (result (assoc 'api
-                            (with-temp-buffer
-                              (insert raw)
-                              (xml-parse-region (point-min) (point-max))))))
+                        (with-temp-buffer
+                          (insert raw)
+                          (xml-parse-region (point-min) (point-max))))))
     (unless result
       (error "There was an error parsing the result of the API call"))
 
