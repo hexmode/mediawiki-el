@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-04-03 19:53:59 mah>
+;; Last Modified: <2017-04-18 12:34:27 hershm>
 
 (defconst mediawiki-version "2.2.8"
   "Current version of mediawiki.el.")
@@ -152,6 +152,7 @@
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
+(require 'subr-x)
 (eval-when-compile
   (require 'cl)
   (require 'mml)
