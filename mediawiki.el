@@ -9,9 +9,9 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-04-18 12:34:27 hershm>
+;; Last Modified: <2017-08-12 19:35:11 mah>
 
-(defconst mediawiki-version "2.2.8"
+(defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -211,7 +211,7 @@
 				    'url-http-proxy-basic-auth-storage))
 			       (url-get-authentication url-http-target-url nil 'any nil))))
 	       (real-fname (concat (url-filename url-http-target-url)
-				   (with-no-warnings 
+				   (with-no-warnings
                                     (url-recreate-url-attributes url-http-target-url))))
 	       (host (url-host url-http-target-url))
 	       (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
@@ -1424,6 +1424,7 @@ If BUFFER is not given, the current buffer is used."
         mediawiki-site
       answer)))
 
+;;;###autoload
 (defun mediawiki-site (&optional site)
   "Set up mediawiki.el for a SITE.
 Without an argument, use `mediawiki-site-default'.
@@ -1980,7 +1981,6 @@ mediawiki-draft-data-file, or send the buffer using
     (mediawiki-mode)
     (message " C-c C-k sends to draft file, C-c C-c sends to org buffer.")))
 
-;;;###autoload
 (defun mediawiki-draft-page ()
   "Set the current buffer as a draft buffer."
   (interactive)
@@ -2005,7 +2005,6 @@ region, will be mediawiki-drafted."
       (mediawiki-debug (current-buffer) "mediawiki-draft-region")
       (jump-to-register mediawiki-draft-register)))))
 
-;;;###autoload
 (defun mediawiki-draft-buffer ()
   "Mediawiki-draft-buffer sends the contents of the current (temporary)
 buffer to the mediawiki-draft-buffer, see the variable
