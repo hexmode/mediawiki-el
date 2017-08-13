@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-08-12 22:42:37 mah>
+;; Last Modified: <2017-08-13 00:09:32 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -1370,9 +1370,17 @@ Store cookies for future authentication."
                             (read-string "LDAP Domain: ")
                           dom-loaded)))
                  (sitename sitename)
+                 (token (cdr
+                         (caadar
+                          (cddr (mediawiki-api-call sitename "query"
+                                                  (list (cons "meta" "tokens")
+                                                        (cons "type" "login")))))))
                  (args (list (cons "lgname" user)
                              (cons "lgpassword" pass)
-                             (when dom (cons "lgdomain" dom))))
+                             (when token
+                               (cons "lgtoken" token))
+                             (when dom
+                               (cons "lgdomain" dom))))
                  (result (cadr (mediawiki-api-call sitename "login" args))))
     (when (string= (cdr (assq 'result result)) "NeedToken")
       (setq result
@@ -1407,13 +1415,6 @@ Store cookies for future authentication."
                                           (cons "starttimestamp"
                                                 (or mediawiki-starttimestamp ""))))
     (set-buffer-modified-p nil)))
-
-;; (cdr (assoc 'edittoken (cadr (caddr (caddr (mediawiki-api-call "mw-svn" "query"
-;;                                                                (list '("prop" . "info")
-;;                                                                      '("intoken" . "edit")
-;;                                                                      '("titles" . (concat "File:" filename)))))))))
-;
-;(mediawiki-api-call "mw-svn" "upload" (list '("filename" . "info.exe") '("file" . "edit") '("token" . token)))
 
 (defun mediawiki-browse (&optional buffer)
   "Open the BUFFER in a browser.
