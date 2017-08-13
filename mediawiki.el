@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-08-13 00:09:32 mah>
+;; Last Modified: <2017-08-13 01:53:37 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -995,10 +995,16 @@ Right now, this only means replacing \"_\" with \" \"."
   "Show a TYPE of information from the RESULT to the user using NOTIF"
   (when (assq type (cddr result))
     (mapc (lambda (err)
-            (let ((label (car err))
-                  (info (cddr err)))
+            (let ((label (or (cdr (assq 'code err))
+                             (car err)))
+                  (info (or (cdr (assq 'info err))
+                            (cddr err))))
               (funcall notif label info)))
-          (cddr (assq type (cddr result))))))
+
+          ;; Poor man's attempt at backward compatible xml form handling
+          (if (listp (cdr (assq type (cddr result))))
+              (cdr (assq type (cddr result)))
+            (cddr (assq type (cddr result)))))))
 
 (defun mediawiki-api-call (sitename action &optional args)
   "Wrapper for making an API call to SITENAME.
@@ -1013,10 +1019,15 @@ ACTION is the API action.  ARGS is a list of arguments."
     (unless result
       (error "There was an error parsing the result of the API call"))
 
-    (mediawiki-raise result 'error (lambda (label info) (error "(%s) %s" label info)))
-    (mediawiki-raise result 'warnings (lambda (label info) (message "Warning (%s) %s"
-                                                                    label info)))
-    (mediawiki-raise result 'info (lambda (label info) (message  "(%s) %s" label info)))
+    (mediawiki-raise result 'warnings
+                     (lambda (label info)
+                       (message "Warning (%s) %s" label info)))
+    (mediawiki-raise result 'info
+                     (lambda (label info)
+                       (message  "(%s) %s" label info)))
+    (mediawiki-raise result 'error
+                     (lambda (label info)
+                       (error "(%s) %s" label info)))
 
     (if (cddr result)
         (let ((action-res (assq (intern action) (cddr result))))
@@ -1347,6 +1358,14 @@ Prompt for a SUMMARY if one isn't given."
   "Get the first page for a given SITENAME."
   (mediawiki-site-extract sitename 5))
 
+(defun mediawiki-site-get-token (sitename type)
+  "Get token(s) for SITENAME of TYPE type."
+  (cdr
+   (caadar
+    (cddr (mediawiki-api-call sitename "query"
+                              (list (cons "meta" "tokens")
+                                    (cons "type" type)))))))
+
 (defun mediawiki-do-login (&optional sitename username password domain)
   "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."
@@ -1370,11 +1389,7 @@ Store cookies for future authentication."
                             (read-string "LDAP Domain: ")
                           dom-loaded)))
                  (sitename sitename)
-                 (token (cdr
-                         (caadar
-                          (cddr (mediawiki-api-call sitename "query"
-                                                  (list (cons "meta" "tokens")
-                                                        (cons "type" "login")))))))
+                 (token (mediawiki-site-get-token sitename "login"))
                  (args (list (cons "lgname" user)
                              (cons "lgpassword" pass)
                              (when token
@@ -1400,21 +1415,37 @@ Store cookies for future authentication."
   (mediawiki-api-call sitename "logout" nil)
   (setq mediawiki-site nil))
 
-(defun mediawiki-save-page (sitename title summary content)
-  "On SITENAME, save the current page using TITLE, SUMMARY and CONTENT."
+(defun mediawiki-save-page (sitename title summary content &optional trynum)
+  "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT."
   ;; FIXME error checking, conflicts!
-  (if (not mediawiki-edittoken)
-      (error "Need an edit token!")
-    (mediawiki-api-call sitename "edit" (list (cons "title"
-                                                (mediawiki-translate-pagename title))
-                                          (cons "text" content)
-                                        (cons "summary" summary)
-                                        (cons "token" mediawiki-edittoken)
-                                        (cons "basetimestamp"
-                                                (or mediawiki-basetimestamp ""))
-                                          (cons "starttimestamp"
-                                                (or mediawiki-starttimestamp ""))))
-    (set-buffer-modified-p nil)))
+  (when (and trynum (< trynum 0))
+    (error "Too many tries."))
+  (let ((trynum (or trynum 3)))
+    (condition-case err
+        (mediawiki-api-call sitename "edit"
+                            (list (cons "title"
+                                        (mediawiki-translate-pagename title))
+                                  (cons "text" content)
+                                  (cons "summary" summary)
+                                  (cons "token" mediawiki-edittoken)
+                                  (cons "basetimestamp"
+                                        (or mediawiki-basetimestamp ""))
+                                  (cons "starttimestamp"
+                                        (or mediawiki-starttimestamp ""))))
+      (error (progn (message (concat trynum "Retry because of error: " err))
+                    (mediawiki-retry-save-page
+                     sitename title summary content trynum)))))
+  (set-buffer-modified-p nil))
+
+(defun mediawiki-retry-save-page (sitename title summary content trynum)
+  "Refresh the edit token and then try to save the current page using TITLE,
+SUMMARY, and CONTENT on SITENAME."
+  (let ((try (if trynum
+                 (- trynum 1)
+               3)))
+    (mediawiki-do-login sitename)
+    (setq mediawiki-edittoken (mediawiki-site-get-token sitename "csrf"))
+    (mediawiki-save-page sitename title summary content try)))
 
 (defun mediawiki-browse (&optional buffer)
   "Open the BUFFER in a browser.
