@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-08-12 20:38:31 mah>
+;; Last Modified: <2017-08-12 22:02:35 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -177,7 +177,7 @@
              lookfor (funcall (pop methods) urlobj) (url-type urlobj))
           bit)))))
 
-(unless (fboundp 'url-url-for-url)
+(unless (fboundp 'url-user-for-url)
   (defun url-user-for-url (url)
     "Attempt to use .authinfo to find a user for this URL."
     (url-bit-for-url 'url-user "login" url)))
