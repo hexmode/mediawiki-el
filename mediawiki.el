@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-08-12 22:02:35 mah>
+;; Last Modified: <2017-08-12 22:24:24 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -1323,15 +1323,21 @@ Prompt for a SUMMARY if one isn't given."
   "Get the url for a given SITENAME."
   (mediawiki-site-extract sitename 1))
 
+(defmacro mediawiki-site-user-pass (sitename index method)
+  "Fetch the user or pass if provided, or use authinfo if not."
+  `(let* ((arg (mediawiki-site-extract ,sitename ,index))
+          (auth (funcall ,method (mediawiki-site-url ,sitename))))
+     (if (and arg (> (string-width arg) 0))
+         arg
+       auth)))
+
 (defun mediawiki-site-username (sitename)
   "Get the username for a given SITENAME."
-  (or (mediawiki-site-extract sitename 2)
-      (url-user-for-url (mediawiki-site-url sitename))))
+  (mediawiki-site-user-pass sitename 2 'url-user-for-url))
 
 (defun mediawiki-site-password (sitename)
   "Get the password for a given SITENAME."
-  (or (mediawiki-site-extract sitename 3)
-      (url-password-for-url (mediawiki-site-url sitename))))
+  (mediawiki-site-user-pass sitename 3 'url-password-for-url))
 
 (defun mediawiki-site-domain (sitename)
   "Get the LDAP domain for a given SITENAME."
