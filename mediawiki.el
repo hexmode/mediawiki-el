@@ -1389,7 +1389,7 @@ Store cookies for future authentication."
                             (read-string "LDAP Domain: ")
                           dom-loaded)))
                  (sitename sitename)
-                 (token (mediawiki-site-get-token sitename "login"))
+                 (token (ignore-error (mediawiki-site-get-token sitename "login")))
                  (args (list (cons "lgname" user)
                              (cons "lgpassword" pass)
                              (when token
