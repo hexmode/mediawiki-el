@@ -2152,6 +2152,84 @@ latter retrieval, and possible indexing.
   (define-key mediawiki-draft-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
   (define-key mediawiki-draft-mode-map "\C-c\C-d" 'mediawiki-draft-buffer))
 
+(defvar mediawiki-mode-map nil "Keymap for `mediawiki-mode'.")
+(progn
+  (setq mediawiki-mode-map (make-sparse-keymap "mediawiki"))
+  (define-key mediawiki-mode-map [menu-bar mediawiki]
+    (cons "MediaWiki" mediawiki-mode-map))
+  (define-key mediawiki-mode-map [unfill-article]
+    '("Unfill article" . mediawiki-unfill-article))
+  (define-key mediawiki-mode-map [fill-article]
+    '("Fill article" . mediawiki-fill-article))
+  (define-key mediawiki-mode-map [separator-fill] '("--"))
+  (define-key mediawiki-mode-map [next-header]
+    '("Next header" . mediawiki-next-header))
+  (define-key mediawiki-mode-map [prev-header]
+    '("Previous header" . mediawiki-prev-header))
+  (define-key mediawiki-mode-map [separator-header] '("--"))
+  (define-key mediawiki-mode-map [outline]
+    '("Toggle Outline Mode..." . outline-minor-mode))
+
+  (define-key mediawiki-mode-map "\M-n" 'mediawiki-next-header)
+  (define-key mediawiki-mode-map "\C-c\C-n" 'mediawiki-next-long-line)
+  (define-key mediawiki-mode-map "\M-p" 'mediawiki-prev-header)
+  (define-key mediawiki-mode-map [(meta down)] 'mediawiki-next-header)
+  (define-key mediawiki-mode-map [(meta up)]   'mediawiki-prev-header)
+  (define-key mediawiki-mode-map "\C-j" 'mediawiki-terminate-paragraph)
+
+  (define-key mediawiki-mode-map "\C-c\C-q" 'mediawiki-unfill-article)
+  (define-key mediawiki-mode-map "\C-c\M-q" 'mediawiki-fill-article)
+  (define-key mediawiki-mode-map "\C-c\M-u" 'mediawiki-unfill-paragraph-or-region)
+  (define-key mediawiki-mode-map "\C-c\C-u" 'mediawiki-unfill-paragraph-simple)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-s" 'mediawiki-insert-strong-emphasis)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-b" 'mediawiki-insert-bold)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-i" 'mediawiki-insert-italics)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-e" 'mediawiki-insert-header)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-l" 'mediawiki-insert-link)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-u" 'mediawiki-insert-user)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-q" 'mediawiki-insert-quotation)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-v" 'mediawiki-insert-bible-verse-template)
+  (define-key mediawiki-mode-map "\C-c\C-w" 'mediawiki-insert-signature)
+  (define-key mediawiki-mode-map "\C-c\C-l" 'mediawiki-insert-hline)
+  (define-key mediawiki-mode-map [(meta f7)] 'mediawiki-draft)
+  (define-key mediawiki-mode-map [(meta f8)] 'mediawiki-reply-at-point-simple)
+  (define-key mediawiki-mode-map [(meta f9)] 'mediawiki-draft-view-draft)
+  (define-key mediawiki-mode-map "\C-c\C-r" 'mediawiki-reply-at-point-simple)
+  (define-key mediawiki-mode-map "\C-cr" 'mediawiki-draft-region)
+  (define-key mediawiki-mode-map [(meta r)] 'mediawiki-draft-reply)
+  (define-key mediawiki-mode-map "\C-c\C-m" 'mediawiki-draft)
+  (define-key mediawiki-mode-map "\C-c\C-b" 'mediawiki-draft-region)
+  (define-key mediawiki-mode-map "\C-c\C-d" 'mediawiki-draft-buffer)
+  (define-key mediawiki-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
+  (define-key mediawiki-mode-map "\C-c\C-p" 'mediawiki-draft-copy-page-to-register)
+  (define-key mediawiki-mode-map "\C-c\C-c" 'mediawiki-draft-send)
+  (define-key mediawiki-mode-map "\C-c\C-s" 'mediawiki-draft-yank-page-to-register)
+
+  (define-key mediawiki-mode-map [(control meta prior)] 'mediawiki-enhance-indent)
+  (define-key mediawiki-mode-map [(control meta next)] 'mediawiki-yank-prefix)
+  (define-key mediawiki-mode-map [(meta return)] 'mediawiki-insert-enumerate)
+  (define-key mediawiki-mode-map [(meta control return)] 'mediawiki-insert-enumerate-nonewline)
+  ;; private setting
+  (define-key mediawiki-mode-map [(shift return)] 'newline-and-indent)
+  (define-key mediawiki-mode-map "\C-\\" 'mediawiki-insert-itemize)
+  (define-key mediawiki-mode-map [(control return)] 'mediawiki-insert-itemize)
+  (define-key mediawiki-mode-map "\C-ca" 'auto-capitalize-mode)
+  ;; (define-key mediawiki-mode-map "\C-ci" 'set-input-method)
+  ;; (define-key mediawiki-mode-map "\C-ct" 'toggle-input-method)
+
+  (define-key mediawiki-mode-map [(backtab)] 'mediawiki-goto-prev-link)
+  (define-key mediawiki-mode-map [(tab)]     'mediawiki-goto-next-link)
+  (define-key mediawiki-mode-map "\M-g"      'mediawiki-reload)
+  (define-key mediawiki-mode-map "\C-x\C-s"  'mediawiki-save)
+  (define-key mediawiki-mode-map "\C-c\C-c"  'mediawiki-save-and-bury)
+  (define-key mediawiki-mode-map "\C-x\C-w"  'mediawiki-save-as)
+  (define-key mediawiki-mode-map "\C-c\C-o"  'mediawiki-open)
+  (define-key mediawiki-mode-map "\M-p"
+    'mediawiki-goto-previous-page)
+  (define-key mediawiki-mode-map "\M-n"      'mediawiki-goto-next-page)
+  (define-key mediawiki-mode-map [(control return)]
+    'mediawiki-open-page-at-point))
+
 (define-derived-mode mediawiki-mode text-mode "MW"
   "Major mode for editing articles written in the markup language
 used by Mediawiki.
@@ -2243,84 +2321,8 @@ Some simple editing commands.
          mediawiki-imenu-generic-expression)
     (imenu-add-to-menubar "Contents"))
 
-  (let ((map (make-sparse-keymap "mediawiki")))
-    (define-key mediawiki-mode-map [menu-bar mediawiki]
-      (cons "MediaWiki" map))
-    (define-key map [unfill-article]
-      '("Unfill article" . mediawiki-unfill-article))
-    (define-key map [fill-article]
-      '("Fill article" . mediawiki-fill-article))
-    (define-key map [separator-fill] '("--"))
-    (define-key map [next-header]
-      '("Next header" . mediawiki-next-header))
-    (define-key map [prev-header]
-      '("Previous header" . mediawiki-prev-header))
-    (define-key map [separator-header] '("--"))
-    (define-key map [outline]
-      '("Toggle Outline Mode..." . outline-minor-mode))
-
-    (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
-    (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table)
-
-    (define-key mediawiki-mode-map "\M-n" 'mediawiki-next-header)
-    (define-key mediawiki-mode-map "\C-c\C-n" 'mediawiki-next-long-line)
-    (define-key mediawiki-mode-map "\M-p" 'mediawiki-prev-header)
-    (define-key mediawiki-mode-map [(meta down)] 'mediawiki-next-header)
-    (define-key mediawiki-mode-map [(meta up)]   'mediawiki-prev-header)
-    (define-key mediawiki-mode-map "\C-j" 'mediawiki-terminate-paragraph)
-
-    (define-key mediawiki-mode-map "\C-c\C-q" 'mediawiki-unfill-article)
-    (define-key mediawiki-mode-map "\C-c\M-q" 'mediawiki-fill-article)
-    (define-key mediawiki-mode-map "\C-c\M-u" 'mediawiki-unfill-paragraph-or-region)
-    (define-key mediawiki-mode-map "\C-c\C-u" 'mediawiki-unfill-paragraph-simple)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-s" 'mediawiki-insert-strong-emphasis)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-b" 'mediawiki-insert-bold)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-i" 'mediawiki-insert-italics)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-e" 'mediawiki-insert-header)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-l" 'mediawiki-insert-link)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-u" 'mediawiki-insert-user)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-q" 'mediawiki-insert-quotation)
-    (define-key mediawiki-mode-map "\C-c\C-f\C-v" 'mediawiki-insert-bible-verse-template)
-    (define-key mediawiki-mode-map "\C-c\C-w" 'mediawiki-insert-signature)
-    (define-key mediawiki-mode-map "\C-c\C-l" 'mediawiki-insert-hline)
-    (define-key mediawiki-mode-map [(meta f7)] 'mediawiki-draft)
-    (define-key mediawiki-mode-map [(meta f8)] 'mediawiki-reply-at-point-simple)
-    (define-key mediawiki-mode-map [(meta f9)] 'mediawiki-draft-view-draft)
-    (define-key mediawiki-mode-map "\C-c\C-r" 'mediawiki-reply-at-point-simple)
-    (define-key mediawiki-mode-map "\C-cr" 'mediawiki-draft-region)
-    (define-key mediawiki-mode-map [(meta r)] 'mediawiki-draft-reply)
-    (define-key mediawiki-mode-map "\C-c\C-m" 'mediawiki-draft)
-    (define-key mediawiki-mode-map "\C-c\C-b" 'mediawiki-draft-region)
-    (define-key mediawiki-mode-map "\C-c\C-d" 'mediawiki-draft-buffer)
-    (define-key mediawiki-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
-    (define-key mediawiki-mode-map "\C-c\C-p" 'mediawiki-draft-copy-page-to-register)
-    (define-key mediawiki-mode-map "\C-c\C-c" 'mediawiki-draft-send)
-    (define-key mediawiki-mode-map "\C-c\C-s" 'mediawiki-draft-yank-page-to-register)
-
-    (define-key mediawiki-mode-map [(control meta prior)] 'mediawiki-enhance-indent)
-    (define-key mediawiki-mode-map [(control meta next)] 'mediawiki-yank-prefix)
-    (define-key mediawiki-mode-map [(meta return)] 'mediawiki-insert-enumerate)
-    (define-key mediawiki-mode-map [(meta control return)] 'mediawiki-insert-enumerate-nonewline)
-    ;; private setting
-    (define-key mediawiki-mode-map [(shift return)] 'newline-and-indent)
-    (define-key mediawiki-mode-map "\C-\\" 'mediawiki-insert-itemize)
-    (define-key mediawiki-mode-map [(control return)] 'mediawiki-insert-itemize)
-    (define-key mediawiki-mode-map "\C-ca" 'auto-capitalize-mode)
-;    (define-key mediawiki-mode-map "\C-ci" 'set-input-method)
-;    (define-key mediawiki-mode-map "\C-ct" 'toggle-input-method)
-
-    (define-key mediawiki-mode-map [(backtab)] 'mediawiki-goto-prev-link)
-    (define-key mediawiki-mode-map [(tab)]     'mediawiki-goto-next-link)
-    (define-key mediawiki-mode-map "\M-g"      'mediawiki-reload)
-    (define-key mediawiki-mode-map "\C-x\C-s"  'mediawiki-save)
-    (define-key mediawiki-mode-map "\C-c\C-c"  'mediawiki-save-and-bury)
-    (define-key mediawiki-mode-map "\C-x\C-w"  'mediawiki-save-as)
-    (define-key mediawiki-mode-map "\C-c\C-o"  'mediawiki-open)
-    (define-key mediawiki-mode-map "\M-p"
-      'mediawiki-goto-previous-page)
-    (define-key mediawiki-mode-map "\M-n"      'mediawiki-goto-next-page)
-    (define-key mediawiki-mode-map [(control return)]
-      'mediawiki-open-page-at-point)))
+  (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
+  (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table))
 
 ;; (defvar mw-pagelist-mode-map
 ;;   (let ((map (make-sparse-keymap)))
