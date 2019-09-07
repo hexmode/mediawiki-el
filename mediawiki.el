@@ -414,10 +414,14 @@ Some provision is made for different versions of Emacs version.
 POST-PROCESS is the function to call for post-processing.
 BUFFER is the buffer to store the result in.  CALLBACK will be
 called in BUFFER with CBARGS, if given."
-  (let ((url-user-agent (concat (string-trim (if (functionp url-user-agent)
-                                                 (funcall url-user-agent)
-                                               url-user-agent))
-                                " mediawiki.el " mediawiki-version "\r\n")))
+  (let ((url-user-agent
+         (concat (string-trim (cond
+                               ((functionp url-user-agent)
+                                (funcall url-user-agent))
+                               ((stringp url-user-agent)
+                                url-user-agent)
+                               (t "")))
+                 " mediawiki.el " mediawiki-version "\r\n")))
     (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
            (if callback
                (setq url-be-asynchronous t)
