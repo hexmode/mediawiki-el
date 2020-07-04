@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-04 18:10:14 mah>
+;; Last Modified: <2020-07-04 18:32:36 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -1422,18 +1422,19 @@ Store cookies for future authentication."
   ;; FIXME error checking, conflicts!
   (when (and trynum (< trynum 0))
     (error "Too many tries."))
-  (let ((trynum (or trynum 3)))
+  (let ((trynum (or trynum 3))
+        (token (mediawiki-site-get-token sitename "csrf")))
     (condition-case err
         (mediawiki-api-call sitename "edit"
                             (list (cons "title"
                                         (mediawiki-translate-pagename title))
                                   (cons "text" content)
                                   (cons "summary" summary)
-                                  (cons "token" mediawiki-edittoken)
+                                  (cons "token" token)
                                   (cons "basetimestamp"
-                                        (or mediawiki-basetimestamp ""))
+                                        (or mediawiki-basetimestamp "now"))
                                   (cons "starttimestamp"
-                                        (or mediawiki-starttimestamp ""))))
+                                        (or mediawiki-starttimestamp "now"))))
       (error (progn (message (concat trynum "Retry because of error: " err))
                     (mediawiki-retry-save-page
                      sitename title summary content trynum)))))
