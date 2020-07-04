@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2017-08-13 01:53:37 mah>
+;; Last Modified: <2020-07-04 14:44:49 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -190,7 +190,7 @@
 (when (fboundp 'url-http-create-request)
   (if (string= "GET / HTTP/1.0\r\nMIME-Version: 1.0\r\nConnection: close\r\nHost: example.com\r\nAccept: */*\r\nUser-Agent: URL/Emacs\r\nContent-length: 4\r\n\r\ntest"
 	       (let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
-		     (url-http-data "test") (url-http-version "1.0")
+		     (url-http-data "test") (url-http-version "1.0") (url-http-referer "test")
 		     url-http-method url-http-attempt-keepalives url-extensions-header
 		     url-http-extra-headers url-http-proxy url-mime-charset-string)
 		 (url-http-create-request)))
