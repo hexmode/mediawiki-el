@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-04 14:44:49 mah>
+;; Last Modified: <2020-07-04 14:59:23 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -414,10 +414,13 @@ Some provision is made for different versions of Emacs version.
 POST-PROCESS is the function to call for post-processing.
 BUFFER is the buffer to store the result in.  CALLBACK will be
 called in BUFFER with CBARGS, if given."
-  (let ((url-user-agent (concat (string-trim (if (functionp url-user-agent)
-                                                 (funcall url-user-agent)
-                                               url-user-agent))
-                                " mediawiki.el " mediawiki-version "\r\n")))
+  (let ((url-user-agent (concat
+                         (if (not (eq url-user-agent 'default))
+                             (string-trim (if (functionp url-user-agent)
+                                              (funcall url-user-agent)
+                                            url-user-agent))
+                           "")
+                         " mediawiki.el " mediawiki-version "\r\n")))
     (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
            (if callback
                (setq url-be-asynchronous t)
