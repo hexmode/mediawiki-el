@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-04 14:59:23 mah>
+;; Last Modified: <2020-07-04 15:34:56 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -1002,7 +1002,8 @@ Right now, this only means replacing \"_\" with \" \"."
                              (car err)))
                   (info (or (cdr (assq 'info err))
                             (cddr err))))
-              (funcall notif label info)))
+              (when info
+                (funcall notif label info))))
 
           ;; Poor man's attempt at backward compatible xml form handling
           (if (listp (cdr (assq type (cddr result))))
