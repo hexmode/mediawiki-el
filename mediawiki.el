@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-04 15:41:14 mah>
+;; Last Modified: <2020-07-04 18:10:14 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -1195,7 +1195,6 @@ title or a list of titles.  PROPS are the revision properites to
 fetch.  LIMIT is the upper bound on the number of results to give."
   (cddr (mediawiki-api-call sitename "query"
                       (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
-                            (cons "intoken" (mediawiki-api-param "edit"))
                             (cons "titles" (mediawiki-api-param title))
                             (when limit
                               (cons "rvlimit" (mediawiki-api-param limit)))
