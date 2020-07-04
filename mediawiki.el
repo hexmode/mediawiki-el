@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-04 15:34:56 mah>
+;; Last Modified: <2020-07-04 15:41:14 mah>
 
 (defconst mediawiki-version "2.2.9"
   "Current version of mediawiki.el.")
@@ -822,12 +822,11 @@ as group and page name.")
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-verbatim-face
-  (let ((font (if (and (assq :inherit custom-face-attributes)
+  (let ((font (when (and (assq :inherit custom-face-attributes)
 		       (if (fboundp 'find-face)
 			   (find-face 'fixed-pitch)
 			 (facep 'fixed-pitch)))
-		  '(:inherit fixed-pitch)
-		'(:family "courier"))))
+		  '(:inherit fixed-pitch))))
     `((((class grayscale) (background light))
        (:foreground "DimGray" ,@font))
       (((class grayscale) (background dark))
