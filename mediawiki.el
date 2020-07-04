@@ -11,7 +11,7 @@
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Last Modified: <2020-07-04 18:32:36 mah>
 
-(defconst mediawiki-version "2.2.9"
+(defconst mediawiki-version "2.3.0"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
