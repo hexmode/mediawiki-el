@@ -9,9 +9,9 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-04 18:32:36 mah>
+;; Last Modified: <2020-07-06 00:32:46 mah>
 
-(defconst mediawiki-version "2.3.0"
+(defconst mediawiki-version "2.3.1"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -156,7 +156,7 @@
 (eval-when-compile
   (require 'cl)
   (require 'mml)
-;; Below copied from url-http to avoid compilation warnings
+  ;; Below copied from url-http to avoid compilation warnings
   (defvar url-http-extra-headers)
   (defvar url-http-target-url)
   (defvar url-http-proxy)
@@ -212,7 +212,7 @@
 			       (url-get-authentication url-http-target-url nil 'any nil))))
 	       (real-fname (concat (url-filename url-http-target-url)
 				   (with-no-warnings
-                                    (url-recreate-url-attributes url-http-target-url))))
+                                     (url-recreate-url-attributes url-http-target-url))))
 	       (host (url-host url-http-target-url))
 	       (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
 			 nil
@@ -276,7 +276,7 @@
 			"Connection: " (if (or using-proxy
 					       (not url-http-attempt-keepalives))
 					   "close" "keep-alive") "\r\n"
-					   ;; HTTP extensions we support
+			;; HTTP extensions we support
 			(if url-extensions-header
 			    (format
 			     "Extension: %s\r\n" url-extensions-header))
@@ -378,7 +378,7 @@
                            "\r\n")))
 
                        ((stringp (car data))
-                                ;; For each pair
+                        ;; For each pair
 
                         (concat
                          ;; Encode the name
@@ -492,7 +492,7 @@ given."
       (cons "Connection" "close")
       (cons "Content-Type" content-type)))
 
-     (url-compat-retrieve url url-http-post-post-process
+    (url-compat-retrieve url url-http-post-post-process
 			 buffer callback cbargs)))
 
 (defun url-http-response-post-process (status &optional buffer
@@ -586,7 +586,7 @@ Can be used to to open the whole buffer."
   "Assoc list of visited pages on this MW site.")
 
 (defvar mediawiki-enumerate-with-terminate-paragraph nil
-"*Before insert enumerate/itemize do \\[mediawiki-terminate-paragraph].")
+  "*Before insert enumerate/itemize do \\[mediawiki-terminate-paragraph].")
 
 (defvar mediawiki-english-or-german t
   "*Variable in order to set the english (t) or german (nil) environment.")
@@ -654,7 +654,7 @@ recorded somewhere by that function."
   :group 'mediawiki-draft)
 
 (defvar mediawiki-reply-with-hline nil
-"*Whether to use a hline as a header seperator in the reply.")
+  "*Whether to use a hline as a header seperator in the reply.")
 
 (defvar mediawiki-reply-with-quote nil
   "*Whether to use a quotation tempalate or not.")
@@ -823,10 +823,10 @@ as group and page name.")
 
 (defface font-mediawiki-verbatim-face
   (let ((font (when (and (assq :inherit custom-face-attributes)
-		       (if (fboundp 'find-face)
-			   (find-face 'fixed-pitch)
-			 (facep 'fixed-pitch)))
-		  '(:inherit fixed-pitch))))
+		         (if (fboundp 'find-face)
+			     (find-face 'fixed-pitch)
+			   (facep 'fixed-pitch)))
+		'(:inherit fixed-pitch))))
     `((((class grayscale) (background light))
        (:foreground "DimGray" ,@font))
       (((class grayscale) (background dark))
@@ -988,10 +988,10 @@ Right now, this only means replacing \"_\" with \" \"."
   (format (let* ((my-parsed (url-generic-parse-url
                              (mediawiki-site-url (or sitename mediawiki-site))))
                  (my-path (url-filename my-parsed)))
-	 (when (or (string= my-path "") (not (string= (substring my-path -1) "/")))
-	   (setq my-path (concat my-path "/")))
-	 (setf (url-filename my-parsed) (concat my-path "api.php"))
-	 (url-recreate-url my-parsed))))
+	    (when (or (string= my-path "") (not (string= (substring my-path -1) "/")))
+	      (setq my-path (concat my-path "/")))
+	    (setf (url-filename my-parsed) (concat my-path "api.php"))
+	    (url-recreate-url my-parsed))))
 
 (defun mediawiki-raise (result type notif)
   "Show a TYPE of information from the RESULT to the user using NOTIF"
@@ -1016,9 +1016,9 @@ ACTION is the API action.  ARGS is a list of arguments."
                              (append args (list (cons "format" "xml")
                                                 (cons "action" action)))))
          (result (assoc 'api
-                            (with-temp-buffer
-                              (insert raw)
-                              (xml-parse-region (point-min) (point-max))))))
+                        (with-temp-buffer
+                          (insert raw)
+                          (xml-parse-region (point-min) (point-max))))))
     (unless result
       (error "There was an error parsing the result of the API call"))
 
@@ -1053,7 +1053,7 @@ ACTION is the API action.  ARGS is a list of arguments."
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
-   (let ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
+   (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
      (list (read-string "Wiki Page: " nil 'hist))))
   (when (or (not (stringp name))
             (string-equal "" name))
@@ -1063,6 +1063,8 @@ ACTION is the API action.  ARGS is a list of arguments."
 (defun mediawiki-reload ()
   "Reload the page from the server."
   (interactive)
+  (when (not mediawiki-site)
+    (setq mediawiki-site (mediawiki-prompt-for-site)))
   (let ((title mediawiki-page-title))
     (if title
 	(mediawiki-open title)
@@ -1086,11 +1088,11 @@ ACTION is the API action.  ARGS is a list of arguments."
     (with-current-buffer (get-buffer-create
                           (concat sitename ": " pagetitle))
       (unless (mediawiki-logged-in-p sitename)
-        (mediawiki-do-login sitename)
-        (setq mediawiki-site sitename))
+        (mediawiki-do-login sitename))
       (ring-insert mediawiki-page-ring (current-buffer))
       (delete-region (point-min) (point-max))
       (mediawiki-mode)
+      (setq mediawiki-site sitename)
       (set-buffer-file-coding-system 'utf-8)
       (insert (or (mediawiki-get sitename pagetitle) ""))
 
@@ -1435,7 +1437,8 @@ Store cookies for future authentication."
                                         (or mediawiki-basetimestamp "now"))
                                   (cons "starttimestamp"
                                         (or mediawiki-starttimestamp "now"))))
-      (error (progn (message (concat trynum "Retry because of error: " err))
+      (error (progn (message "try #%d: %s " trynum
+                             (concat "Retry because of error: " (cadr err)))
                     (mediawiki-retry-save-page
                      sitename title summary content trynum)))))
   (set-buffer-modified-p nil))
