@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-06 00:32:46 mah>
+;; Last Modified: <2020-07-11 21:24:28 mah>
 
 (defconst mediawiki-version "2.3.1"
   "Current version of mediawiki.el.")
@@ -963,23 +963,33 @@ as group and page name.")
 
 (defvar mediawiki-debug-buffer " *MediaWiki Debug*")
 
+(defun mediawiki-debug-line (line)
+  "Log a LINE to BUFFER."
+  (when mediawiki-debug
+    (with-current-buffer (get-buffer-create mediawiki-debug-buffer)
+      (goto-char (point-max))
+      (insert "\n")
+      (insert line))))
+
 (defun mediawiki-debug (buffer function)
   "The debug handler.
 When debugging is turned on, log the name of the BUFFER with the
 FUNCTION that called the debugging function, so it can be
 examined.  If debugging is off, just kill the buffer.  This
 allows you to see what is being sent to and from the server."
-  (if (not mediawiki-debug)
-      (kill-buffer buffer)
-    (with-current-buffer (get-buffer-create mediawiki-debug-buffer)
-      (goto-char (point-max))
-      (insert "\n")
-      (insert-buffer-substring buffer))))
+  (when mediawiki-debug
+    (mediawiki-debug-line
+     (concat
+      "\n\n=-=-=-=-=-=-=-=\n"
+      function "\n\n"
+      (with-current-buffer buffer
+        (buffer-string)))))
+  (kill-buffer buffer))
 
 (defun mediawiki-translate-pagename (name)
   "Given NAME, return the typical name that MediaWiki would use.
 Right now, this only means replacing \"_\" with \" \"."
-  (if (not name)
+  (if (or (not name) (string= name ""))
       "Main Page"
     (mapconcat 'identity (split-string name "_" t) " ")))
 
@@ -1012,6 +1022,9 @@ Right now, this only means replacing \"_\" with \" \"."
 (defun mediawiki-api-call (sitename action &optional args)
   "Wrapper for making an API call to SITENAME.
 ACTION is the API action.  ARGS is a list of arguments."
+  (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
+                                (mm-url-encode-multipart-form-data
+                                 (delq nil args) "==")))
   (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
                              (append args (list (cons "format" "xml")
                                                 (cons "action" action)))))
@@ -1195,12 +1208,18 @@ variables it sets there will be local to that buffer."
 SITENAME is the site to use.  TITLE is a string containing one
 title or a list of titles.  PROPS are the revision properites to
 fetch.  LIMIT is the upper bound on the number of results to give."
-  (cddr (mediawiki-api-call sitename "query"
-                      (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
-                            (cons "titles" (mediawiki-api-param title))
-                            (when limit
-                              (cons "rvlimit" (mediawiki-api-param limit)))
-                            (cons "rvprop" (mediawiki-api-param props))))))
+  (when (or (eq nil title) (string= "" title))
+      (error "No title passed!"))
+  (let ((qresult (mediawiki-api-call
+         sitename "query"
+         (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
+               (cons "titles" (mediawiki-api-param title))
+               (when limit
+                 (cons "rvlimit" (mediawiki-api-param limit)))
+               (cons "rvprop" (mediawiki-api-param props))))))
+    (if (eq t qresult)
+        (error "No results for revision query.")
+      (cddr qresult))))
 
 (defun mediawiki-page-get-title (page)
   "Given a PAGE from a pagelist structure, extract the title."
@@ -1427,16 +1446,18 @@ Store cookies for future authentication."
   (let ((trynum (or trynum 3))
         (token (mediawiki-site-get-token sitename "csrf")))
     (condition-case err
-        (mediawiki-api-call sitename "edit"
-                            (list (cons "title"
-                                        (mediawiki-translate-pagename title))
-                                  (cons "text" content)
-                                  (cons "summary" summary)
-                                  (cons "token" token)
-                                  (cons "basetimestamp"
-                                        (or mediawiki-basetimestamp "now"))
-                                  (cons "starttimestamp"
-                                        (or mediawiki-starttimestamp "now"))))
+        (progn
+          (mediawiki-api-call sitename "edit"
+                              (list (cons "title"
+                                          (mediawiki-translate-pagename title))
+                                    (cons "text" content)
+                                    (cons "summary" summary)
+                                    (cons "token" token)
+                                    (cons "basetimestamp"
+                                          (or mediawiki-basetimestamp "now"))
+                                    (cons "starttimestamp"
+                                          (or mediawiki-starttimestamp "now"))))
+          (message "Saved %s to %s" title sitename))
       (error (progn (message "try #%d: %s " trynum
                              (concat "Retry because of error: " (cadr err)))
                     (mediawiki-retry-save-page
@@ -1484,7 +1505,8 @@ Interactively, prompt for a SITE."
   (when (or (eq nil mediawiki-site)
             (not (string-equal site mediawiki-site)))
     (setq mediawiki-site (mediawiki-do-login site)))
-  (mediawiki-edit site (mediawiki-site-first-page site)))
+  (mediawiki-edit site (or (car (delq "" (list (mediawiki-site-first-page site))))
+                           "Main Page")))
 
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
