@@ -9,7 +9,7 @@
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2020-07-11 21:24:28 mah>
+;; Last Modified: <2020-07-11 22:45:06 mah>
 
 (defconst mediawiki-version "2.3.1"
   "Current version of mediawiki.el.")
@@ -730,112 +730,125 @@ as group and page name.")
   "Face to use for text in verbatim macros or environments.")
 
 (defface font-mediawiki-bold-face
-  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit bold))
-		    ((assq :weight custom-face-attributes) '(:weight bold))
-		    (t '(:bold t)))))
     `((((class grayscale) (background light))
-       (:foreground "DimGray" ,@font))
+       :foreground "DimGray"
+       :weight bold)
       (((class grayscale) (background dark))
-       (:foreground "LightGray" ,@font))
+       :foreground "LightGray"
+       :weight bold)
       (((class color) (background light))
-       (:foreground "DarkOliveGreen" ,@font))
+       :foreground "DarkOliveGreen"
+       :weight bold)
       (((class color) (background dark))
-       (:foreground "OliveDrab" ,@font))
-      (t (,@font))))
+       :foreground "OliveDrab"
+       :weight bold)
+      (t
+       :weight bold))
   "Face used to highlight text to be typeset in bold."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-italic-face
-  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit italic))
-		    ((assq :slant custom-face-attributes) '(:slant italic))
-		    (t '(:italic t)))))
-    `((((class grayscale) (background light))
-       (:foreground "DimGray" ,@font))
-      (((class grayscale) (background dark))
-       (:foreground "LightGray" ,@font))
-      (((class color) (background light))
-       (:foreground "DarkOliveGreen" ,@font))
-      (((class color) (background dark))
-       (:foreground "OliveDrab" ,@font))
-      (t (,@font))))
+  `((((class grayscale) (background light))
+     :foreground "DimGray"
+     :slant italic)
+    (((class grayscale) (background dark))
+     :foreground "LightGray"
+     :slant italic)
+    (((class color) (background light))
+     :foreground "DarkOliveGreen"
+     :slant italic)
+    (((class color) (background dark))
+     :foreground "OliveDrab"
+     :slant italic)
+    (t
+     :slant italic))
   "Face used to highlight text to be typeset in italic."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-math-face
-  (let ((font (cond ((assq :inherit custom-face-attributes)
-		     '(:inherit underline))
-		    (t '(:underline t)))))
-    `((((class grayscale) (background light))
-       (:foreground "DimGray" ,@font))
-      (((class grayscale) (background dark))
-       (:foreground "LightGray" ,@font))
-      (((class color) (background light))
-       (:foreground "SaddleBrown"))
-      (((class color) (background dark))
-       (:foreground "burlywood"))
-      (t (,@font))))
+  `((((class grayscale) (background light))
+     :foreground "DimGray"
+     :underline t)
+    (((class grayscale) (background dark))
+     :foreground "LightGray"
+     :underline t)
+    (((class color) (background light))
+     :foreground "SaddleBrown"
+     :underline t)
+    (((class color) (background dark))
+     :foreground "burlywood"
+     :underline t)
+    (t
+     :underline t))
   "Face used to highlight math."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-sedate-face
-  '((((class grayscale) (background light)) (:foreground "DimGray"))
-    (((class grayscale) (background dark))  (:foreground "LightGray"))
-    (((class color) (background light)) (:foreground "DimGray"))
-    (((class color) (background dark))  (:foreground "LightGray"))
-   ;;;(t (:underline t))
-    )
+  '((((class grayscale) (background light))
+     :foreground "DimGray")
+    (((class grayscale) (background dark))
+     :foreground "LightGray")
+    (((class color) (background light))
+     :foreground "DimGray")
+    (((class color) (background dark))
+     :foreground "LightGray"))
   "Face used to highlight sedate stuff."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-string-face
-  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit italic))
-		    ((assq :slant custom-face-attributes) '(:slant italic))
-		    (t '(:italic t)))))
-    `((((type tty) (class color))
-       (:foreground "green"))
-      (((class grayscale) (background light))
-       (:foreground "DimGray" ,@font))
-      (((class grayscale) (background dark))
-       (:foreground "LightGray" ,@font))
-      (((class color) (background light))
-       (:foreground "RosyBrown"))
-      (((class color) (background dark))
-       (:foreground "LightSalmon"))
-      (t (,@font))))
+  `((((type tty) (class color))
+     :foreground "green"
+     :slant italic)
+    (((class grayscale) (background light))
+     :foreground "DimGray"
+     :slant italic)
+    (((class grayscale) (background dark))
+     :foreground "LightGray"
+     :slant italic)
+    (((class color) (background light))
+     :foreground "RosyBrown"
+     :slant italic)
+    (((class color) (background dark))
+     :foreground "LightSalmon"
+     :slant italic)
+    (t
+     :slant italic))
   "Face used to highlight strings."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-warning-face
-  (let ((font (cond ((assq :inherit custom-face-attributes) '(:inherit bold))
-		    ((assq :weight custom-face-attributes) '(:weight bold))
-		    (t '(:bold t)))))
-    `((((class grayscale)(background light))
-       (:foreground "DimGray" ,@font))
-      (((class grayscale)(background dark))
-       (:foreground "LightGray" ,@font))
-      (((class color)(background light))
-       (:foreground "red" ,@font))
-      (((class color)(background dark))
-       (:foreground "red" ,@font))
-      (t (,@font))))
+  `((((class grayscale)(background light))
+     :foreground "DimGray"
+     :weight bold)
+    (((class grayscale)(background dark))
+     :foreground "LightGray"
+     :weight bold)
+    (((class color)(background light))
+     :foreground "red"
+     :weight bold)
+    (((class color)(background dark))
+     :foreground "red"
+     :weight bold)
+    (t
+     :weight bold))
   "Face for important keywords."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-verbatim-face
-  (let ((font (when (and (assq :inherit custom-face-attributes)
-		         (if (fboundp 'find-face)
-			     (find-face 'fixed-pitch)
-			   (facep 'fixed-pitch)))
-		'(:inherit fixed-pitch))))
-    `((((class grayscale) (background light))
-       (:foreground "DimGray" ,@font))
-      (((class grayscale) (background dark))
-       (:foreground "LightGray" ,@font))
-      (((class color) (background light))
-       (:foreground "SaddleBrown" ,@font))
-      (((class color) (background dark))
-       (:foreground "burlywood" ,@font))
-      (t (,@font))))
+  `((((class grayscale) (background light))
+     :foreground "DimGray"
+     :inherit fixed-pitch)
+    (((class grayscale) (background dark))
+     :foreground "LightGray"
+     :inherit fixed-pitch)
+    (((class color) (background light))
+     :foreground "SaddleBrown"
+     :inherit fixed-pitch)
+    (((class color) (background dark))
+     :foreground "burlywood"
+     :inherit fixed-pitch)
+    (t
+     :inherit fixed-pitch))
   "Face used to highlight TeX verbatim environments."
   :group 'font-mediawiki-highlighting-faces)
 
@@ -1375,11 +1388,15 @@ Prompt for a SUMMARY if one isn't given."
 
 (defun mediawiki-site-domain (sitename)
   "Get the LDAP domain for a given SITENAME."
-  (mediawiki-site-extract sitename 4))
+  (let ((domain (mediawiki-site-extract sitename 4)))
+    (when (and domain (not (string= "" domain)))
+      domain)))
 
 (defun mediawiki-site-first-page (sitename)
   "Get the first page for a given SITENAME."
-  (mediawiki-site-extract sitename 5))
+  (let ((page (mediawiki-site-extract sitename 5)))
+    (if (or (not page) (string= page ""))
+        "Main Page")))
 
 (defun mediawiki-site-get-token (sitename type)
   "Get token(s) for SITENAME of TYPE type."
@@ -1505,8 +1522,7 @@ Interactively, prompt for a SITE."
   (when (or (eq nil mediawiki-site)
             (not (string-equal site mediawiki-site)))
     (setq mediawiki-site (mediawiki-do-login site)))
-  (mediawiki-edit site (or (car (delq "" (list (mediawiki-site-first-page site))))
-                           "Main Page")))
+  (mediawiki-edit site (mediawiki-site-first-page site)))
 
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
