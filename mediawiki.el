@@ -966,7 +966,7 @@ as group and page name.")
    (cons "^ .*$" '(0 font-lock-constant-face t t))
 
    ;; Math environment (uniform highlight only, no TeX markup)
-   (list "<math>\\(\\(\n?.\\)*\\)</math>"
+   (list "<math>\\(\\(\n?.\\)*?\\)</math>"
          '(1 font-lock-keyword-face t t))))
 
 (defvar mediawiki-draft-send-archive t
