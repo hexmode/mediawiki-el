@@ -2289,7 +2289,7 @@ following commands may come in handy:
 
 Be warned that function can be dead  slow, better use mediawiki-unfill-paragraph-or-region.
 \\[mediawiki-unfill-paragraph-or-region] unfills the paragraph
-\\[mediawiki-unfill-paragraph-simple] doehe same but simpler.
+\\[mediawiki-unfill-paragraph-simple] does the same but simpler.
 
 The following commands put in markup structures.
 \\[mediawiki-insert-strong-emphasis] inserts italics
