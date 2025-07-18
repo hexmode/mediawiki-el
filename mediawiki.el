@@ -10,9 +10,9 @@
 ;; Package-Requires: ((emacs "26.1") (web "0.5.2"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2025-07-17 23:29:36 mah>
+;; Last Modified: <2025-07-18 00:25:12 mah>
 
-(defconst mediawiki-version "2.4.0"
+(defconst mediawiki-version "2.4.1"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -876,7 +876,8 @@ fetch.  LIMIT is the upper bound on the number of results to give."
                (cons "titles" (mediawiki-api-param title))
                (when limit
                  (cons "rvlimit" (mediawiki-api-param limit)))
-               (cons "rvprop" (mediawiki-api-param props))))))
+               (cons "rvprop" (mediawiki-api-param props))
+               (cons "rvslots" "main")))))
     (if (eq t qresult)
         (error "No results for revision query.")
       (cddr qresult))))
@@ -893,10 +894,38 @@ return the whole revision structure."
   (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
     (cond
      ((eq bit 'content)
-      (cadr rev))
+      ;; Handle new slot-based format introduced with rvslots parameter
+      (let ((content-data (cadr rev)))
+        (cond
+         ;; Check if this is the new slots format
+         ((and (listp content-data) (eq (car content-data) 'slots))
+          ;; New format: (slots nil (slot ((attrs...)) "content"))
+          ;; Extract the content string from the slot structure
+          (let ((slot-element (nth 2 content-data)))  ; Get the slot element
+            (if (and (listp slot-element) (eq (car slot-element) 'slot))
+                ;; The content is the last element in the slot
+                (car (last slot-element))
+              "")))
+         ;; Check if content-data is already a string (old format)
+         ((stringp content-data)
+          content-data)
+         ;; Fallback
+         (t ""))))
      ((assoc bit (car rev))
       (cdr (assoc bit (car rev))))
      (t rev))))
+
+(defun mediawiki-extract-string-from-structure (structure)
+  "Recursively extract the first string found in STRUCTURE."
+  (cond
+   ((stringp structure) structure)
+   ((listp structure)
+    (let ((result nil))
+      (dolist (element structure)
+        (when (not result)
+          (setq result (mediawiki-extract-string-from-structure element))))
+      result))
+   (t nil)))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
   "Given PAGELIST, extract the informaton for TITLE."
