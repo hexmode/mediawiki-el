@@ -66,7 +66,7 @@ Returns the response data or signals an error.
 
 This function provides backward compatibility while leveraging the async
 implementation for consistent behavior and error handling.
-Supports cancellation via keyboard interrupt (C-g)."
+Supports cancellation via keyboard interrupt (\\[keyboard-quit])."
   (let ((timeout (or timeout mediawiki-request-timeout))
         (result nil)
         (error-result nil)
@@ -113,7 +113,7 @@ Supports cancellation via keyboard interrupt (C-g)."
                      (format "Request timed out after %d seconds" timeout)
                      nil)
                     completed t))
-            
+
             ;; Allow Emacs to process other events (including keyboard interrupts)
             (unless completed
               (accept-process-output nil 0.1)))
@@ -144,33 +144,33 @@ Returns t if response is valid, nil otherwise.
 Logs validation errors when debugging is enabled."
   (let ((valid t)
         (errors '()))
-    
+
     ;; Check required fields
     (unless (plist-member response :success)
       (push "Missing :success field" errors)
       (setq valid nil))
-    
+
     (unless (plist-member response :status-code)
       (push "Missing :status-code field" errors)
       (setq valid nil))
-    
+
     ;; Validate status code if present
     (let ((status-code (plist-get response :status-code)))
       (when (and status-code (not (integerp status-code)))
         (push "Invalid status code type" errors)
         (setq valid nil)))
-    
+
     ;; Validate headers if present
     (let ((headers (plist-get response :headers)))
       (when (and headers (not (listp headers)))
         (push "Invalid headers format" errors)
         (setq valid nil)))
-    
+
     ;; Log validation errors
     (when (and errors (mediawiki-debug-enabled-p))
-      (mediawiki-debug-log "Response validation failed: %s" 
+      (mediawiki-debug-log "Response validation failed: %s"
                           (mapconcat 'identity errors "; ")))
-    
+
     valid))
 
 (defun mediawiki-http-parse-json-response (response)
@@ -189,17 +189,17 @@ Logs parsing errors when debugging is enabled."
               (json-read-from-string body)))
         (json-parse-error
          (when (mediawiki-debug-enabled-p)
-           (mediawiki-debug-log "JSON parsing failed: %s\nBody: %s" 
+           (mediawiki-debug-log "JSON parsing failed: %s\nBody: %s"
                                (error-message-string err) body))
          nil)
         (json-error
          (when (mediawiki-debug-enabled-p)
-           (mediawiki-debug-log "JSON parsing failed: %s\nBody: %s" 
+           (mediawiki-debug-log "JSON parsing failed: %s\nBody: %s"
                                (error-message-string err) body))
          nil)
         (error
          (when (mediawiki-debug-enabled-p)
-           (mediawiki-debug-log "Unexpected error parsing JSON: %s" 
+           (mediawiki-debug-log "Unexpected error parsing JSON: %s"
                                (error-message-string err)))
          nil)))))
 
@@ -211,7 +211,7 @@ Returns a plist with extracted information."
         (content-length (mediawiki-http-get-header response "content-length"))
         (server (mediawiki-http-get-header response "server"))
         (body-length (length (or (plist-get response :body) ""))))
-    
+
     (list :status-code status-code
           :content-type content-type
           :content-length content-length
@@ -226,42 +226,42 @@ REQUEST-INFO is optional additional context about the original request."
   (when (mediawiki-debug-enabled-p)
     (let ((info (mediawiki-http-extract-response-info response))
           (timestamp (format-time-string "%Y-%m-%d %H:%M:%S")))
-      
+
       (mediawiki-debug-log "=== HTTP Response [%s] ===" timestamp)
-      
+
       ;; Log request context if available
       (when request-info
-        (mediawiki-debug-log "Request: %s %s" 
+        (mediawiki-debug-log "Request: %s %s"
                             (plist-get request-info :method)
                             (plist-get request-info :url)))
-      
+
       ;; Log response summary
-      (mediawiki-debug-log "Status: %s (%s)" 
+      (mediawiki-debug-log "Status: %s (%s)"
                           (plist-get info :status-code)
                           (if (plist-get info :success) "SUCCESS" "ERROR"))
-      
+
       (when (plist-get info :content-type)
         (mediawiki-debug-log "Content-Type: %s" (plist-get info :content-type)))
-      
+
       (when (plist-get info :server)
         (mediawiki-debug-log "Server: %s" (plist-get info :server)))
-      
+
       (mediawiki-debug-log "Body Length: %d bytes" (plist-get info :actual-body-length))
-      
+
       ;; Log error information if present
       (when (not (plist-get info :success))
         (mediawiki-debug-log "Error Type: %s" (plist-get info :error-type))
         (let ((error-msg (plist-get response :error)))
           (when error-msg
             (mediawiki-debug-log "Error Message: %s" error-msg))))
-      
+
       ;; Log response body if it's small enough and in debug mode
       (let ((body (plist-get response :body)))
-        (when (and body 
+        (when (and body
                    (< (length body) mediawiki-debug-max-body-length)
                    (mediawiki-debug-verbose-p))
           (mediawiki-debug-log "Response Body:\n%s" body)))
-      
+
       (mediawiki-debug-log "=== End Response ==="))))
 
 (defun mediawiki-http-check-response-health (response)
@@ -269,37 +269,37 @@ REQUEST-INFO is optional additional context about the original request."
 Returns a plist with health information and warnings."
   (let ((warnings '())
         (status :healthy))
-    
+
     ;; Check for missing content-type
     (unless (mediawiki-http-get-content-type response)
       (push "Missing Content-Type header" warnings))
-    
+
     ;; Check for suspicious content-type for API responses
     (let ((content-type (mediawiki-http-get-content-type response)))
-      (when (and content-type 
+      (when (and content-type
                  (not (string-match-p "application/json\\|text/plain" content-type)))
         (push (format "Unexpected Content-Type: %s" content-type) warnings)))
-    
+
     ;; Check for empty body on successful responses
     (when (and (plist-get response :success)
                (or (not (plist-get response :body))
                    (string-empty-p (plist-get response :body))))
       (push "Empty response body on successful request" warnings)
       (setq status :warning))
-    
+
     ;; Check for very large responses
     (let ((body-length (length (or (plist-get response :body) ""))))
       (when (> body-length mediawiki-large-response-threshold)
         (push (format "Large response body: %d bytes" body-length) warnings)
         (when (eq status :healthy)
           (setq status :warning))))
-    
+
     ;; Check for rate limiting indicators
     (let ((status-code (plist-get response :status-code)))
       (when (= status-code 429)
         (push "Rate limiting detected" warnings)
         (setq status :rate-limited)))
-    
+
     (list :status status
           :warnings warnings
           :warning-count (length warnings))))
@@ -316,20 +316,20 @@ different types of errors (network, authentication, server errors)."
   (condition-case err
       (let* ((response (mediawiki-http-parse-response status url method))
              (request-info (list :url url :method method)))
-        
+
         ;; Validate response structure
         (unless (mediawiki-http-validate-response response)
           (mediawiki-debug-log "Response validation failed for %s %s" method url))
-        
+
         ;; Log response details
         (mediawiki-http-log-response response request-info)
-        
+
         ;; Check response health and log warnings
         (let ((health (mediawiki-http-check-response-health response)))
           (when (plist-get health :warnings)
-            (mediawiki-debug-log "Response health warnings: %s" 
+            (mediawiki-debug-log "Response health warnings: %s"
                                 (mapconcat 'identity (plist-get health :warnings) "; "))))
-        
+
         ;; Call appropriate callback
         (if (mediawiki-http-response-success-p response)
             (when callback

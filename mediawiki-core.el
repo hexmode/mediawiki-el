@@ -70,7 +70,7 @@ per-session later."
   :group 'mediawiki)
 
 (defcustom mediawiki-large-response-threshold 100000
-  "Threshold in bytes for considering a response 'large'."
+  "Threshold in bytes for considering a response `large'."
   :type 'integer
   :tag "Large Response Threshold"
   :group 'mediawiki)
@@ -183,14 +183,14 @@ FORMAT-STRING and ARGS are passed to `format'."
       (insert line))))
 
 (defun mediawiki-debug-request (url method data)
-  "Log request details for debugging."
+  "Log URL request details for debugging with METHOD and DATA."
   (when mediawiki-debug
     (mediawiki-debug-line
      (format "REQUEST: %s %s\nDATA: %s"
              method url (prin1-to-string data)))))
 
 (defun mediawiki-debug-response (response)
-  "Log response details for debugging."
+  "Log RESPONSE details for debugging."
   (when mediawiki-debug
     (mediawiki-debug-line
      (format "RESPONSE: %s" (prin1-to-string response)))))

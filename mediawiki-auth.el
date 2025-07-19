@@ -44,7 +44,7 @@ FORCE-METHOD can override the default authentication method."
          (auth-method (or force-method
                          (mediawiki-site-auth-method site)
                          mediawiki-default-auth-method)))
-    
+
     (cond
      ((eq auth-method 'basic)
       (mediawiki-auth-basic-login sitename))
@@ -59,31 +59,31 @@ FORCE-METHOD can override the default authentication method."
          (credentials (mediawiki-auth-get-credentials sitename))
          (username (plist-get credentials :username))
          (password (plist-get credentials :password)))
-    
+
     (unless (and username password)
       (error "Username and password required for basic authentication"))
-    
+
     ;; First, get a login token
     (let ((token-response (mediawiki-api-call-sync
                           sitename "query"
                           (list (cons "meta" "tokens")
                                 (cons "type" "login")))))
-      
+
       (unless (mediawiki-api-response-success token-response)
         (error "Failed to get login token: %s"
                (mediawiki-api-get-error-info token-response)))
-      
+
       (let ((login-token (mediawiki-auth-extract-token token-response "login")))
         (unless login-token
           (error "No login token in response"))
-        
+
         ;; Perform login
         (let ((login-response (mediawiki-api-call-sync
                               sitename "login"
                               (list (cons "lgname" username)
                                     (cons "lgpassword" password)
                                     (cons "lgtoken" login-token)))))
-          
+
           (mediawiki-auth-handle-login-response sitename login-response))))))
 
 (defun mediawiki-auth-oauth-login (sitename)
@@ -98,7 +98,7 @@ This is a placeholder for future OAuth implementation."
   (let* ((site (mediawiki-get-site sitename))
          (url (mediawiki-site-url site))
          (username (mediawiki-site-username site)))
-    
+
     (if (eq mediawiki-auth-source-backend 'auth-source)
         (mediawiki-auth-get-from-auth-source url username)
       (mediawiki-auth-prompt-credentials sitename))))
@@ -151,7 +151,7 @@ This is a placeholder for future OAuth implementation."
                   :user-info login-data
                   :login-time (current-time)
                   :last-activity (current-time))))
-    
+
     (mediawiki-set-session sitename session)
     session))
 
@@ -182,7 +182,7 @@ This is a placeholder for future OAuth implementation."
       (condition-case nil
           (mediawiki-api-call-sync sitename "logout" nil)
         (error nil))
-      
+
       ;; Remove local session
       (mediawiki-remove-session sitename)
       (message "Logged out from %s" sitename))))
@@ -195,10 +195,10 @@ This is a placeholder for future OAuth implementation."
     (when session
       ;; Clear existing tokens
       (clrhash (mediawiki-session-tokens session))
-      
+
       ;; Update last activity
       (setf (mediawiki-session-last-activity session) (current-time))
-      
+
       session)))
 
 (provide 'mediawiki-auth)

@@ -25,27 +25,27 @@
     - Add response debugging and logging capabilities
     - _Requirements: 5.2, 5.3_
 
-- [ ] 3. Create JSON-based API communication framework
-  - [ ] 3.1 Implement JSON API request builder
+- [x] 3. Create JSON-based API communication framework
+  - [x] 3.1 Implement JSON API request builder
     - Write `mediawiki-api-call-async` with JSON format support
     - Replace XML parsing with JSON parsing throughout
     - Add parameter validation and encoding
     - _Requirements: 1.2, 1.3_
 
-  - [ ] 3.2 Create API response parser and validator
+  - [x] 3.2 Create API response parser and validator
     - Implement JSON response parsing with error detection
     - Add MediaWiki API error code handling
     - Create structured error reporting system
     - _Requirements: 1.4, 5.1_
 
-  - [ ] 3.3 Add API endpoint discovery and validation
+  - [x] 3.3 Add API endpoint discovery and validation
     - Implement MediaWiki version detection
     - Add API capability checking
     - Create fallback mechanisms for older MediaWiki versions
     - _Requirements: 1.1_
 
 - [ ] 4. Modernize authentication system
-  - [ ] 4.1 Implement auth-source integration
+  - [-] 4.1 Implement auth-source integration
     - Replace hardcoded credentials with auth-source library calls
     - Add secure credential storage and retrieval
     - Implement credential caching with proper security

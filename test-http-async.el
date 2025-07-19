@@ -24,10 +24,10 @@
         (if (and (plist-get response :success)
                  (= (plist-get response :status-code) 200))
             (test-record-result "sync-basic" t "Successful GET request")
-          (test-record-result "sync-basic" nil 
+          (test-record-result "sync-basic" nil
                              (format "Unexpected response: %s" response))))
     (error
-     (test-record-result "sync-basic" nil 
+     (test-record-result "sync-basic" nil
                         (format "Error: %s" (error-message-string err))))))
 
 (defun test-sync-http-error ()
@@ -39,7 +39,7 @@
                  (= (plist-get response :status-code) 404)
                  (eq (plist-get response :error-type) 'not-found-error))
             (test-record-result "sync-error" t "Correctly handled 404 error")
-          (test-record-result "sync-error" nil 
+          (test-record-result "sync-error" nil
                              (format "Unexpected response: %s" response))))
     (error
      ;; This is expected for sync requests that fail
@@ -59,10 +59,10 @@
             (expected-type (cadr test)))
         (let ((actual-type (mediawiki-http-classify-error status-code)))
           (if (eq actual-type expected-type)
-              (test-record-result 
+              (test-record-result
                (format "classify-%s" (or status-code "nil"))
                t (format "Correctly classified as %s" expected-type))
-            (test-record-result 
+            (test-record-result
              (format "classify-%s" (or status-code "nil"))
              nil (format "Expected %s, got %s" expected-type actual-type))))))))
 
@@ -71,7 +71,7 @@
   (message "Testing async callback mechanism...")
   (let ((callback-called nil)
         (error-callback-called nil))
-    
+
     ;; Test success callback
     (mediawiki-http-request-async
      "https://httpbin.org/get"
@@ -83,7 +83,7 @@
      (lambda (response)
        (setq error-callback-called t)
        (test-record-result "async-success-callback" nil "Error callback called unexpectedly")))
-    
+
     ;; Give it a moment to process (this is a limitation of testing async code)
     (message "Async test initiated - callback results will appear shortly")))
 
@@ -91,15 +91,15 @@
   "Run all HTTP tests."
   (setq test-results '())
   (message "=== Starting HTTP Tests ===")
-  
+
   ;; Run synchronous tests first (they complete immediately)
   (test-sync-http-basic)
   (test-sync-http-error)
   (test-error-classification)
-  
+
   ;; Run async test (results will appear later)
   (test-async-callback-mechanism)
-  
+
   (message "=== Test Summary ===")
   (let ((passed 0)
         (failed 0))
@@ -108,7 +108,7 @@
           (setq passed (1+ passed))
         (setq failed (1+ failed))))
     (message "Tests completed: %d passed, %d failed" passed failed))
-  
+
   (message "Note: Async test results may appear after this summary"))
 
 ;; Run the tests

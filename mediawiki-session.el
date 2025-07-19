@@ -38,11 +38,11 @@
   (let ((session (mediawiki-get-session sitename)))
     (unless session
       (error "No active session for %s" sitename))
-    
+
     (let ((cached-token (gethash token-type (mediawiki-session-tokens session)))
           (expiry (gethash (concat token-type "-expiry")
                           (mediawiki-session-tokens session))))
-      
+
       (if (and cached-token expiry
                (time-less-p (current-time) expiry))
           cached-token
@@ -53,29 +53,29 @@
   (let ((session (mediawiki-get-session sitename)))
     (unless session
       (error "No active session for %s" sitename))
-    
+
     (let ((response (mediawiki-api-call-sync
                     sitename "query"
                     (list (cons "meta" "tokens")
                           (cons "type" token-type)))))
-      
+
       (unless (mediawiki-api-response-success response)
         (error "Failed to refresh %s token: %s"
                token-type (mediawiki-api-get-error-info response)))
-      
+
       (let ((token (mediawiki-session-extract-token response token-type)))
         (unless token
           (error "No %s token in response" token-type))
-        
+
         ;; Cache the token with expiration
         (let ((tokens (mediawiki-session-tokens session))
               (expiry (time-add (current-time) mediawiki-token-cache-duration)))
           (puthash token-type token tokens)
           (puthash (concat token-type "-expiry") expiry tokens))
-        
+
         ;; Update last activity
         (setf (mediawiki-session-last-activity session) (current-time))
-        
+
         token))))
 
 (defun mediawiki-session-extract-token (response token-type)
@@ -102,7 +102,7 @@
       ;; Clear sensitive data
       (clrhash (mediawiki-session-tokens session))
       (setf (mediawiki-session-user-info session) nil)
-      
+
       ;; Remove from active sessions
       (mediawiki-remove-session sitename))))
 
@@ -132,7 +132,7 @@
                  (push (cons sitename (mediawiki-session-serialize session))
                        session-data))
                mediawiki-sessions)
-      
+
       (with-temp-file mediawiki-session-file
         (prin1 session-data (current-buffer))))))
 
@@ -194,7 +194,7 @@
                (unless (mediawiki-session-check-activity session)
                  (push sitename expired-sites)))
              mediawiki-sessions)
-    
+
     (dolist (sitename expired-sites)
       (mediawiki-session-cleanup sitename)
       (message "Cleaned up expired session for %s" sitename))))
@@ -204,10 +204,10 @@
 (defun mediawiki-session-initialize ()
   "Initialize session management system."
   (mediawiki-session-load-all)
-  
+
   ;; Set up cleanup timer
   (run-with-timer 3600 3600 #'mediawiki-session-cleanup-expired)
-  
+
   ;; Set up save timer
   (run-with-timer 300 300 #'mediawiki-session-save-all))
 
