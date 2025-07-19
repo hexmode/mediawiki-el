@@ -58,30 +58,83 @@ to prevent blocking the Emacs interface."
                    (format "Failed to initiate request: %s" (error-message-string err))
                    nil)))))))
 
-(defun mediawiki-http-request-sync (url method data)
+(defun mediawiki-http-request-sync (url method data &optional timeout)
   "Make a synchronous HTTP request to URL using METHOD with DATA.
+This is a wrapper around the async function that blocks until completion.
+TIMEOUT specifies the maximum time to wait (defaults to `mediawiki-request-timeout').
 Returns the response data or signals an error.
 
-This function provides backward compatibility while using the same
-enhanced error handling as the async version."
-  (mediawiki-debug-request url method data)
+This function provides backward compatibility while leveraging the async
+implementation for consistent behavior and error handling.
+Supports cancellation via keyboard interrupt (C-g)."
+  (let ((timeout (or timeout mediawiki-request-timeout))
+        (result nil)
+        (error-result nil)
+        (completed nil)
+        (cancelled nil)
+        (start-time (current-time))
+        (timer nil))
 
-  (let ((url-request-method method)
-        (url-request-data (when data
-                           (if (hash-table-p data)
-                               (mediawiki-http-encode-form-data data)
-                             data)))
-        (url-request-extra-headers
-         (append
-          (when data
-            '(("Content-Type" . "application/x-www-form-urlencoded")))
-          '(("User-Agent" . "MediaWiki.el/2.0 (Emacs)")))))
+    ;; Set up completion callbacks
+    (let ((success-callback
+           (lambda (response)
+             (setq result response
+                   completed t)))
+          (error-callback
+           (lambda (error-response)
+             (setq error-result error-response
+                   completed t))))
 
-    (condition-case err
-        (with-current-buffer (url-retrieve-synchronously url t nil mediawiki-request-timeout)
-          (mediawiki-http-handle-sync-response url method))
-      (error
-       (error "HTTP request failed: %s" (error-message-string err))))))
+      ;; Start the async request
+      (mediawiki-http-request-async url method data success-callback error-callback)
+
+      ;; Set up timeout timer
+      (when (> timeout 0)
+        (setq timer
+              (run-at-time timeout nil
+                           (lambda ()
+                             (unless completed
+                               (setq error-result
+                                     (mediawiki-http-create-error-response
+                                      'timeout-error
+                                      (format "Request timed out after %d seconds" timeout)
+                                      nil)
+                                     completed t))))))
+
+      ;; Wait for completion with periodic checks and cancellation support
+      (condition-case err
+          (while (not completed)
+            ;; Check if we've exceeded timeout manually (fallback)
+            (when (and (> timeout 0)
+                       (> (float-time (time-subtract (current-time) start-time)) timeout))
+              (setq error-result
+                    (mediawiki-http-create-error-response
+                     'timeout-error
+                     (format "Request timed out after %d seconds" timeout)
+                     nil)
+                    completed t))
+            
+            ;; Allow Emacs to process other events (including keyboard interrupts)
+            (unless completed
+              (accept-process-output nil 0.1)))
+        (quit
+         ;; Handle cancellation (C-g)
+         (setq cancelled t
+               completed t)))
+
+      ;; Clean up timer
+      (when timer
+        (cancel-timer timer))
+
+      ;; Return result, signal error, or handle cancellation
+      (cond
+       (cancelled
+        (signal 'quit nil))  ; Re-signal the quit to maintain standard behavior
+       (result result)
+       (error-result
+        (error "HTTP request failed: %s" (plist-get error-result :error)))
+       (t
+        (error "HTTP request failed: Unknown error"))))))
 
 ;;; Response Handling
 
@@ -108,15 +161,7 @@ different types of errors (network, authentication, server errors)."
          (format "Failed to parse response: %s" (error-message-string err))
          nil))))))
 
-(defun mediawiki-http-handle-sync-response (url method)
-  "Handle synchronous HTTP response in current buffer.
-URL and METHOD are used for enhanced error reporting.
-Returns parsed response or signals an error."
-  (let ((response (mediawiki-http-parse-response nil url method)))
-    (mediawiki-debug-response response)
-    (if (mediawiki-http-response-success-p response)
-        response
-      (error "HTTP request failed: %s" (plist-get response :error)))))
+
 
 (defun mediawiki-http-parse-response (status &optional url method)
   "Parse HTTP response from current buffer with STATUS.

@@ -13,7 +13,7 @@
     - Add proper error handling for network issues
     - _Requirements: 4.1, 5.3_
 
-  - [ ] 2.2 Implement synchronous HTTP wrapper for compatibility
+  - [x] 2.2 Implement synchronous HTTP wrapper for compatibility
     - Create `mediawiki-http-request-sync` as wrapper around async function
     - Ensure backward compatibility with existing synchronous code
     - Add timeout handling and cancellation support
