@@ -7,7 +7,7 @@
   - _Requirements: 6.4_
 
 - [ ] 2. Implement modern HTTP communication layer
-  - [ ] 2.1 Create asynchronous HTTP request functions
+  - [x] 2.1 Create asynchronous HTTP request functions
     - Write `mediawiki-http-request-async` using modern Emacs HTTP capabilities
     - Implement callback-based response handling
     - Add proper error handling for network issues
