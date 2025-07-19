@@ -149,6 +149,14 @@
 
 ;;; Code:
 
+;; Load the new modular components
+(require 'mediawiki-core)
+(require 'mediawiki-http)
+(require 'mediawiki-api)
+(require 'mediawiki-auth)
+(require 'mediawiki-session)
+
+;; Legacy dependencies for backward compatibility
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
@@ -177,14 +185,16 @@ per-session later."
   :tag "MediaWiki Debugging"
   :group 'mediawiki)
 
-(defcustom mediawiki-site-alist '(("Wikipedia"
-                                   "https://en.wikipedia.org/w/"
-                                   "username"
-                                   "password"
-                                   nil
-				   "Main Page"))
-  "A list of MediaWiki websites."
-  :tag "MediaWiki sites"
+;; Legacy site configuration - will be migrated to new format
+(defcustom mediawiki-legacy-site-alist '(("Wikipedia"
+                                          "https://en.wikipedia.org/w/"
+                                          "username"
+                                          "password"
+                                          nil
+                                          "Main Page"))
+  "Legacy list of MediaWiki websites (deprecated).
+This will be automatically migrated to the new site configuration format."
+  :tag "MediaWiki sites (Legacy)"
   :group 'mediawiki
   :type '(alist :tag "Site Name"
                 :key-type (string :tag "Site Name")
@@ -197,6 +207,40 @@ per-session later."
                                           (other :tag "No" nil))
                                   (string :tag "First Page"
                                           :description "First page to open when `mediawiki-site' is called for this site"))))
+
+;;; Site Configuration Migration
+
+(defun mediawiki-migrate-legacy-sites ()
+  "Migrate legacy site configuration to new format."
+  (when mediawiki-legacy-site-alist
+    (dolist (entry mediawiki-legacy-site-alist)
+      (let* ((name (car entry))
+             (params (cdr entry))
+             (url (nth 0 params))
+             (username (nth 1 params))
+             (password (nth 2 params))
+             (domain (nth 3 params))
+             (first-page (nth 4 params)))
+        
+        ;; Create new site structure
+        (let ((site (make-mediawiki-site
+                     :name name
+                     :url url
+                     :username (unless (string= username "username") username)
+                     :auth-method 'basic
+                     :auth-config (when domain (list :domain domain))
+                     :capabilities nil
+                     :session-info nil)))
+          
+          (mediawiki-add-site site))))
+    
+    ;; Clear legacy configuration after migration
+    (setq mediawiki-legacy-site-alist nil)
+    (message "Migrated %d sites to new configuration format" 
+             (length mediawiki-site-alist))))
+
+;; Migrate on load
+(mediawiki-migrate-legacy-sites)
 
 (defcustom mediawiki-pop-buffer-hook '()
   "List of functions to execute after popping to a buffer.
@@ -632,7 +676,7 @@ Right now, this only means replacing \"_\" with \" \"."
 (defun mediawiki-make-api-url (&optional sitename)
   "Translate SITENAME (or MEDIAWIKI-SITE if not given) to a URL."
   (format (let* ((my-parsed (url-generic-parse-url
-                             (mediawiki-site-url (or sitename mediawiki-site))))
+                             (mediawiki-get-url (or sitename mediawiki-site))))
                  (my-path (url-filename my-parsed)))
 	    (when (or (string= my-path "") (not (string= (substring my-path -1) "/")))
 	      (setq my-path (concat my-path "/")))
@@ -715,7 +759,7 @@ ACTION is the API action.  ARGS is a list of arguments."
 
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
-  (format (concat (mediawiki-site-url (or sitename mediawiki-site))
+  (format (concat (mediawiki-get-url (or sitename mediawiki-site))
                   (if action
                       mediawiki-argument-pattern
                     "?title=%s"))
@@ -1042,9 +1086,7 @@ Prompt for a SUMMARY if one isn't given."
       bit)
      (nil))))
 
-(defun mediawiki-site-url (sitename)
-  "Get the url for a given SITENAME."
-  (mediawiki-site-extract sitename 1))
+
 
 (defmacro mediawiki-site-user-pass (sitename index method)
   "Fetch the user or pass if provided, or use authinfo if not."
