@@ -136,6 +136,174 @@ Supports cancellation via keyboard interrupt (C-g)."
        (t
         (error "HTTP request failed: Unknown error"))))))
 
+;;; Response Processing Utilities
+
+(defun mediawiki-http-validate-response (response)
+  "Validate RESPONSE structure and content.
+Returns t if response is valid, nil otherwise.
+Logs validation errors when debugging is enabled."
+  (let ((valid t)
+        (errors '()))
+    
+    ;; Check required fields
+    (unless (plist-member response :success)
+      (push "Missing :success field" errors)
+      (setq valid nil))
+    
+    (unless (plist-member response :status-code)
+      (push "Missing :status-code field" errors)
+      (setq valid nil))
+    
+    ;; Validate status code if present
+    (let ((status-code (plist-get response :status-code)))
+      (when (and status-code (not (integerp status-code)))
+        (push "Invalid status code type" errors)
+        (setq valid nil)))
+    
+    ;; Validate headers if present
+    (let ((headers (plist-get response :headers)))
+      (when (and headers (not (listp headers)))
+        (push "Invalid headers format" errors)
+        (setq valid nil)))
+    
+    ;; Log validation errors
+    (when (and errors (mediawiki-debug-enabled-p))
+      (mediawiki-debug-log "Response validation failed: %s" 
+                          (mapconcat 'identity errors "; ")))
+    
+    valid))
+
+(defun mediawiki-http-parse-json-response (response)
+  "Parse JSON content from RESPONSE body.
+Returns parsed JSON data or nil if parsing fails.
+Logs parsing errors when debugging is enabled."
+  (let ((body (plist-get response :body)))
+    (when (and body (stringp body) (> (length body) 0))
+      (condition-case err
+          (if (fboundp 'json-parse-string)
+              ;; Use modern json-parse-string if available (Emacs 27+)
+              (json-parse-string body :object-type 'plist :array-type 'list)
+            ;; Fall back to json.el for older Emacs versions
+            (let ((json-object-type 'plist)
+                  (json-array-type 'vector))
+              (json-read-from-string body)))
+        (json-parse-error
+         (when (mediawiki-debug-enabled-p)
+           (mediawiki-debug-log "JSON parsing failed: %s\nBody: %s" 
+                               (error-message-string err) body))
+         nil)
+        (json-error
+         (when (mediawiki-debug-enabled-p)
+           (mediawiki-debug-log "JSON parsing failed: %s\nBody: %s" 
+                               (error-message-string err) body))
+         nil)
+        (error
+         (when (mediawiki-debug-enabled-p)
+           (mediawiki-debug-log "Unexpected error parsing JSON: %s" 
+                               (error-message-string err)))
+         nil)))))
+
+(defun mediawiki-http-extract-response-info (response)
+  "Extract useful information from RESPONSE for logging and debugging.
+Returns a plist with extracted information."
+  (let ((status-code (plist-get response :status-code))
+        (content-type (mediawiki-http-get-content-type response))
+        (content-length (mediawiki-http-get-header response "content-length"))
+        (server (mediawiki-http-get-header response "server"))
+        (body-length (length (or (plist-get response :body) ""))))
+    
+    (list :status-code status-code
+          :content-type content-type
+          :content-length content-length
+          :actual-body-length body-length
+          :server server
+          :success (plist-get response :success)
+          :error-type (plist-get response :error-type))))
+
+(defun mediawiki-http-log-response (response &optional request-info)
+  "Log RESPONSE details for debugging purposes.
+REQUEST-INFO is optional additional context about the original request."
+  (when (mediawiki-debug-enabled-p)
+    (let ((info (mediawiki-http-extract-response-info response))
+          (timestamp (format-time-string "%Y-%m-%d %H:%M:%S")))
+      
+      (mediawiki-debug-log "=== HTTP Response [%s] ===" timestamp)
+      
+      ;; Log request context if available
+      (when request-info
+        (mediawiki-debug-log "Request: %s %s" 
+                            (plist-get request-info :method)
+                            (plist-get request-info :url)))
+      
+      ;; Log response summary
+      (mediawiki-debug-log "Status: %s (%s)" 
+                          (plist-get info :status-code)
+                          (if (plist-get info :success) "SUCCESS" "ERROR"))
+      
+      (when (plist-get info :content-type)
+        (mediawiki-debug-log "Content-Type: %s" (plist-get info :content-type)))
+      
+      (when (plist-get info :server)
+        (mediawiki-debug-log "Server: %s" (plist-get info :server)))
+      
+      (mediawiki-debug-log "Body Length: %d bytes" (plist-get info :actual-body-length))
+      
+      ;; Log error information if present
+      (when (not (plist-get info :success))
+        (mediawiki-debug-log "Error Type: %s" (plist-get info :error-type))
+        (let ((error-msg (plist-get response :error)))
+          (when error-msg
+            (mediawiki-debug-log "Error Message: %s" error-msg))))
+      
+      ;; Log response body if it's small enough and in debug mode
+      (let ((body (plist-get response :body)))
+        (when (and body 
+                   (< (length body) mediawiki-debug-max-body-length)
+                   (mediawiki-debug-verbose-p))
+          (mediawiki-debug-log "Response Body:\n%s" body)))
+      
+      (mediawiki-debug-log "=== End Response ==="))))
+
+(defun mediawiki-http-check-response-health (response)
+  "Check RESPONSE for common issues and return health status.
+Returns a plist with health information and warnings."
+  (let ((warnings '())
+        (status :healthy))
+    
+    ;; Check for missing content-type
+    (unless (mediawiki-http-get-content-type response)
+      (push "Missing Content-Type header" warnings))
+    
+    ;; Check for suspicious content-type for API responses
+    (let ((content-type (mediawiki-http-get-content-type response)))
+      (when (and content-type 
+                 (not (string-match-p "application/json\\|text/plain" content-type)))
+        (push (format "Unexpected Content-Type: %s" content-type) warnings)))
+    
+    ;; Check for empty body on successful responses
+    (when (and (plist-get response :success)
+               (or (not (plist-get response :body))
+                   (string-empty-p (plist-get response :body))))
+      (push "Empty response body on successful request" warnings)
+      (setq status :warning))
+    
+    ;; Check for very large responses
+    (let ((body-length (length (or (plist-get response :body) ""))))
+      (when (> body-length mediawiki-large-response-threshold)
+        (push (format "Large response body: %d bytes" body-length) warnings)
+        (when (eq status :healthy)
+          (setq status :warning))))
+    
+    ;; Check for rate limiting indicators
+    (let ((status-code (plist-get response :status-code)))
+      (when (= status-code 429)
+        (push "Rate limiting detected" warnings)
+        (setq status :rate-limited)))
+    
+    (list :status status
+          :warnings warnings
+          :warning-count (length warnings))))
+
 ;;; Response Handling
 
 (defun mediawiki-http-handle-async-response (status callback error-callback url method)
@@ -146,20 +314,36 @@ URL and METHOD are used for error reporting.
 This function implements requirement 5.3 by distinguishing between
 different types of errors (network, authentication, server errors)."
   (condition-case err
-      (let ((response (mediawiki-http-parse-response status url method)))
-        (mediawiki-debug-response response)
+      (let* ((response (mediawiki-http-parse-response status url method))
+             (request-info (list :url url :method method)))
+        
+        ;; Validate response structure
+        (unless (mediawiki-http-validate-response response)
+          (mediawiki-debug-log "Response validation failed for %s %s" method url))
+        
+        ;; Log response details
+        (mediawiki-http-log-response response request-info)
+        
+        ;; Check response health and log warnings
+        (let ((health (mediawiki-http-check-response-health response)))
+          (when (plist-get health :warnings)
+            (mediawiki-debug-log "Response health warnings: %s" 
+                                (mapconcat 'identity (plist-get health :warnings) "; "))))
+        
+        ;; Call appropriate callback
         (if (mediawiki-http-response-success-p response)
             (when callback
               (funcall callback response))
           (when error-callback
             (funcall error-callback response))))
     (error
-     (when error-callback
-       (funcall error-callback
-        (mediawiki-http-create-error-response
-         'parsing-error
-         (format "Failed to parse response: %s" (error-message-string err))
-         nil))))))
+     (let ((error-response (mediawiki-http-create-error-response
+                           'parsing-error
+                           (format "Failed to parse response: %s" (error-message-string err))
+                           nil)))
+       (mediawiki-debug-log "Response parsing error: %s" (error-message-string err))
+       (when error-callback
+         (funcall error-callback error-response))))))
 
 
 
@@ -296,6 +480,58 @@ URL and METHOD provide context for the error message."
 (defun mediawiki-http-get-content-type (response)
   "Get content type from RESPONSE."
   (mediawiki-http-get-header response "content-type"))
+
+(defun mediawiki-http-is-json-response (response)
+  "Check if RESPONSE contains JSON content."
+  (let ((content-type (mediawiki-http-get-content-type response)))
+    (and content-type
+         (string-match-p "application/json" content-type))))
+
+(defun mediawiki-http-is-success-status (status-code)
+  "Check if STATUS-CODE indicates success (2xx range)."
+  (and status-code (>= status-code 200) (< status-code 300)))
+
+(defun mediawiki-http-is-client-error (status-code)
+  "Check if STATUS-CODE indicates client error (4xx range)."
+  (and status-code (>= status-code 400) (< status-code 500)))
+
+(defun mediawiki-http-is-server-error (status-code)
+  "Check if STATUS-CODE indicates server error (5xx range)."
+  (and status-code (>= status-code 500) (< status-code 600)))
+
+(defun mediawiki-http-is-redirect-status (status-code)
+  "Check if STATUS-CODE indicates redirect (3xx range)."
+  (and status-code (>= status-code 300) (< status-code 400)))
+
+(defun mediawiki-http-get-response-size (response)
+  "Get the size of RESPONSE body in bytes."
+  (length (or (plist-get response :body) "")))
+
+(defun mediawiki-http-response-has-body (response)
+  "Check if RESPONSE has a non-empty body."
+  (let ((body (plist-get response :body)))
+    (and body (stringp body) (> (length body) 0))))
+
+(defun mediawiki-http-get-status-description (status-code)
+  "Get a human-readable description for STATUS-CODE."
+  (cond
+   ((= status-code 200) "OK")
+   ((= status-code 201) "Created")
+   ((= status-code 204) "No Content")
+   ((= status-code 301) "Moved Permanently")
+   ((= status-code 302) "Found")
+   ((= status-code 304) "Not Modified")
+   ((= status-code 400) "Bad Request")
+   ((= status-code 401) "Unauthorized")
+   ((= status-code 403) "Forbidden")
+   ((= status-code 404) "Not Found")
+   ((= status-code 405) "Method Not Allowed")
+   ((= status-code 429) "Too Many Requests")
+   ((= status-code 500) "Internal Server Error")
+   ((= status-code 502) "Bad Gateway")
+   ((= status-code 503) "Service Unavailable")
+   ((= status-code 504) "Gateway Timeout")
+   (t (format "HTTP %d" status-code))))
 
 (provide 'mediawiki-http)
 

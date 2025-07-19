@@ -57,6 +57,24 @@ per-session later."
   :tag "Retry Delay"
   :group 'mediawiki)
 
+(defcustom mediawiki-debug-verbose nil
+  "Enable verbose debugging output including response bodies."
+  :type 'boolean
+  :tag "Verbose Debugging"
+  :group 'mediawiki)
+
+(defcustom mediawiki-debug-max-body-length 1000
+  "Maximum length of response body to log in debug output."
+  :type 'integer
+  :tag "Debug Max Body Length"
+  :group 'mediawiki)
+
+(defcustom mediawiki-large-response-threshold 100000
+  "Threshold in bytes for considering a response 'large'."
+  :type 'integer
+  :tag "Large Response Threshold"
+  :group 'mediawiki)
+
 ;;; Core Data Structures
 
 (cl-defstruct mediawiki-site
@@ -137,6 +155,24 @@ Each entry is (SITE-NAME . MEDIAWIKI-SITE-STRUCT).")
   (remhash sitename mediawiki-sessions))
 
 ;;; Debug Functions
+
+(defun mediawiki-debug-enabled-p ()
+  "Check if debugging is enabled."
+  mediawiki-debug)
+
+(defun mediawiki-debug-verbose-p ()
+  "Check if verbose debugging is enabled."
+  (and mediawiki-debug mediawiki-debug-verbose))
+
+(defun mediawiki-debug-log (format-string &rest args)
+  "Log a formatted message to debug buffer.
+FORMAT-STRING and ARGS are passed to `format'."
+  (when mediawiki-debug
+    (let ((message (apply 'format format-string args))
+          (timestamp (format-time-string "%H:%M:%S")))
+      (with-current-buffer (get-buffer-create mediawiki-debug-buffer)
+        (goto-char (point-max))
+        (insert (format "[%s] %s\n" timestamp message))))))
 
 (defun mediawiki-debug-line (line)
   "Log a LINE to debug buffer."
