@@ -19,7 +19,11 @@
 
 (require 'auth-source)
 (require 'mediawiki-core)
-(require 'mediawiki-api)
+
+;; Conditionally require mediawiki-api (may not be available during testing)
+(condition-case nil
+    (require 'mediawiki-api)
+  (error nil))
 
 ;;; Authentication Configuration
 
@@ -34,6 +38,25 @@
   :type '(choice (const :tag "Basic (username/password)" basic)
                  (const :tag "OAuth" oauth))
   :group 'mediawiki)
+
+(defcustom mediawiki-auth-cache-duration 3600
+  "Duration in seconds to cache credentials before re-querying auth-source."
+  :type 'integer
+  :group 'mediawiki)
+
+(defcustom mediawiki-auth-source-creation-prompts t
+  "Whether to prompt for credential creation when not found in auth-source."
+  :type 'boolean
+  :group 'mediawiki)
+
+;;; Credential Cache
+
+(defvar mediawiki-auth-credential-cache (make-hash-table :test 'equal)
+  "Cache for credentials retrieved from auth-source.
+Keys are site identifiers, values are plists with :username, :password, and :expiry.")
+
+(defvar mediawiki-auth-cache-cleanup-timer nil
+  "Timer for cleaning up expired credential cache entries.")
 
 ;;; Authentication Functions
 
@@ -94,31 +117,192 @@ This is a placeholder for future OAuth implementation."
 ;;; Credential Management
 
 (defun mediawiki-auth-get-credentials (sitename)
-  "Get credentials for SITENAME from auth-source or prompt user."
+  "Get credentials for SITENAME from cache, auth-source, or prompt user."
+  (let* ((site (mediawiki-get-site sitename))
+         (cache-key (mediawiki-auth-make-cache-key sitename))
+         (cached-creds (mediawiki-auth-get-cached-credentials cache-key)))
+
+    ;; Return cached credentials if still valid
+    (if cached-creds
+        cached-creds
+      ;; Otherwise get fresh credentials
+      (let ((credentials (if (eq mediawiki-auth-source-backend 'auth-source)
+                            (mediawiki-auth-get-from-auth-source sitename)
+                          (mediawiki-auth-prompt-credentials sitename))))
+        ;; Cache the credentials
+        (mediawiki-auth-cache-credentials cache-key credentials)
+        credentials))))
+
+(defun mediawiki-auth-get-from-auth-source (sitename)
+  "Get credentials from auth-source for SITENAME."
   (let* ((site (mediawiki-get-site sitename))
          (url (mediawiki-site-url site))
-         (username (mediawiki-site-username site)))
+         (username (mediawiki-site-username site))
+         (host (mediawiki-auth-extract-host url))
+         (port (mediawiki-auth-extract-port url)))
 
-    (if (eq mediawiki-auth-source-backend 'auth-source)
-        (mediawiki-auth-get-from-auth-source url username)
-      (mediawiki-auth-prompt-credentials sitename))))
+    (mediawiki-debug-log "Searching auth-source for host=%s user=%s port=%s" host username port)
 
-(defun mediawiki-auth-get-from-auth-source (url username)
-  "Get credentials from auth-source for URL and USERNAME."
-  (let ((auth-info (auth-source-search :host (url-host (url-generic-parse-url url))
-                                      :user username
-                                      :max 1)))
-    (if auth-info
-        (let ((entry (car auth-info)))
-          (list :username (plist-get entry :user)
-                :password (funcall (plist-get entry :secret))))
-      (error "No credentials found in auth-source"))))
+    ;; Search auth-source with multiple strategies
+    (let ((auth-info (or
+                     ;; Try with specific user if provided
+                     (and username
+                          (auth-source-search :host host
+                                            :user username
+                                            :port port
+                                            :max 1))
+                     ;; Try without user specification
+                     (auth-source-search :host host
+                                       :port port
+                                       :max 1)
+                     ;; Try with site name as host
+                     (auth-source-search :host sitename
+                                       :max 1))))
+
+      (if auth-info
+          (let* ((entry (car auth-info))
+                 (found-user (plist-get entry :user))
+                 (secret-func (plist-get entry :secret))
+                 (found-password (and secret-func (funcall secret-func))))
+
+            (mediawiki-debug-log "Found auth-source entry: user=%s" found-user)
+
+            (unless found-password
+              (error "No password found in auth-source entry for %s" sitename))
+
+            (list :username (or found-user username)
+                  :password found-password))
+
+        ;; No credentials found - handle based on configuration
+        (if mediawiki-auth-source-creation-prompts
+            (mediawiki-auth-create-auth-source-entry sitename)
+          (error "No credentials found in auth-source for %s" sitename))))))
+
+(defun mediawiki-auth-create-auth-source-entry (sitename)
+  "Create new auth-source entry for SITENAME by prompting user."
+  (let* ((site (mediawiki-get-site sitename))
+         (url (mediawiki-site-url site))
+         (host (mediawiki-auth-extract-host url))
+         (port (mediawiki-auth-extract-port url))
+         (username (or (mediawiki-site-username site)
+                      (read-string (format "Username for %s: " sitename))))
+         (password (read-passwd (format "Password for %s: " sitename))))
+
+    (mediawiki-debug-log "Creating auth-source entry for host=%s user=%s" host username)
+
+    ;; Try to create the entry in auth-source
+    (condition-case err
+        (let ((created-entry (auth-source-search :host host
+                                               :user username
+                                               :port port
+                                               :max 1
+                                               :create t)))
+          (when created-entry
+            (let ((entry (car created-entry)))
+              ;; Set the password if the entry supports it
+              (when (plist-get entry :save-function)
+                (funcall (plist-get entry :save-function)))
+              (mediawiki-debug-log "Created auth-source entry successfully"))))
+      (error
+       (mediawiki-debug-log "Failed to create auth-source entry: %s" (error-message-string err))))
+
+    ;; Return the credentials regardless of whether creation succeeded
+    (list :username username :password password)))
 
 (defun mediawiki-auth-prompt-credentials (sitename)
   "Prompt user for credentials for SITENAME."
-  (let ((username (read-string (format "Username for %s: " sitename)))
-        (password (read-passwd (format "Password for %s: " sitename))))
+  (let* ((site (mediawiki-get-site sitename))
+         (username (or (mediawiki-site-username site)
+                      (read-string (format "Username for %s: " sitename))))
+         (password (read-passwd (format "Password for %s: " sitename))))
     (list :username username :password password)))
+
+;;; Credential Caching
+
+(defun mediawiki-auth-make-cache-key (sitename)
+  "Create cache key for SITENAME credentials."
+  (format "%s" sitename))
+
+(defun mediawiki-auth-get-cached-credentials (cache-key)
+  "Get cached credentials for CACHE-KEY if still valid."
+  (let ((cached-entry (gethash cache-key mediawiki-auth-credential-cache)))
+    (when cached-entry
+      (let ((expiry (plist-get cached-entry :expiry)))
+        (if (time-less-p (current-time) expiry)
+            (progn
+              (mediawiki-debug-log "Using cached credentials for %s" cache-key)
+              (list :username (plist-get cached-entry :username)
+                    :password (plist-get cached-entry :password)))
+          (progn
+            (mediawiki-debug-log "Cached credentials expired for %s" cache-key)
+            (remhash cache-key mediawiki-auth-credential-cache)
+            nil))))))
+
+(defun mediawiki-auth-cache-credentials (cache-key credentials)
+  "Cache CREDENTIALS for CACHE-KEY with expiration."
+  (let ((expiry (time-add (current-time) mediawiki-auth-cache-duration)))
+    (puthash cache-key
+             (list :username (plist-get credentials :username)
+                   :password (plist-get credentials :password)
+                   :expiry expiry)
+             mediawiki-auth-credential-cache)
+    (mediawiki-debug-log "Cached credentials for %s until %s" 
+                        cache-key (format-time-string "%H:%M:%S" expiry))
+    
+    ;; Ensure cleanup timer is running
+    (mediawiki-auth-ensure-cleanup-timer)))
+
+(defun mediawiki-auth-clear-cached-credentials (sitename)
+  "Clear cached credentials for SITENAME."
+  (let ((cache-key (mediawiki-auth-make-cache-key sitename)))
+    (remhash cache-key mediawiki-auth-credential-cache)
+    (mediawiki-debug-log "Cleared cached credentials for %s" sitename)))
+
+(defun mediawiki-auth-clear-all-cached-credentials ()
+  "Clear all cached credentials."
+  (clrhash mediawiki-auth-credential-cache)
+  (mediawiki-debug-log "Cleared all cached credentials"))
+
+;;; Credential Cache Cleanup
+
+(defun mediawiki-auth-ensure-cleanup-timer ()
+  "Ensure credential cache cleanup timer is running."
+  (unless mediawiki-auth-cache-cleanup-timer
+    (setq mediawiki-auth-cache-cleanup-timer
+          (run-with-timer 300 300 #'mediawiki-auth-cleanup-expired-credentials))))
+
+(defun mediawiki-auth-cleanup-expired-credentials ()
+  "Remove expired credentials from cache."
+  (let ((expired-keys '())
+        (current-time (current-time)))
+    
+    (maphash (lambda (key entry)
+               (let ((expiry (plist-get entry :expiry)))
+                 (when (time-less-p expiry current-time)
+                   (push key expired-keys))))
+             mediawiki-auth-credential-cache)
+    
+    (dolist (key expired-keys)
+      (remhash key mediawiki-auth-credential-cache))
+    
+    (when expired-keys
+      (mediawiki-debug-log "Cleaned up %d expired credential cache entries" 
+                          (length expired-keys)))))
+
+;;; URL Parsing Utilities
+
+(defun mediawiki-auth-extract-host (url)
+  "Extract host from URL for auth-source lookup."
+  (if (string-match "^https?://\\([^/]+\\)" url)
+      (match-string 1 url)
+    url))
+
+(defun mediawiki-auth-extract-port (url)
+  "Extract port from URL for auth-source lookup."
+  (cond
+   ((string-match "^https://" url) "https")
+   ((string-match "^http://" url) "http")
+   (t nil)))
 
 ;;; Token Management
 
@@ -175,7 +359,7 @@ This is a placeholder for future OAuth implementation."
 ;;; Logout
 
 (defun mediawiki-auth-logout (sitename)
-  "Logout from SITENAME."
+  "Logout from SITENAME and clear cached credentials."
   (let ((session (mediawiki-get-session sitename)))
     (when session
       ;; Call logout API if possible
@@ -185,6 +369,11 @@ This is a placeholder for future OAuth implementation."
 
       ;; Remove local session
       (mediawiki-remove-session sitename)
+      
+      ;; Clear cached credentials for security
+      (mediawiki-auth-clear-cached-credentials sitename)
+      
+      (mediawiki-debug-log "Logged out from %s and cleared cached credentials" sitename)
       (message "Logged out from %s" sitename))))
 
 ;;; Token Refresh
@@ -200,6 +389,83 @@ This is a placeholder for future OAuth implementation."
       (setf (mediawiki-session-last-activity session) (current-time))
 
       session)))
+
+;;; Security and Utility Functions
+
+(defun mediawiki-auth-invalidate-credentials (sitename)
+  "Invalidate cached credentials for SITENAME and force re-authentication."
+  (mediawiki-auth-clear-cached-credentials sitename)
+  (mediawiki-remove-session sitename)
+  (mediawiki-debug-log "Invalidated credentials and session for %s" sitename)
+  (message "Credentials invalidated for %s - will prompt on next login" sitename))
+
+(defun mediawiki-auth-test-credentials (sitename)
+  "Test if cached credentials for SITENAME are still valid."
+  (condition-case err
+      (let ((credentials (mediawiki-auth-get-credentials sitename)))
+        (if credentials
+            (progn
+              (mediawiki-debug-log "Credentials test successful for %s" sitename)
+              t)
+          (progn
+            (mediawiki-debug-log "No credentials available for %s" sitename)
+            nil)))
+    (error
+     (mediawiki-debug-log "Credentials test failed for %s: %s" sitename (error-message-string err))
+     nil)))
+
+(defun mediawiki-auth-get-cache-status ()
+  "Get status information about the credential cache."
+  (let ((total-entries (hash-table-count mediawiki-auth-credential-cache))
+        (expired-count 0)
+        (current-time (current-time)))
+    
+    (maphash (lambda (_key entry)
+               (let ((expiry (plist-get entry :expiry)))
+                 (when (time-less-p expiry current-time)
+                   (setq expired-count (1+ expired-count)))))
+             mediawiki-auth-credential-cache)
+    
+    (list :total-entries total-entries
+          :expired-entries expired-count
+          :active-entries (- total-entries expired-count)
+          :cleanup-timer-active (timerp mediawiki-auth-cache-cleanup-timer))))
+
+(defun mediawiki-auth-force-cache-cleanup ()
+  "Force immediate cleanup of expired credential cache entries."
+  (interactive)
+  (mediawiki-auth-cleanup-expired-credentials)
+  (let ((status (mediawiki-auth-get-cache-status)))
+    (message "Cache cleanup complete: %d active, %d total entries"
+             (plist-get status :active-entries)
+             (plist-get status :total-entries))))
+
+;;; Initialization and Cleanup
+
+(defun mediawiki-auth-initialize ()
+  "Initialize the authentication system."
+  (mediawiki-debug-log "Initializing MediaWiki authentication system")
+  
+  ;; Ensure cleanup timer is started
+  (mediawiki-auth-ensure-cleanup-timer)
+  
+  ;; Add cleanup hook for Emacs exit
+  (add-hook 'kill-emacs-hook #'mediawiki-auth-shutdown))
+
+(defun mediawiki-auth-shutdown ()
+  "Clean up authentication system on Emacs shutdown."
+  (mediawiki-debug-log "Shutting down MediaWiki authentication system")
+  
+  ;; Cancel cleanup timer
+  (when (timerp mediawiki-auth-cache-cleanup-timer)
+    (cancel-timer mediawiki-auth-cache-cleanup-timer)
+    (setq mediawiki-auth-cache-cleanup-timer nil))
+  
+  ;; Clear credential cache for security
+  (mediawiki-auth-clear-all-cached-credentials))
+
+;; Initialize when loaded
+(mediawiki-auth-initialize)
 
 (provide 'mediawiki-auth)
 
