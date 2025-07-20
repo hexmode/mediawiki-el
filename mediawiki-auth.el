@@ -25,6 +25,8 @@
     (require 'mediawiki-api)
   (error nil))
 
+(require 'cl-lib)  ; For cl-find-if used in 2FA handling
+
 ;;; Authentication Configuration
 
 (defcustom mediawiki-auth-source-backend 'auth-source
@@ -77,7 +79,9 @@ FORCE-METHOD can override the default authentication method."
       (error "Unknown authentication method: %s" auth-method)))))
 
 (defun mediawiki-auth-basic-login (sitename)
-  "Perform basic username/password authentication for SITENAME."
+  "Perform basic username/password authentication for SITENAME using modern login API.
+Implements proper token-based authentication flow with support for login continuation
+and multi-step authentication as required by requirements 2.1 and 2.4."
   (let* ((site (mediawiki-get-site sitename))
          (credentials (mediawiki-auth-get-credentials sitename))
          (username (plist-get credentials :username))
@@ -86,28 +90,205 @@ FORCE-METHOD can override the default authentication method."
     (unless (and username password)
       (error "Username and password required for basic authentication"))
 
-    ;; First, get a login token
-    (let ((token-response (mediawiki-api-call-sync
-                          sitename "query"
-                          (list (cons "meta" "tokens")
-                                (cons "type" "login")))))
+    (mediawiki-debug-log "Starting modern login flow for %s with user %s" sitename username)
 
-      (unless (mediawiki-api-response-success token-response)
-        (error "Failed to get login token: %s"
-               (mediawiki-api-get-error-info token-response)))
+    ;; Modern login flow with proper error handling and continuation support
+    (mediawiki-auth-perform-modern-login sitename username password)))
 
-      (let ((login-token (mediawiki-auth-extract-token token-response "login")))
-        (unless login-token
-          (error "No login token in response"))
+(defun mediawiki-auth-perform-modern-login (sitename username password &optional login-token)
+  "Perform modern MediaWiki login with proper token handling and continuation support.
+LOGIN-TOKEN can be provided for continuation of multi-step login process."
+  (let ((login-token (or login-token (mediawiki-auth-get-login-token sitename))))
+    
+    (unless login-token
+      (error "Failed to obtain login token for %s" sitename))
 
-        ;; Perform login
-        (let ((login-response (mediawiki-api-call-sync
-                              sitename "login"
-                              (list (cons "lgname" username)
-                                    (cons "lgpassword" password)
-                                    (cons "lgtoken" login-token)))))
+    (mediawiki-debug-log "Performing login with token for %s" sitename)
 
-          (mediawiki-auth-handle-login-response sitename login-response))))))
+    ;; Perform the login request with modern parameters
+    (let ((login-response (mediawiki-api-call-sync
+                          sitename "clientlogin"
+                          (mediawiki-auth-build-login-params username password login-token))))
+
+      (mediawiki-auth-handle-modern-login-response sitename username password login-response))))
+
+(defun mediawiki-auth-get-login-token (sitename)
+  "Get login token for SITENAME using modern token API."
+  (mediawiki-debug-log "Requesting login token for %s" sitename)
+  
+  (let ((token-response (mediawiki-api-call-sync
+                        sitename "query"
+                        (list (cons "meta" "tokens")
+                              (cons "type" "login")))))
+
+    (unless (mediawiki-api-response-success token-response)
+      (let ((error-info (mediawiki-api-get-error-info token-response)))
+        (mediawiki-debug-log "Failed to get login token for %s: %s" sitename error-info)
+        (error "Failed to get login token: %s" error-info)))
+
+    (let ((login-token (mediawiki-auth-extract-token token-response "login")))
+      (unless login-token
+        (error "No login token in response from %s" sitename))
+      
+      (mediawiki-debug-log "Successfully obtained login token for %s" sitename)
+      login-token)))
+
+(defun mediawiki-auth-build-login-params (username password login-token)
+  "Build login parameters for modern clientlogin API.
+Returns parameter list for username, password, and token."
+  (list (cons "loginreturnurl" "http://localhost/")  ; Required by clientlogin
+        (cons "username" username)
+        (cons "password" password)
+        (cons "logintoken" login-token)
+        (cons "rememberMe" "1")))  ; Keep session active
+
+(defun mediawiki-auth-handle-modern-login-response (sitename username password response)
+  "Handle modern login API response with support for continuation and multi-step auth.
+Implements proper handling of all modern MediaWiki login states including
+PASS, FAIL, RESTART, UI, REDIRECT, and continuation scenarios."
+  (if (not (mediawiki-api-response-success response))
+      (let ((error-info (mediawiki-api-get-error-info response)))
+        (mediawiki-debug-log "Login request failed for %s: %s" sitename error-info)
+        (error "Login request failed: %s" error-info))
+
+    (let* ((data (mediawiki-api-response-data response))
+           (clientlogin-data (cdr (assq 'clientlogin data)))
+           (status (cdr (assq 'status clientlogin-data)))
+           (message (cdr (assq 'message clientlogin-data)))
+           (messagecode (cdr (assq 'messagecode clientlogin-data))))
+
+      (mediawiki-debug-log "Login response for %s: status=%s, code=%s" 
+                          sitename status messagecode)
+
+      (cond
+       ;; Successful login
+       ((string= status "PASS")
+        (mediawiki-debug-log "Login successful for %s" sitename)
+        (mediawiki-auth-handle-successful-login sitename clientlogin-data)
+        (message "Successfully logged in to %s as %s" sitename username))
+
+       ;; Login failed
+       ((string= status "FAIL")
+        (let ((error-msg (or message 
+                            (format "Login failed with code: %s" messagecode)
+                            "Login failed")))
+          (mediawiki-debug-log "Login failed for %s: %s" sitename error-msg)
+          (error "Login failed: %s" error-msg)))
+
+       ;; Need to restart login process (token expired, etc.)
+       ((string= status "RESTART")
+        (mediawiki-debug-log "Login restart required for %s: %s" sitename message)
+        (message "Restarting login process for %s..." sitename)
+        (mediawiki-auth-perform-modern-login sitename username password))
+
+       ;; UI interaction required (2FA, CAPTCHA, etc.)
+       ((string= status "UI")
+        (mediawiki-debug-log "UI interaction required for %s: %s" sitename messagecode)
+        (mediawiki-auth-handle-ui-requirement sitename username password clientlogin-data))
+
+       ;; Redirect required
+       ((string= status "REDIRECT")
+        (let ((redirect-url (cdr (assq 'redirecttarget clientlogin-data))))
+          (mediawiki-debug-log "Redirect required for %s to: %s" sitename redirect-url)
+          (error "Login requires redirect to: %s" redirect-url)))
+
+       ;; Unknown status
+       (t
+        (let ((error-msg (format "Unknown login status: %s" status)))
+          (mediawiki-debug-log "Unknown login status for %s: %s" sitename status)
+          (error "%s" error-msg)))))))
+
+(defun mediawiki-auth-handle-successful-login (sitename clientlogin-data)
+  "Handle successful login by creating session and storing user information."
+  (let* ((username (cdr (assq 'username clientlogin-data)))
+         (userid (cdr (assq 'lguserid clientlogin-data)))
+         (session (make-mediawiki-session
+                   :site-name sitename
+                   :tokens (make-hash-table :test 'equal)
+                   :user-info (list :username username
+                                   :userid userid
+                                   :login-data clientlogin-data)
+                   :login-time (current-time)
+                   :last-activity (current-time))))
+
+    (mediawiki-set-session sitename session)
+    (mediawiki-debug-log "Created session for %s (user: %s, id: %s)" 
+                        sitename username userid)
+    session))
+
+(defun mediawiki-auth-handle-ui-requirement (sitename username password clientlogin-data)
+  "Handle UI requirements like 2FA, CAPTCHA, or other interactive authentication.
+Implements support for multi-step authentication as required by requirement 2.4."
+  (let* ((messagecode (cdr (assq 'messagecode clientlogin-data)))
+         (message (cdr (assq 'message clientlogin-data)))
+         (requests (cdr (assq 'requests clientlogin-data))))
+
+    (mediawiki-debug-log "UI requirement for %s: %s - %s" sitename messagecode message)
+
+    (cond
+     ;; Two-factor authentication
+     ((or (string-match-p "oathauth" messagecode)
+          (string-match-p "2fa" messagecode)
+          (string-match-p "totp" messagecode))
+      (mediawiki-auth-handle-2fa sitename username password clientlogin-data))
+
+     ;; CAPTCHA challenge
+     ((string-match-p "captcha" messagecode)
+      (mediawiki-auth-handle-captcha sitename username password clientlogin-data))
+
+     ;; Generic UI requirements
+     (t
+      (mediawiki-auth-handle-generic-ui sitename username password clientlogin-data)))))
+
+(defun mediawiki-auth-handle-2fa (sitename username password clientlogin-data)
+  "Handle two-factor authentication requirement.
+Prompts user for 2FA code and continues login process."
+  (let* ((requests (cdr (assq 'requests clientlogin-data)))
+         (otp-request (cl-find-if (lambda (req) 
+                                   (string-match-p "otp\\|totp\\|2fa" 
+                                                  (cdr (assq 'id req))))
+                                 requests)))
+    
+    (if otp-request
+        (let* ((otp-code (read-string "Enter 2FA/OTP code: "))
+               (continue-token (cdr (assq 'logintoken clientlogin-data)))
+               (continue-params (list (cons "loginreturnurl" "http://localhost/")
+                                     (cons "username" username)
+                                     (cons "password" password)
+                                     (cons "logintoken" continue-token)
+                                     (cons "OATHToken" otp-code))))
+          
+          (mediawiki-debug-log "Continuing login with 2FA for %s" sitename)
+          
+          (let ((continue-response (mediawiki-api-call-sync
+                                   sitename "clientlogin" continue-params)))
+            (mediawiki-auth-handle-modern-login-response 
+             sitename username password continue-response)))
+      
+      (error "2FA required but no OTP request found in response"))))
+
+(defun mediawiki-auth-handle-captcha (sitename username password clientlogin-data)
+  "Handle CAPTCHA challenge requirement.
+This is a placeholder for CAPTCHA handling - full implementation would
+require displaying the CAPTCHA image and getting user input."
+  (let ((message (cdr (assq 'message clientlogin-data))))
+    (mediawiki-debug-log "CAPTCHA required for %s: %s" sitename message)
+    (error "CAPTCHA authentication required but not yet implemented: %s" message)))
+
+(defun mediawiki-auth-handle-generic-ui (sitename username password clientlogin-data)
+  "Handle generic UI requirements that don't fit specific categories.
+Provides basic continuation support for unknown UI requirements."
+  (let* ((message (cdr (assq 'message clientlogin-data)))
+         (messagecode (cdr (assq 'messagecode clientlogin-data)))
+         (requests (cdr (assq 'requests clientlogin-data))))
+    
+    (mediawiki-debug-log "Generic UI requirement for %s: %s" sitename messagecode)
+    
+    ;; For now, we'll error out on unknown UI requirements
+    ;; In a full implementation, this could be extended to handle
+    ;; additional interactive authentication methods
+    (error "Interactive authentication required: %s (code: %s)" 
+           message messagecode)))
 
 (defun mediawiki-auth-oauth-login (sitename)
   "Perform OAuth authentication for SITENAME.
@@ -312,32 +493,7 @@ This is a placeholder for future OAuth implementation."
     (cdr (assq (intern (concat token-type "token"))
                (cdr (assq 'tokens (cdr (assq 'query data))))))))
 
-(defun mediawiki-auth-handle-login-response (sitename response)
-  "Handle login RESPONSE for SITENAME."
-  (if (mediawiki-api-response-success response)
-      (let ((login-data (cdr (assq 'login (mediawiki-api-response-data response)))))
-        (let ((result (cdr (assq 'result login-data))))
-          (cond
-           ((string= result "Success")
-            (mediawiki-auth-create-session sitename login-data)
-            (message "Successfully logged in to %s" sitename))
-           ((string= result "NeedToken")
-            (error "Login token handling error"))
-           (t
-            (error "Login failed: %s" result)))))
-    (error "Login request failed: %s" (mediawiki-api-get-error-info response))))
 
-(defun mediawiki-auth-create-session (sitename login-data)
-  "Create session for SITENAME from LOGIN-DATA."
-  (let ((session (make-mediawiki-session
-                  :site-name sitename
-                  :tokens (make-hash-table :test 'equal)
-                  :user-info login-data
-                  :login-time (current-time)
-                  :last-activity (current-time))))
-
-    (mediawiki-set-session sitename session)
-    session))
 
 ;;; Session Validation
 

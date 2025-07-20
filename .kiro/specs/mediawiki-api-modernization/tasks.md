@@ -51,7 +51,7 @@
     - Implement credential caching with proper security
     - _Requirements: 2.2_
 
-  - [ ] 4.2 Create modern login API implementation
+  - [x] 4.2 Create modern login API implementation
     - Replace deprecated login methods with current MediaWiki login API
     - Implement proper token-based authentication flow
     - Add support for login continuation and multi-step auth
