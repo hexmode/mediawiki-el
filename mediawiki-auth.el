@@ -96,10 +96,10 @@ and multi-step authentication as required by requirements 2.1 and 2.4."
     (mediawiki-auth-perform-modern-login sitename username password)))
 
 (defun mediawiki-auth-perform-modern-login (sitename username password &optional login-token)
-  "Perform modern MediaWiki login with proper token handling and continuation support.
+  "Perform modern MediaWiki login to SITENAME with proper token handling and continuation support.
 LOGIN-TOKEN can be provided for continuation of multi-step login process."
   (let ((login-token (or login-token (mediawiki-auth-get-login-token sitename))))
-    
+
     (unless login-token
       (error "Failed to obtain login token for %s" sitename))
 
@@ -140,7 +140,7 @@ Returns parameter list for username, password, and token."
         (cons "username" username)
         (cons "password" password)
         (cons "logintoken" login-token)
-        (cons "rememberMe" "1")))  ; Keep session active
+        (cons "rememberme" "1")))  ; Keep session active
 
 (defun mediawiki-auth-handle-modern-login-response (sitename username password response)
   "Handle modern login API response with support for continuation and multi-step auth.
