@@ -9,12 +9,31 @@ CORE_FILES = mediawiki-core.el mediawiki-auth.el
 # Test files
 TEST_FILES = $(wildcard test-*.el)
 
+# Set to something other than 1 if you want interactive tests
+export NO_INTERACTION ?= 1
+
+ERT_TESTS := $(shell grep -l ert-deftest tests/test-*.el)
+
 .PHONY: test clean
 
 # Run all tests
 test:
 	@echo "Running all MediaWiki.el tests..."
 	$(BATCH) -l run-tests.el
+
+# Pattern rule to run each test file
+define TEST_RULES
+$(1): $(2)
+	@echo "Running $(1)"
+	@$(BATCH) -l mediawiki-core.el -l mediawiki-session.el -l mediawiki-http.el -l mediawiki-api.el -l mediawiki-auth.el \
+		-l tests/$(1).el -f ert-run-tests-batch-and-exit;
+endef
+
+# Generate rules for each test file
+$(foreach test,$(ERT_TESTS),$(eval $(call TEST_RULES,$(notdir $(patsubst %.el,%,$(test))),$(test))))
+
+ert-test: $(patsubst tests/%.el,%,$(ERT_TESTS))
+.PHONY: ert-test
 
 # Run individual test files
 test-minimal:

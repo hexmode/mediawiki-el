@@ -917,7 +917,11 @@ Returns t on success, nil on failure."
 
 (defun mediawiki-session-build-gpg-encrypt-args (method)
   "Build GPG command arguments for encryption METHOD."
-  (let ((base-args '("--cipher-algo" "AES256" "--compress-algo" "2")))
+  (let ((inter-args '("--batch" "--passphrase" "this-is-not-random-and-is-only-for-testing"))
+        (baser-args '("--cipher-algo" "AES256" "--compress-algo" "2"))
+        (base-args (if (string= "1" (getenv "NO_INTERACTION"))
+                       (append inter-args baser-args)
+                     baser-args)))
     (cond
      ((eq method 'symmetric)
       (append base-args '("--symmetric")))

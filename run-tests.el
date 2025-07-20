@@ -23,18 +23,16 @@
 
 ;; Load auth module
 (load-file "mediawiki-auth.el")
+(load-file "mediawiki-http.el")
+(load-file "mediawiki-api.el")
 
 ;; Find and load all test files
-(let ((test-files (directory-files "." nil "^test-.*\\.el$")))
+(let ((test-files (directory-files "tests" t "^test-.*\\.el$")))
   (dolist (test-file test-files)
-    (unless (string= test-file "run-tests.el")
-      (message "Loading test file: %s" test-file)
-      (condition-case err
-          (load-file test-file)
-        (error
-         (message "Error loading %s: %s" test-file (error-message-string err)))))))
-
-;; Run all tests
-(ert-run-tests-batch-and-exit)
+    (message "Loading test file: %s" test-file)
+    (condition-case err
+        (load-file test-file)
+      (error
+       (message "Error loading %s: %s" test-file (error-message-string err))))))
 
 ;;; run-tests.el ends here

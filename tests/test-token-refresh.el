@@ -258,17 +258,6 @@
   
   (test-token-refresh-teardown))
 
-;;; Test Runner
-
-(defun test-token-refresh-run-all ()
-  "Run all token refresh tests."
-  (interactive)
-  (message "Running automatic token refresh tests...")
-  
-  (ert-run-tests-batch-and-exit 
-   '(and (tag :token-refresh)
-         (not (tag :interactive)))))
-
 ;; Add tags to tests
 (put 'test-token-refresh-expiration-detection 'ert-tags '(:token-refresh))
 (put 'test-token-refresh-cache-management 'ert-tags '(:token-refresh))

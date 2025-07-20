@@ -53,23 +53,23 @@
   (unwind-protect
       (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name))
             (test-credentials '(:username "testuser" :password "testpass")))
-        
+
         ;; Test caching credentials
         (mediawiki-auth-cache-credentials cache-key test-credentials)
-        
+
         ;; Test retrieving cached credentials
         (let ((cached-creds (mediawiki-auth-get-cached-credentials cache-key)))
           (should cached-creds)
           (should (string= (plist-get cached-creds :username) "testuser"))
           (should (string= (plist-get cached-creds :password) "testpass")))
-        
+
         ;; Test cache expiration (simulate expired cache)
-        (let ((expired-entry (list :username "testuser" 
+        (let ((expired-entry (list :username "testuser"
                                   :password "testpass"
                                   :expiry (time-subtract (current-time) 10))))
           (puthash cache-key expired-entry mediawiki-auth-credential-cache)
           (should-not (mediawiki-auth-get-cached-credentials cache-key))))
-    
+
     (test-mediawiki-cleanup-test-site)))
 
 (ert-deftest test-mediawiki-auth-cache-cleanup ()
@@ -77,29 +77,29 @@
   (test-mediawiki-setup-test-site)
   (unwind-protect
       (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name)))
-        
+
         ;; Add expired entry
-        (let ((expired-entry (list :username "testuser" 
+        (let ((expired-entry (list :username "testuser"
                                   :password "testpass"
                                   :expiry (time-subtract (current-time) 10))))
           (puthash cache-key expired-entry mediawiki-auth-credential-cache))
-        
+
         ;; Add valid entry
         (let ((valid-key "valid-site")
               (valid-entry (list :username "validuser"
                                 :password "validpass"
                                 :expiry (time-add (current-time) 3600))))
           (puthash valid-key valid-entry mediawiki-auth-credential-cache))
-        
+
         ;; Test cleanup
         (mediawiki-auth-cleanup-expired-credentials)
-        
+
         ;; Expired entry should be removed
         (should-not (gethash cache-key mediawiki-auth-credential-cache))
-        
+
         ;; Valid entry should remain
         (should (gethash "valid-site" mediawiki-auth-credential-cache)))
-    
+
     (test-mediawiki-cleanup-test-site)))
 
 ;;; URL Parsing Tests
@@ -112,7 +112,7 @@
                    "test.org:8080"))
   (should (string= (mediawiki-auth-extract-host "https://en.wikipedia.org/w/")
                    "en.wikipedia.org"))
-  
+
   (should (string= (mediawiki-auth-extract-port "https://example.com/") "https"))
   (should (string= (mediawiki-auth-extract-port "http://example.com/") "http"))
   (should-not (mediawiki-auth-extract-port "ftp://example.com/")))
@@ -126,31 +126,31 @@
       (progn
         ;; Clear cache first
         (mediawiki-auth-clear-all-cached-credentials)
-        
+
         ;; Add some test entries
         (let ((active-key "active-site")
               (expired-key "expired-site"))
-          
+
           ;; Add active entry
           (puthash active-key
                    (list :username "activeuser"
                          :password "activepass"
                          :expiry (time-add (current-time) 3600))
                    mediawiki-auth-credential-cache)
-          
+
           ;; Add expired entry
           (puthash expired-key
                    (list :username "expireduser"
                          :password "expiredpass"
                          :expiry (time-subtract (current-time) 10))
                    mediawiki-auth-credential-cache)
-          
+
           ;; Test status
           (let ((status (mediawiki-auth-get-cache-status)))
             (should (= (plist-get status :total-entries) 2))
             (should (= (plist-get status :expired-entries) 1))
             (should (= (plist-get status :active-entries) 1)))))
-    
+
     (test-mediawiki-cleanup-test-site)))
 
 ;;; Security Tests
@@ -161,7 +161,7 @@
   (unwind-protect
       (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name))
             (test-credentials '(:username "testuser" :password "testpass")))
-        
+
         ;; Cache credentials and create session
         (mediawiki-auth-cache-credentials cache-key test-credentials)
         (let ((session (make-mediawiki-session
@@ -169,18 +169,18 @@
                         :tokens (make-hash-table :test 'equal)
                         :login-time (current-time))))
           (mediawiki-set-session test-mediawiki-site-config-name session))
-        
+
         ;; Verify credentials and session exist
         (should (mediawiki-auth-get-cached-credentials cache-key))
         (should (mediawiki-get-session test-mediawiki-site-config-name))
-        
+
         ;; Invalidate credentials
         (mediawiki-auth-invalidate-credentials test-mediawiki-site-config-name)
-        
+
         ;; Verify credentials and session are cleared
         (should-not (mediawiki-auth-get-cached-credentials cache-key))
         (should-not (mediawiki-get-session test-mediawiki-site-config-name)))
-    
+
     (test-mediawiki-cleanup-test-site)))
 
 (ert-deftest test-mediawiki-auth-logout-clears-cache ()
@@ -189,7 +189,7 @@
   (unwind-protect
       (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name))
             (test-credentials '(:username "testuser" :password "testpass")))
-        
+
         ;; Cache credentials and create session
         (mediawiki-auth-cache-credentials cache-key test-credentials)
         (let ((session (make-mediawiki-session
@@ -197,18 +197,18 @@
                         :tokens (make-hash-table :test 'equal)
                         :login-time (current-time))))
           (mediawiki-set-session test-mediawiki-site-config-name session))
-        
+
         ;; Verify credentials exist
         (should (mediawiki-auth-get-cached-credentials cache-key))
-        
+
         ;; Mock the API call to avoid actual network request
         (cl-letf (((symbol-function 'mediawiki-api-call-sync)
                    (lambda (&rest _args) nil)))
           (mediawiki-auth-logout test-mediawiki-site-config-name))
-        
+
         ;; Verify credentials are cleared
         (should-not (mediawiki-auth-get-cached-credentials cache-key)))
-    
+
     (test-mediawiki-cleanup-test-site)))
 
 ;;; Integration Tests
@@ -218,25 +218,18 @@
   (test-mediawiki-setup-test-site)
   (unwind-protect
       (let ((mediawiki-auth-source-backend 'manual))
-        
+
         ;; Mock user input
         (cl-letf (((symbol-function 'read-string)
                    (lambda (_prompt) "manual-user"))
                   ((symbol-function 'read-passwd)
                    (lambda (_prompt) "manual-pass")))
-          
+
           (let ((credentials (mediawiki-auth-get-credentials test-mediawiki-site-config-name)))
             (should (string= (plist-get credentials :username) "manual-user"))
             (should (string= (plist-get credentials :password) "manual-pass")))))
-    
+
     (test-mediawiki-cleanup-test-site)))
-
-;;; Test Runner
-
-(defun test-mediawiki-run-auth-source-tests ()
-  "Run all auth-source integration tests."
-  (interactive)
-  (ert-run-tests-batch-and-exit "test-mediawiki-auth"))
 
 ;;; Test Utilities
 
@@ -246,9 +239,9 @@
   (let ((status (mediawiki-auth-get-cache-status)))
     (message "Cache Status: %s" status)
     (maphash (lambda (key entry)
-               (message "Cache Entry: %s -> %s" key 
+               (message "Cache Entry: %s -> %s" key
                        (list :username (plist-get entry :username)
-                             :expiry (format-time-string "%H:%M:%S" 
+                             :expiry (format-time-string "%H:%M:%S"
                                                        (plist-get entry :expiry)))))
              mediawiki-auth-credential-cache)))
 

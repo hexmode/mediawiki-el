@@ -32,19 +32,19 @@
   "Test basic credential caching functionality."
   (let ((cache-key "test-site")
         (credentials '(:username "testuser" :password "testpass")))
-    
+
     ;; Clear any existing cache
     (mediawiki-auth-clear-all-cached-credentials)
-    
+
     ;; Test caching
     (mediawiki-auth-cache-credentials cache-key credentials)
-    
+
     ;; Test retrieval
     (let ((cached (mediawiki-auth-get-cached-credentials cache-key)))
       (should cached)
       (should (string= (plist-get cached :username) "testuser"))
       (should (string= (plist-get cached :password) "testpass")))
-    
+
     ;; Clean up
     (mediawiki-auth-clear-all-cached-credentials)))
 
@@ -58,46 +58,43 @@
 (ert-deftest test-auth-cache-expiration ()
   "Test credential cache expiration."
   (let ((cache-key "expire-test"))
-    
+
     ;; Clear cache
     (mediawiki-auth-clear-all-cached-credentials)
-    
+
     ;; Add expired entry manually
     (puthash cache-key
              (list :username "user"
                    :password "pass"
                    :expiry (time-subtract (current-time) 10))
              mediawiki-auth-credential-cache)
-    
+
     ;; Should return nil for expired entry
     (should-not (mediawiki-auth-get-cached-credentials cache-key))
-    
+
     ;; Should be removed from cache
     (should-not (gethash cache-key mediawiki-auth-credential-cache))))
 
 (ert-deftest test-auth-cache-status ()
   "Test cache status reporting."
   (mediawiki-auth-clear-all-cached-credentials)
-  
+
   ;; Add test entries
-  (puthash "active" 
-           (list :username "user1" :password "pass1" 
+  (puthash "active"
+           (list :username "user1" :password "pass1"
                  :expiry (time-add (current-time) 3600))
            mediawiki-auth-credential-cache)
-  
+
   (puthash "expired"
            (list :username "user2" :password "pass2"
                  :expiry (time-subtract (current-time) 10))
            mediawiki-auth-credential-cache)
-  
+
   (let ((status (mediawiki-auth-get-cache-status)))
     (should (= (plist-get status :total-entries) 2))
     (should (= (plist-get status :expired-entries) 1))
     (should (= (plist-get status :active-entries) 1)))
-  
-  (mediawiki-auth-clear-all-cached-credentials))
 
-;; Run tests
-(ert-run-tests-batch-and-exit)
+  (mediawiki-auth-clear-all-cached-credentials))
 
 ;;; test-auth-minimal.el ends here

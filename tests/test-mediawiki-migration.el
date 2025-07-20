@@ -187,7 +187,7 @@
     (should (null nonexistent))
 
     ;; Verify site properties
-    (should (mediawiki-site-p wikipedia))
+    (should (mediawiki-site-config-p wikipedia))
     (should (string= "Wikipedia" (mediawiki-site-config-name wikipedia)))))
 
 (ert-deftest test-mediawiki-get-url-after-migration ()
@@ -269,7 +269,7 @@
   (dolist (entry mediawiki-site-alist)
     (let ((site (cdr entry)))
       ;; Verify it's a proper mediawiki-site struct
-      (should (mediawiki-site-p site))
+      (should (mediawiki-site-config-p site))
 
       ;; Verify required fields are present
       (should (stringp (mediawiki-site-config-name site)))
@@ -404,13 +404,6 @@
   (should (= 100 (length mediawiki-site-alist)))
   (should (mediawiki-get-site "Site0"))
   (should (mediawiki-get-site "Site99")))
-
-;;; Test Runner
-
-(defun run-mediawiki-migration-tests ()
-  "Run all MediaWiki migration tests."
-  (interactive)
-  (ert-run-tests-batch-and-exit "test-mediawiki-migration"))
 
 (provide 'test-mediawiki-migration)
 

@@ -93,7 +93,4 @@
   (should (string= (mediawiki-auth-extract-host "https://wiki.company.com/")
                    "wiki.company.com")))
 
-;; Run tests
-(ert-run-tests-batch-and-exit)
-
 ;;; test-auth-source-mock.el ends here
