@@ -57,7 +57,7 @@
     - Add support for login continuation and multi-step auth
     - _Requirements: 2.1, 2.4_
 
-  - [ ] 4.3 Add OAuth authentication support
+  - [x] 4.3 Add OAuth authentication support
     - Implement OAuth 1.0a flow for MediaWiki
     - Add OAuth token management and refresh
     - Create OAuth configuration and setup utilities

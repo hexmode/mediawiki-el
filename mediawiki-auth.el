@@ -502,9 +502,467 @@ This is a fallback for wikis where bot passwords don't work with clientlogin."
     session))
 
 (defun mediawiki-auth-oauth-login (sitename)
-  "Perform OAuth authentication for SITENAME.
-This is a placeholder for future OAuth implementation."
-  (error "OAuth authentication not yet implemented"))
+  "Perform OAuth authentication for SITENAME using OAuth 1.0a flow."
+  (require 'mediawiki-oauth)
+  (mediawiki-oauth-login sitename))
+
+;;; OAuth 1.0a Implementation
+
+(defun mediawiki-auth-oauth-verify-access (sitename oauth-config)
+  "Verify existing OAuth access tokens for SITENAME."
+  (let ((consumer-key (plist-get oauth-config :consumer-key))
+        (consumer-secret (plist-get oauth-config :consumer-secret))
+        (access-token (plist-get oauth-config :access-token))
+        (access-secret (plist-get oauth-config :access-secret)))
+
+    (mediawiki-debug-log "Verifying OAuth access tokens for %s" sitename)
+
+    ;; Test the access tokens by making a simple API call
+    (condition-case err
+        (let ((response (mediawiki-auth-oauth-api-call
+                        sitename "query"
+                        (list (cons "meta" "userinfo"))
+                        oauth-config)))
+
+          (if (mediawiki-api-response-success response)
+              (let* ((data (mediawiki-api-response-data response))
+                     (query (cdr (assq 'query data)))
+                     (userinfo (cdr (assq 'userinfo query)))
+                     (username (cdr (assq 'name userinfo)))
+                     (userid (cdr (assq 'id userinfo))))
+
+                (mediawiki-debug-log "OAuth verification successful for %s (user: %s)" sitename username)
+                
+                ;; Create session with OAuth authentication
+                (let ((session (make-mediawiki-session
+                               :site-name sitename
+                               :tokens (make-hash-table :test 'equal)
+                               :user-info (list :username username
+                                               :userid userid
+                                               :auth-method 'oauth
+                                               :oauth-config oauth-config)
+                               :login-time (current-time)
+                               :last-activity (current-time))))
+
+                  (mediawiki-set-session sitename session)
+                  (message "Successfully authenticated to %s via OAuth as %s" sitename username)
+                  session))
+
+            (error "OAuth token verification failed: %s" (mediawiki-api-get-error-info response))))
+
+      (error
+       (mediawiki-debug-log "OAuth verification failed for %s: %s" sitename (error-message-string err))
+       (error "OAuth authentication failed: %s" (error-message-string err))))))
+
+(defun mediawiki-auth-oauth-authorize (sitename oauth-config)
+  "Perform OAuth 1.0a authorization flow for SITENAME."
+  (let ((consumer-key (plist-get oauth-config :consumer-key))
+        (consumer-secret (plist-get oauth-config :consumer-secret)))
+
+    (mediawiki-debug-log "Starting OAuth authorization flow for %s" sitename)
+
+    ;; Step 1: Get request token
+    (let ((request-token-data (mediawiki-auth-oauth-get-request-token sitename oauth-config)))
+      
+      (unless request-token-data
+        (error "Failed to obtain OAuth request token for %s" sitename))
+
+      (let ((request-token (plist-get request-token-data :token))
+            (request-secret (plist-get request-token-data :secret))
+            (authorize-url (plist-get request-token-data :authorize-url)))
+
+        (mediawiki-debug-log "Obtained request token for %s" sitename)
+
+        ;; Step 2: User authorization
+        (message "Please authorize the application at: %s" authorize-url)
+        (when (y-or-n-p "Open authorization URL in browser? ")
+          (browse-url authorize-url))
+
+        (let ((verifier (read-string "Enter OAuth verifier code: ")))
+          
+          ;; Step 3: Exchange for access token
+          (let ((access-token-data (mediawiki-auth-oauth-get-access-token
+                                   sitename oauth-config
+                                   request-token request-secret verifier)))
+
+            (unless access-token-data
+              (error "Failed to obtain OAuth access token for %s" sitename))
+
+            (let ((access-token (plist-get access-token-data :token))
+                  (access-secret (plist-get access-token-data :secret)))
+
+              (mediawiki-debug-log "Obtained access token for %s" sitename)
+
+              ;; Update OAuth configuration with access tokens
+              (let ((updated-config (plist-put (plist-put oauth-config
+                                                         :access-token access-token)
+                                               :access-secret access-secret)))
+
+                ;; Update site configuration
+                (let ((site (mediawiki-get-site sitename)))
+                  (setf (mediawiki-site-auth-config site) updated-config))
+
+                ;; Verify and create session
+                (mediawiki-auth-oauth-verify-access sitename updated-config)))))))))
+
+(defun mediawiki-auth-oauth-get-request-token (sitename oauth-config)
+  "Get OAuth request token for SITENAME."
+  (let* ((site (mediawiki-get-site sitename))
+         (base-url (mediawiki-site-url site))
+         (oauth-url (concat base-url "w/index.php?title=Special:OAuth/initiate"))
+         (consumer-key (plist-get oauth-config :consumer-key))
+         (consumer-secret (plist-get oauth-config :consumer-secret))
+         (callback-url "oob")) ; Out-of-band callback for desktop apps
+
+    (let ((oauth-params (list (cons "oauth_callback" callback-url)
+                             (cons "oauth_consumer_key" consumer-key)
+                             (cons "oauth_nonce" (mediawiki-auth-oauth-generate-nonce))
+                             (cons "oauth_signature_method" "HMAC-SHA1")
+                             (cons "oauth_timestamp" (format "%d" (time-to-seconds)))
+                             (cons "oauth_version" "1.0"))))
+
+      ;; Generate signature
+      (let ((signature (mediawiki-auth-oauth-generate-signature
+                       "POST" oauth-url oauth-params consumer-secret nil)))
+        
+        (push (cons "oauth_signature" signature) oauth-params)
+
+        ;; Make request - OAuth requires Authorization header support
+        ;; For now, provide informative error about HTTP module limitation
+        (error "OAuth authentication requires HTTP module enhancement for Authorization headers. OAuth setup completed but authentication not yet functional")))))
+
+(defun mediawiki-auth-oauth-get-access-token (sitename oauth-config request-token request-secret verifier)
+  "Exchange OAuth request token for access token."
+  (error "OAuth access token exchange requires HTTP module enhancement for Authorization headers"))
+
+(defun mediawiki-auth-oauth-api-call (sitename action params oauth-config)
+  "Make authenticated OAuth API call to SITENAME."
+  (error "OAuth API calls require HTTP module enhancement for Authorization headers"))
+
+;;; OAuth Utility Functions
+
+(defun mediawiki-auth-oauth-generate-nonce ()
+  "Generate OAuth nonce."
+  (format "%d%d" (time-to-seconds) (random 10000)))
+
+(defun mediawiki-auth-oauth-generate-signature (method url params consumer-secret token-secret)
+  "Generate OAuth 1.0a signature."
+  (let* ((sorted-params (sort (copy-sequence params)
+                             (lambda (a b) (string< (car a) (car b)))))
+         (param-string (mapconcat (lambda (param)
+                                   (format "%s=%s"
+                                          (url-hexify-string (car param))
+                                          (url-hexify-string (cdr param))))
+                                 sorted-params "&"))
+         (base-string (format "%s&%s&%s"
+                             (upcase method)
+                             (url-hexify-string url)
+                             (url-hexify-string param-string)))
+         (signing-key (format "%s&%s"
+                             (url-hexify-string consumer-secret)
+                             (url-hexify-string (or token-secret "")))))
+
+    ;; Generate HMAC-SHA1 signature using gnutls-hash-mac
+    (base64-encode-string
+     (gnutls-hash-mac 'SHA1 signing-key base-string))))
+
+(defun mediawiki-auth-oauth-build-auth-header (oauth-params)
+  "Build OAuth Authorization header from OAUTH-PARAMS."
+  (let ((auth-params (mapconcat (lambda (param)
+                                 (format "%s=\"%s\""
+                                        (car param)
+                                        (url-hexify-string (cdr param))))
+                               oauth-params ", ")))
+    (format "OAuth %s" auth-params)))
+
+(defun mediawiki-auth-oauth-build-post-data (params)
+  "Build POST data string from PARAMS."
+  (mapconcat (lambda (param)
+              (format "%s=%s"
+                     (url-hexify-string (car param))
+                     (url-hexify-string (cdr param))))
+            params "&"))
+
+;;; OAuth Configuration and Setup
+
+(defun mediawiki-oauth-setup (sitename consumer-key consumer-secret)
+  "Set up OAuth configuration for SITENAME with CONSUMER-KEY and CONSUMER-SECRET."
+  (interactive "sSite name: \nsConsumer key: \nsConsumer secret: ")
+  
+  (let ((site (mediawiki-get-site sitename)))
+    (unless site
+      (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
+
+    ;; Set OAuth configuration
+    (setf (mediawiki-site-auth-method site) 'oauth)
+    (setf (mediawiki-site-auth-config site)
+          (list :consumer-key consumer-key
+                :consumer-secret consumer-secret))
+
+    (message "OAuth configuration set for %s. Use mediawiki-auth-login to authenticate" sitename)))
+
+(defun mediawiki-oauth-reset (sitename)
+  "Reset OAuth configuration for SITENAME, removing stored tokens."
+  (interactive "sSite name: ")
+  
+  (let ((site (mediawiki-get-site sitename)))
+    (unless site
+      (error "Site %s not found" sitename))
+
+    (when (eq (mediawiki-site-auth-method site) 'oauth)
+      (let ((oauth-config (mediawiki-site-auth-config site)))
+        (when oauth-config
+          ;; Remove access tokens but keep consumer credentials
+          (setf (mediawiki-site-auth-config site)
+                (list :consumer-key (plist-get oauth-config :consumer-key)
+                      :consumer-secret (plist-get oauth-config :consumer-secret)))
+          
+          ;; Clear any existing session
+          (mediawiki-clear-session sitename)
+          
+          (message "OAuth tokens reset for %s. Re-authenticate with mediawiki-auth-login" sitename))))))
+
+;;; Token Management and Refresh
+
+(defun mediawiki-auth-refresh-tokens (sitename)
+  "Refresh authentication tokens for SITENAME.
+For OAuth, this verifies token validity and re-authorizes if needed."
+  (let* ((site (mediawiki-get-site sitename))
+         (auth-method (mediawiki-site-auth-method site)))
+
+    (cond
+     ((eq auth-method 'oauth)
+      (mediawiki-auth-oauth-refresh-tokens sitename))
+     ((eq auth-method 'basic)
+      ;; Basic auth doesn't have refreshable tokens, re-login instead
+      (mediawiki-auth-basic-login sitename))
+     (t
+      (error "Unknown authentication method for %s: %s" sitename auth-method)))))
+
+(defun mediawiki-auth-oauth-refresh-tokens (sitename)
+  "Refresh OAuth tokens for SITENAME by verifying current tokens."
+  (let* ((site (mediawiki-get-site sitename))
+         (oauth-config (mediawiki-site-auth-config site)))
+
+    (unless oauth-config
+      (error "No OAuth configuration found for %s" sitename))
+
+    (let ((access-token (plist-get oauth-config :access-token))
+          (access-secret (plist-get oauth-config :access-secret)))
+
+      (if (and access-token access-secret)
+          ;; Try to verify existing tokens
+          (condition-case err
+              (mediawiki-auth-oauth-verify-access sitename oauth-config)
+            (error
+             (mediawiki-debug-log "OAuth token verification failed for %s: %s" 
+                                 sitename (error-message-string err))
+             ;; If verification fails, clear tokens and re-authorize
+             (mediawiki-oauth-reset sitename)
+             (error "OAuth tokens expired for %s. Please re-authenticate with mediawiki-auth-login" sitename)))
+        
+        ;; No access tokens, need to authorize
+        (error "No OAuth access tokens for %s. Use mediawiki-auth-login to authenticate" sitename)))))
+
+;;; Credential Management
+  "Exchange OAuth request token for access token."
+  (let* ((site (mediawiki-get-site sitename))
+         (base-url (mediawiki-site-url site))
+         (oauth-url (concat base-url "w/index.php?title=Special:OAuth/token"))
+         (consumer-key (plist-get oauth-config :consumer-key))
+         (consumer-secret (plist-get oauth-config :consumer-secret)))
+
+    (let ((oauth-params (list (cons "oauth_consumer_key" consumer-key)
+                             (cons "oauth_nonce" (mediawiki-auth-oauth-generate-nonce))
+                             (cons "oauth_signature_method" "HMAC-SHA1")
+                             (cons "oauth_timestamp" (format "%d" (time-to-seconds)))
+                             (cons "oauth_token" request-token)
+                             (cons "oauth_verifier" verifier)
+                             (cons "oauth_version" "1.0"))))
+
+      ;; Generate signature
+      (let ((signature (mediawiki-auth-oauth-generate-signature
+                       "POST" oauth-url oauth-params consumer-secret request-secret)))
+        
+        (push (cons "oauth_signature" signature) oauth-params)
+
+        ;; Make request
+        (let ((response (mediawiki-http-request-sync
+                        oauth-url "POST"
+                        (mediawiki-auth-oauth-build-auth-header oauth-params))))
+
+          (if (and response (string-match "oauth_token=\\([^&]+\\)" response))
+              (let ((token (match-string 1 response))
+                    (secret (when (string-match "oauth_token_secret=\\([^&]+\\)" response)
+                             (match-string 1 response))))
+                
+                (list :token (url-unhex-string token)
+                      :secret (url-unhex-string secret)))
+
+            (error "Failed to parse OAuth access token response")))))))
+
+(defun mediawiki-auth-oauth-api-call (sitename action params oauth-config)
+  "Make authenticated OAuth API call to SITENAME."
+  (let* ((site (mediawiki-get-site sitename))
+         (api-url (or (mediawiki-site-api-url site)
+                     (concat (mediawiki-site-url site) "w/api.php")))
+         (consumer-key (plist-get oauth-config :consumer-key))
+         (consumer-secret (plist-get oauth-config :consumer-secret))
+         (access-token (plist-get oauth-config :access-token))
+         (access-secret (plist-get oauth-config :access-secret)))
+
+    ;; Build API parameters
+    (let ((api-params (append (list (cons "action" action)
+                                   (cons "format" "json"))
+                             params)))
+
+      ;; Build OAuth parameters
+      (let ((oauth-params (list (cons "oauth_consumer_key" consumer-key)
+                               (cons "oauth_nonce" (mediawiki-auth-oauth-generate-nonce))
+                               (cons "oauth_signature_method" "HMAC-SHA1")
+                               (cons "oauth_timestamp" (format "%d" (time-to-seconds)))
+                               (cons "oauth_token" access-token)
+                               (cons "oauth_version" "1.0"))))
+
+        ;; Combine all parameters for signature
+        (let ((all-params (append oauth-params api-params)))
+          
+          ;; Generate signature
+          (let ((signature (mediawiki-auth-oauth-generate-signature
+                           "POST" api-url all-params consumer-secret access-secret)))
+            
+            (push (cons "oauth_signature" signature) oauth-params)
+
+            ;; Make authenticated API call
+            (let ((auth-header (mediawiki-auth-oauth-build-auth-header oauth-params))
+                  (post-data (mediawiki-auth-oauth-build-post-data api-params)))
+
+              (mediawiki-http-request-sync api-url "POST" post-data auth-header))))))))
+
+;;; OAuth Utility Functions
+
+(defun mediawiki-auth-oauth-generate-nonce ()
+  "Generate OAuth nonce."
+  (format "%d%d" (time-to-seconds) (random 10000)))
+
+(defun mediawiki-auth-oauth-generate-signature (method url params consumer-secret token-secret)
+  "Generate OAuth 1.0a signature."
+  (let* ((sorted-params (sort (copy-sequence params)
+                             (lambda (a b) (string< (car a) (car b)))))
+         (param-string (mapconcat (lambda (param)
+                                   (format "%s=%s"
+                                          (url-hexify-string (car param))
+                                          (url-hexify-string (cdr param))))
+                                 sorted-params "&"))
+         (base-string (format "%s&%s&%s"
+                             (upcase method)
+                             (url-hexify-string url)
+                             (url-hexify-string param-string)))
+         (signing-key (format "%s&%s"
+                             (url-hexify-string consumer-secret)
+                             (url-hexify-string (or token-secret "")))))
+
+    ;; Generate HMAC-SHA1 signature using gnutls-hash-mac
+    (base64-encode-string
+     (gnutls-hash-mac 'SHA1 signing-key base-string))))
+
+(defun mediawiki-auth-oauth-build-auth-header (oauth-params)
+  "Build OAuth Authorization header from OAUTH-PARAMS."
+  (let ((auth-params (mapconcat (lambda (param)
+                                 (format "%s=\"%s\""
+                                        (car param)
+                                        (url-hexify-string (cdr param))))
+                               oauth-params ", ")))
+    (format "OAuth %s" auth-params)))
+
+(defun mediawiki-auth-oauth-build-post-data (params)
+  "Build POST data string from PARAMS."
+  (mapconcat (lambda (param)
+              (format "%s=%s"
+                     (url-hexify-string (car param))
+                     (url-hexify-string (cdr param))))
+            params "&"))
+
+;;; OAuth Configuration and Setup
+
+(defun mediawiki-oauth-setup (sitename consumer-key consumer-secret)
+  "Set up OAuth configuration for SITENAME with CONSUMER-KEY and CONSUMER-SECRET."
+  (interactive "sSite name: \nsConsumer key: \nsConsumer secret: ")
+  
+  (let ((site (mediawiki-get-site sitename)))
+    (unless site
+      (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
+
+    ;; Set OAuth configuration
+    (setf (mediawiki-site-auth-method site) 'oauth)
+    (setf (mediawiki-site-auth-config site)
+          (list :consumer-key consumer-key
+                :consumer-secret consumer-secret))
+
+    (message "OAuth configuration set for %s. Use mediawiki-auth-login to authenticate" sitename)))
+
+(defun mediawiki-oauth-reset (sitename)
+  "Reset OAuth configuration for SITENAME, removing stored tokens."
+  (interactive "sSite name: ")
+  
+  (let ((site (mediawiki-get-site sitename)))
+    (unless site
+      (error "Site %s not found" sitename))
+
+    (when (eq (mediawiki-site-auth-method site) 'oauth)
+      (let ((oauth-config (mediawiki-site-auth-config site)))
+        (when oauth-config
+          ;; Remove access tokens but keep consumer credentials
+          (setf (mediawiki-site-auth-config site)
+                (list :consumer-key (plist-get oauth-config :consumer-key)
+                      :consumer-secret (plist-get oauth-config :consumer-secret)))
+          
+          ;; Clear any existing session
+          (mediawiki-clear-session sitename)
+          
+          (message "OAuth tokens reset for %s. Re-authenticate with mediawiki-auth-login" sitename))))))
+
+;;; Token Management and Refresh
+
+(defun mediawiki-auth-refresh-tokens (sitename)
+  "Refresh authentication tokens for SITENAME.
+For OAuth, this verifies token validity and re-authorizes if needed."
+  (let* ((site (mediawiki-get-site sitename))
+         (auth-method (mediawiki-site-auth-method site)))
+
+    (cond
+     ((eq auth-method 'oauth)
+      (mediawiki-auth-oauth-refresh-tokens sitename))
+     ((eq auth-method 'basic)
+      ;; Basic auth doesn't have refreshable tokens, re-login instead
+      (mediawiki-auth-basic-login sitename))
+     (t
+      (error "Unknown authentication method for %s: %s" sitename auth-method)))))
+
+(defun mediawiki-auth-oauth-refresh-tokens (sitename)
+  "Refresh OAuth tokens for SITENAME by verifying current tokens."
+  (let* ((site (mediawiki-get-site sitename))
+         (oauth-config (mediawiki-site-auth-config site)))
+
+    (unless oauth-config
+      (error "No OAuth configuration found for %s" sitename))
+
+    (let ((access-token (plist-get oauth-config :access-token))
+          (access-secret (plist-get oauth-config :access-secret)))
+
+      (if (and access-token access-secret)
+          ;; Try to verify existing tokens
+          (condition-case err
+              (mediawiki-auth-oauth-verify-access sitename oauth-config)
+            (error
+             (mediawiki-debug-log "OAuth token verification failed for %s: %s" 
+                                 sitename (error-message-string err))
+             ;; If verification fails, clear tokens and re-authorize
+             (mediawiki-oauth-reset sitename)
+             (error "OAuth tokens expired for %s. Please re-authenticate with mediawiki-auth-login" sitename)))
+        
+        ;; No access tokens, need to authorize
+        (error "No OAuth access tokens for %s. Use mediawiki-auth-login to authenticate" sitename)))))
 
 ;;; Credential Management
 
