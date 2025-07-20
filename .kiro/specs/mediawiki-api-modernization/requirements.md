@@ -26,7 +26,7 @@ This feature involves modernizing the mediawiki.el package to work with the late
 1. WHEN authenticating to a MediaWiki site THEN the system SHALL support modern authentication methods including OAuth where available
 2. WHEN storing credentials THEN the system SHALL use Emacs auth-source library for secure credential storage
 3. WHEN login tokens expire THEN the system SHALL automatically refresh authentication without user intervention
-4. IF a site requires two-factor authentication THEN the system SHALL provide appropriate prompts and handling
+4. ~~IF a site requires two-factor authentication THEN the system SHALL provide appropriate prompts and handling~~ *[Moved to future-todos.md - not planned for immediate implementation]*
 
 ### Requirement 3
 

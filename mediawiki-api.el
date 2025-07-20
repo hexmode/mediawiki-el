@@ -179,9 +179,21 @@ Handles both single errors and arrays of errors."
 
 (defun mediawiki-api-parse-single-error (error)
   "Parse a single MediaWiki API ERROR into structured format."
-  (let ((code (cdr (assq 'code error)))
-        (info (cdr (assq 'info error)))
-        (data (cdr (assq 'data error))))
+  (let ((code (cond
+               ;; If error is a simple cons cell like (code . "value")
+               ((and (consp error) (not (listp (cdr error))))
+                (cdr error))
+               ;; If error is an alist with code field
+               ((listp error)
+                (cdr (assq 'code error)))
+               ;; Fallback
+               (t "unknown")))
+        (info (if (listp error)
+                  (cdr (assq 'info error))
+                "API error"))
+        (data (if (listp error)
+                  (cdr (assq 'data error))
+                nil)))
 
     (mediawiki-api-create-error
      code

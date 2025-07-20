@@ -79,9 +79,9 @@ FORCE-METHOD can override the default authentication method."
       (error "Unknown authentication method: %s" auth-method)))))
 
 (defun mediawiki-auth-basic-login (sitename)
-  "Perform basic username/password authentication for SITENAME using modern login API.
-Implements proper token-based authentication flow with support for login continuation
-and multi-step authentication as required by requirements 2.1 and 2.4."
+  "Perform basic username/password authentication for SITENAME using reliable login API.
+Uses action=login with bot passwords for reliable authentication. OAuth will be used
+for modern authentication when implemented."
   (let* ((site (mediawiki-get-site sitename))
          (credentials (mediawiki-auth-get-credentials sitename))
          (username (plist-get credentials :username))
@@ -90,32 +90,16 @@ and multi-step authentication as required by requirements 2.1 and 2.4."
     (unless (and username password)
       (error "Username and password required for basic authentication"))
 
-    (mediawiki-debug-log "Starting modern login flow for %s with user %s" sitename username)
+    (mediawiki-debug-log "Starting login flow for %s with user %s" sitename username)
 
-    ;; Modern login flow with proper error handling and continuation support
-    (mediawiki-auth-perform-modern-login sitename username password)))
+    ;; Use reliable action=login method with bot passwords
+    (mediawiki-auth-perform-login sitename username password)))
 
-(defun mediawiki-auth-perform-modern-login (sitename username password &optional login-token)
-  "Perform modern MediaWiki login to SITENAME with proper token handling and continuation support.
-LOGIN-TOKEN can be provided for continuation of multi-step login process."
-  (let ((login-token (or login-token (mediawiki-auth-get-login-token sitename))))
+(defun mediawiki-auth-perform-login (sitename username password)
+  "Perform login using reliable action=login method with bot passwords."
+  (mediawiki-debug-log "Starting login flow for %s" sitename)
 
-    (unless login-token
-      (error "Failed to obtain login token for %s" sitename))
-
-    (mediawiki-debug-log "Performing login with token for %s" sitename)
-
-    ;; Perform the login request with modern parameters
-    (let ((login-response (mediawiki-api-call-sync
-                          sitename "clientlogin"
-                          (mediawiki-auth-build-login-params username password login-token))))
-
-      (mediawiki-auth-handle-modern-login-response sitename username password login-response))))
-
-(defun mediawiki-auth-get-login-token (sitename)
-  "Get login token for SITENAME using modern token API."
-  (mediawiki-debug-log "Requesting login token for %s" sitename)
-  
+  ;; Get login token
   (let ((token-response (mediawiki-api-call-sync
                         sitename "query"
                         (list (cons "meta" "tokens")
@@ -129,9 +113,157 @@ LOGIN-TOKEN can be provided for continuation of multi-step login process."
     (let ((login-token (mediawiki-auth-extract-token token-response "login")))
       (unless login-token
         (error "No login token in response from %s" sitename))
-      
+
+      (mediawiki-debug-log "Successfully obtained login token for %s" sitename)
+
+      ;; Perform login using action=login
+      (let ((login-response (mediawiki-api-call-sync
+                            sitename "login"
+                            (list (cons "lgname" username)
+                                  (cons "lgpassword" password)
+                                  (cons "lgtoken" login-token)))))
+
+        (mediawiki-auth-handle-login-response sitename username login-response)))))
+
+(defun mediawiki-auth-handle-login-response (sitename username response)
+  "Handle login API response."
+  (if (not (mediawiki-api-response-success response))
+      (let ((error-info (mediawiki-api-get-error-info response)))
+        (mediawiki-debug-log "Login request failed for %s: %s" sitename error-info)
+        (error "Login request failed: %s" error-info))
+
+    (let* ((data (mediawiki-api-response-data response))
+           (login-data (cdr (assq 'login data)))
+           (result (cdr (assq 'result login-data))))
+
+      (mediawiki-debug-log "Login response for %s: result=%s" sitename result)
+
+      (cond
+       ;; Successful login
+       ((string= result "Success")
+        (mediawiki-debug-log "Login successful for %s" sitename)
+        (mediawiki-auth-handle-successful-login-legacy sitename login-data)
+        (message "Successfully logged in to %s as %s" sitename username))
+
+       ;; Need token (shouldn't happen since we got token first)
+       ((string= result "NeedToken")
+        (error "Login token handling error for %s" sitename))
+
+       ;; Login failed
+       (t
+        (let ((reason (cdr (assq 'reason login-data))))
+          (mediawiki-debug-log "Login failed for %s: %s" sitename result)
+          (error "Login failed: %s" (or reason result))))))))
+
+(defun mediawiki-auth-handle-successful-login-legacy (sitename login-data)
+  "Handle successful login by creating session."
+  (let* ((username (cdr (assq 'lgusername login-data)))
+         (userid (cdr (assq 'lguserid login-data)))
+         (session (make-mediawiki-session
+                   :site-name sitename
+                   :tokens (make-hash-table :test 'equal)
+                   :user-info (list :username username
+                                   :userid userid
+                                   :login-data login-data)
+                   :login-time (current-time)
+                   :last-activity (current-time))))
+
+    (mediawiki-set-session sitename session)
+    (mediawiki-debug-log "Created session for %s (user: %s, id: %s)"
+                        sitename username userid)
+    session))
+
+(defun mediawiki-auth-perform-modern-login (sitename username password &optional login-token)
+  "Perform modern MediaWiki login following the proper interactive flow.
+LOGIN-TOKEN can be provided for continuation of multi-step login process."
+  (let ((login-token (or login-token (mediawiki-auth-get-login-token sitename))))
+
+    (unless login-token
+      (error "Failed to obtain login token for %s" sitename))
+
+    ;; Step 1: Get authentication manager info to understand required fields
+    (mediawiki-debug-log "Getting authentication manager info for %s" sitename)
+    (let ((auth-info (mediawiki-auth-get-authmanager-info sitename)))
+
+      (unless auth-info
+        (error "Failed to get authentication manager info for %s" sitename))
+
+      (mediawiki-debug-log "Performing login with proper auth fields for %s" sitename)
+
+      ;; Step 2: Perform the login request with proper fields
+      (let ((login-response (mediawiki-api-call-sync
+                            sitename "clientlogin"
+                            (mediawiki-auth-build-modern-login-params username password login-token auth-info))))
+
+        (mediawiki-auth-handle-modern-login-response sitename username password login-response)))))
+
+(defun mediawiki-auth-get-login-token (sitename)
+  "Get login token for SITENAME using modern token API."
+  (mediawiki-debug-log "Requesting login token for %s" sitename)
+
+  (let ((token-response (mediawiki-api-call-sync
+                        sitename "query"
+                        (list (cons "meta" "tokens")
+                              (cons "type" "login")))))
+
+    (unless (mediawiki-api-response-success token-response)
+      (let ((error-info (mediawiki-api-get-error-info token-response)))
+        (mediawiki-debug-log "Failed to get login token for %s: %s" sitename error-info)
+        (error "Failed to get login token: %s" error-info)))
+
+    (let ((login-token (mediawiki-auth-extract-token token-response "login")))
+      (unless login-token
+        (error "No login token in response from %s" sitename))
+
       (mediawiki-debug-log "Successfully obtained login token for %s" sitename)
       login-token)))
+
+(defun mediawiki-auth-get-authmanager-info (sitename)
+  "Get authentication manager info for SITENAME to understand required fields."
+  (mediawiki-debug-log "Requesting authmanager info for %s" sitename)
+
+  (let ((response (mediawiki-api-call-sync
+                  sitename "query"
+                  (list (cons "meta" "authmanagerinfo")
+                        (cons "amirequestsfor" "login")))))
+
+    (unless (mediawiki-api-response-success response)
+      (let ((error-info (mediawiki-api-get-error-info response)))
+        (mediawiki-debug-log "Failed to get authmanager info for %s: %s" sitename error-info)
+        (error "Failed to get authmanager info: %s" error-info)))
+
+    (let* ((data (mediawiki-api-response-data response))
+           (query (cdr (assq 'query data)))
+           (authmanager-info (cdr (assq 'authmanagerinfo query))))
+
+      (mediawiki-debug-log "Successfully obtained authmanager info for %s" sitename)
+      authmanager-info)))
+
+(defun mediawiki-auth-build-modern-login-params (username password login-token auth-info)
+  "Build modern login parameters based on AUTH-INFO from authmanager.
+Returns parameter list optimized for the specific wiki's requirements."
+  (let ((params (list (cons "loginreturnurl" "http://localhost/")
+                     (cons "username" username)
+                     (cons "password" password)
+                     (cons "logintoken" login-token))))
+
+    ;; Add rememberme if supported
+    (let ((requests (cdr (assq 'requests auth-info))))
+      (when (mediawiki-auth-field-supported-p requests "rememberMe")
+        (push (cons "rememberme" "1") params)))
+
+    (mediawiki-debug-log "Built modern login params with %d fields" (length params))
+    params))
+
+(defun mediawiki-auth-field-supported-p (requests field-name)
+  "Check if FIELD-NAME is supported based on REQUESTS from authmanager info."
+  (when requests
+    (cl-some (lambda (request)
+               (let ((fields (cdr (assq 'fields request))))
+                 (cl-some (lambda (field)
+                            (string= (cdr (assq 'name field)) field-name))
+                          fields)))
+             requests)))
 
 (defun mediawiki-auth-build-login-params (username password login-token)
   "Build login parameters for modern clientlogin API.
@@ -157,7 +289,7 @@ PASS, FAIL, RESTART, UI, REDIRECT, and continuation scenarios."
            (message (cdr (assq 'message clientlogin-data)))
            (messagecode (cdr (assq 'messagecode clientlogin-data))))
 
-      (mediawiki-debug-log "Login response for %s: status=%s, code=%s" 
+      (mediawiki-debug-log "Login response for %s: status=%s, code=%s"
                           sitename status messagecode)
 
       (cond
@@ -169,7 +301,7 @@ PASS, FAIL, RESTART, UI, REDIRECT, and continuation scenarios."
 
        ;; Login failed
        ((string= status "FAIL")
-        (let ((error-msg (or message 
+        (let ((error-msg (or message
                             (format "Login failed with code: %s" messagecode)
                             "Login failed")))
           (mediawiki-debug-log "Login failed for %s: %s" sitename error-msg)
@@ -212,7 +344,7 @@ PASS, FAIL, RESTART, UI, REDIRECT, and continuation scenarios."
                    :last-activity (current-time))))
 
     (mediawiki-set-session sitename session)
-    (mediawiki-debug-log "Created session for %s (user: %s, id: %s)" 
+    (mediawiki-debug-log "Created session for %s (user: %s, id: %s)"
                         sitename username userid)
     session))
 
@@ -244,11 +376,11 @@ Implements support for multi-step authentication as required by requirement 2.4.
   "Handle two-factor authentication requirement.
 Prompts user for 2FA code and continues login process."
   (let* ((requests (cdr (assq 'requests clientlogin-data)))
-         (otp-request (cl-find-if (lambda (req) 
-                                   (string-match-p "otp\\|totp\\|2fa" 
+         (otp-request (cl-find-if (lambda (req)
+                                   (string-match-p "otp\\|totp\\|2fa"
                                                   (cdr (assq 'id req))))
                                  requests)))
-    
+
     (if otp-request
         (let* ((otp-code (read-string "Enter 2FA/OTP code: "))
                (continue-token (cdr (assq 'logintoken clientlogin-data)))
@@ -257,14 +389,14 @@ Prompts user for 2FA code and continues login process."
                                      (cons "password" password)
                                      (cons "logintoken" continue-token)
                                      (cons "OATHToken" otp-code))))
-          
+
           (mediawiki-debug-log "Continuing login with 2FA for %s" sitename)
-          
+
           (let ((continue-response (mediawiki-api-call-sync
                                    sitename "clientlogin" continue-params)))
-            (mediawiki-auth-handle-modern-login-response 
+            (mediawiki-auth-handle-modern-login-response
              sitename username password continue-response)))
-      
+
       (error "2FA required but no OTP request found in response"))))
 
 (defun mediawiki-auth-handle-captcha (sitename username password clientlogin-data)
@@ -281,14 +413,93 @@ Provides basic continuation support for unknown UI requirements."
   (let* ((message (cdr (assq 'message clientlogin-data)))
          (messagecode (cdr (assq 'messagecode clientlogin-data)))
          (requests (cdr (assq 'requests clientlogin-data))))
-    
+
     (mediawiki-debug-log "Generic UI requirement for %s: %s" sitename messagecode)
-    
+
     ;; For now, we'll error out on unknown UI requirements
     ;; In a full implementation, this could be extended to handle
     ;; additional interactive authentication methods
-    (error "Interactive authentication required: %s (code: %s)" 
+    (error "Interactive authentication required: %s (code: %s)"
            message messagecode)))
+
+(defun mediawiki-auth-perform-legacy-login (sitename username password)
+  "Perform legacy login using action=login for wikis that don't support clientlogin properly.
+This is a fallback for wikis where bot passwords don't work with clientlogin."
+  (mediawiki-debug-log "Starting legacy login flow for %s" sitename)
+
+  ;; Get login token for legacy login
+  (let ((token-response (mediawiki-api-call-sync
+                        sitename "query"
+                        (list (cons "meta" "tokens")
+                              (cons "type" "login")))))
+
+    (unless (mediawiki-api-response-success token-response)
+      (let ((error-info (mediawiki-api-get-error-info token-response)))
+        (mediawiki-debug-log "Failed to get legacy login token for %s: %s" sitename error-info)
+        (error "Failed to get legacy login token: %s" error-info)))
+
+    (let ((login-token (mediawiki-auth-extract-token token-response "login")))
+      (unless login-token
+        (error "No legacy login token in response from %s" sitename))
+
+      (mediawiki-debug-log "Successfully obtained legacy login token for %s" sitename)
+
+      ;; Perform legacy login
+      (let ((login-response (mediawiki-api-call-sync
+                            sitename "login"
+                            (list (cons "lgname" username)
+                                  (cons "lgpassword" password)
+                                  (cons "lgtoken" login-token)))))
+
+        (mediawiki-auth-handle-legacy-login-response sitename username login-response)))))
+
+(defun mediawiki-auth-handle-legacy-login-response (sitename username response)
+  "Handle legacy login API response."
+  (if (not (mediawiki-api-response-success response))
+      (let ((error-info (mediawiki-api-get-error-info response)))
+        (mediawiki-debug-log "Legacy login request failed for %s: %s" sitename error-info)
+        (error "Legacy login request failed: %s" error-info))
+
+    (let* ((data (mediawiki-api-response-data response))
+           (login-data (cdr (assq 'login data)))
+           (result (cdr (assq 'result login-data))))
+
+      (mediawiki-debug-log "Legacy login response for %s: result=%s" sitename result)
+
+      (cond
+       ;; Successful login
+       ((string= result "Success")
+        (mediawiki-debug-log "Legacy login successful for %s" sitename)
+        (mediawiki-auth-handle-legacy-successful-login sitename login-data)
+        (message "Successfully logged in to %s as %s (legacy)" sitename username))
+
+       ;; Need token (shouldn't happen since we got token first)
+       ((string= result "NeedToken")
+        (error "Legacy login token handling error for %s" sitename))
+
+       ;; Login failed
+       (t
+        (let ((reason (cdr (assq 'reason login-data))))
+          (mediawiki-debug-log "Legacy login failed for %s: %s" sitename result)
+          (error "Legacy login failed: %s" (or reason result))))))))
+
+(defun mediawiki-auth-handle-legacy-successful-login (sitename login-data)
+  "Handle successful legacy login by creating session."
+  (let* ((username (cdr (assq 'lgusername login-data)))
+         (userid (cdr (assq 'lguserid login-data)))
+         (session (make-mediawiki-session
+                   :site-name sitename
+                   :tokens (make-hash-table :test 'equal)
+                   :user-info (list :username username
+                                   :userid userid
+                                   :login-data login-data)
+                   :login-time (current-time)
+                   :last-activity (current-time))))
+
+    (mediawiki-set-session sitename session)
+    (mediawiki-debug-log "Created legacy session for %s (user: %s, id: %s)"
+                        sitename username userid)
+    session))
 
 (defun mediawiki-auth-oauth-login (sitename)
   "Perform OAuth authentication for SITENAME.
@@ -427,9 +638,9 @@ This is a placeholder for future OAuth implementation."
                    :password (plist-get credentials :password)
                    :expiry expiry)
              mediawiki-auth-credential-cache)
-    (mediawiki-debug-log "Cached credentials for %s until %s" 
+    (mediawiki-debug-log "Cached credentials for %s until %s"
                         cache-key (format-time-string "%H:%M:%S" expiry))
-    
+
     ;; Ensure cleanup timer is running
     (mediawiki-auth-ensure-cleanup-timer)))
 
@@ -456,18 +667,18 @@ This is a placeholder for future OAuth implementation."
   "Remove expired credentials from cache."
   (let ((expired-keys '())
         (current-time (current-time)))
-    
+
     (maphash (lambda (key entry)
                (let ((expiry (plist-get entry :expiry)))
                  (when (time-less-p expiry current-time)
                    (push key expired-keys))))
              mediawiki-auth-credential-cache)
-    
+
     (dolist (key expired-keys)
       (remhash key mediawiki-auth-credential-cache))
-    
+
     (when expired-keys
-      (mediawiki-debug-log "Cleaned up %d expired credential cache entries" 
+      (mediawiki-debug-log "Cleaned up %d expired credential cache entries"
                           (length expired-keys)))))
 
 ;;; URL Parsing Utilities
@@ -525,10 +736,10 @@ This is a placeholder for future OAuth implementation."
 
       ;; Remove local session
       (mediawiki-remove-session sitename)
-      
+
       ;; Clear cached credentials for security
       (mediawiki-auth-clear-cached-credentials sitename)
-      
+
       (mediawiki-debug-log "Logged out from %s and cleared cached credentials" sitename)
       (message "Logged out from %s" sitename))))
 
@@ -575,13 +786,13 @@ This is a placeholder for future OAuth implementation."
   (let ((total-entries (hash-table-count mediawiki-auth-credential-cache))
         (expired-count 0)
         (current-time (current-time)))
-    
+
     (maphash (lambda (_key entry)
                (let ((expiry (plist-get entry :expiry)))
                  (when (time-less-p expiry current-time)
                    (setq expired-count (1+ expired-count)))))
              mediawiki-auth-credential-cache)
-    
+
     (list :total-entries total-entries
           :expired-entries expired-count
           :active-entries (- total-entries expired-count)
@@ -601,22 +812,22 @@ This is a placeholder for future OAuth implementation."
 (defun mediawiki-auth-initialize ()
   "Initialize the authentication system."
   (mediawiki-debug-log "Initializing MediaWiki authentication system")
-  
+
   ;; Ensure cleanup timer is started
   (mediawiki-auth-ensure-cleanup-timer)
-  
+
   ;; Add cleanup hook for Emacs exit
   (add-hook 'kill-emacs-hook #'mediawiki-auth-shutdown))
 
 (defun mediawiki-auth-shutdown ()
   "Clean up authentication system on Emacs shutdown."
   (mediawiki-debug-log "Shutting down MediaWiki authentication system")
-  
+
   ;; Cancel cleanup timer
   (when (timerp mediawiki-auth-cache-cleanup-timer)
     (cancel-timer mediawiki-auth-cache-cleanup-timer)
     (setq mediawiki-auth-cache-cleanup-timer nil))
-  
+
   ;; Clear credential cache for security
   (mediawiki-auth-clear-all-cached-credentials))
 
