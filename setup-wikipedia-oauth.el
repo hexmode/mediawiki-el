@@ -18,8 +18,8 @@ This is for when you already have all OAuth credentials from the OAuth provider.
       (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
 
     ;; Set OAuth configuration with all tokens
-    (setf (mediawiki-site-auth-method site) 'oauth)
-    (setf (mediawiki-site-auth-config site)
+    (setf (mediawiki-site-config-auth-method site) 'oauth)
+    (setf (mediawiki-site-config-auth-config site)
           (list :consumer-key consumer-key
                 :consumer-secret consumer-secret
                 :access-token access-token
@@ -33,7 +33,7 @@ Replace the placeholder values with your actual OAuth credentials."
   
   ;; First, make sure Wikipedia is added as a site
   (unless (mediawiki-get-site "Wikipedia")
-    (let ((wikipedia-site (make-mediawiki-site
+    (let ((wikipedia-site (make-mediawiki-site-config
                           :name "Wikipedia"
                           :url "https://en.wikipedia.org/"
                           :api-url "https://en.wikipedia.org/w/api.php"

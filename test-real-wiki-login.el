@@ -31,7 +31,7 @@
          (password (read-passwd "Password: ")))
 
     ;; Create and add the site
-    (let ((site (make-mediawiki-site
+    (let ((site (make-mediawiki-site-config
                  :name wiki-name
                  :url wiki-url
                  :api-url api-url
@@ -123,7 +123,7 @@
 (defun setup-test-wiki (name url api-url &optional username)
   "Quick setup function for testing.
 Usage: (setup-test-wiki \"mywiki\" \"https://wiki.example.com\" \"https://wiki.example.com/w/api.php\" \"myuser\")"
-  (let ((site (make-mediawiki-site
+  (let ((site (make-mediawiki-site-config
                :name name
                :url url
                :api-url api-url

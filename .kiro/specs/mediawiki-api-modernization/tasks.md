@@ -6,7 +6,7 @@
   - Implement basic configuration and customization variables
   - _Requirements: 6.4_
 
-- [ ] 2. Implement modern HTTP communication layer
+- [x] 2. Implement modern HTTP communication layer
   - [x] 2.1 Create asynchronous HTTP request functions
     - Write `mediawiki-http-request-async` using modern Emacs HTTP capabilities
     - Implement callback-based response handling
@@ -24,6 +24,12 @@
     - Implement HTTP status code handling
     - Add response debugging and logging capabilities
     - _Requirements: 5.2, 5.3_
+
+  - [x] 2.4 Add custom HTTP header support for OAuth
+    - Enhance HTTP request functions to support custom Authorization headers
+    - Implement OAuth 1.0a Authorization header generation and transmission
+    - Add header validation and debugging capabilities
+    - _Requirements: 2.1 (OAuth support)_
 
 - [x] 3. Create JSON-based API communication framework
   - [x] 3.1 Implement JSON API request builder
@@ -44,7 +50,7 @@
     - Create fallback mechanisms for older MediaWiki versions
     - _Requirements: 1.1_
 
-- [ ] 4. Modernize authentication system
+- [x] 4. Modernize authentication system
   - [x] 4.1 Implement auth-source integration
     - Replace hardcoded credentials with auth-source library calls
     - Add secure credential storage and retrieval
@@ -63,26 +69,26 @@
     - Create OAuth configuration and setup utilities
     - _Requirements: 2.1_
 
-  - [ ] 4.4 Implement automatic token refresh
+  - [x] 4.4 Implement automatic token refresh
     - Add token expiration detection and handling
     - Implement automatic re-authentication when tokens expire
     - Create session persistence across Emacs restarts
     - _Requirements: 2.3_
 
 - [ ] 5. Create robust session management
-  - [ ] 5.1 Implement session state tracking
+  - [x] 5.1 Implement session state tracking
     - Create session data structures and storage
     - Add session validation and health checking
     - Implement session cleanup and logout procedures
     - _Requirements: 2.3_
 
-  - [ ] 5.2 Add token management system
+  - [x] 5.2 Add token management system
     - Implement CSRF token handling for edit operations
     - Add token caching and refresh mechanisms
     - Create token validation and error recovery
     - _Requirements: 3.2_
 
-  - [ ] 5.3 Create session persistence
+  - [x] 5.3 Create session persistence
     - Add session state saving and loading
     - Implement secure session storage
     - Add session migration and upgrade handling

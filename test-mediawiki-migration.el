@@ -48,7 +48,7 @@
              (first-page (nth 4 params)))
 
         ;; Create new site structure
-        (let ((site (make-mediawiki-site
+        (let ((site (make-mediawiki-site-config
                      :name name
                      :url url
                      :username (unless (string= username "username") username)
@@ -100,10 +100,10 @@
   ;; Check that sites were migrated correctly
   (let ((wikipedia-site (mediawiki-get-site "Wikipedia")))
     (should wikipedia-site)
-    (should (string= "Wikipedia" (mediawiki-site-name wikipedia-site)))
-    (should (string= "https://en.wikipedia.org/w/" (mediawiki-site-url wikipedia-site)))
-    (should (string= "testuser" (mediawiki-site-username wikipedia-site)))
-    (should (eq 'basic (mediawiki-site-auth-method wikipedia-site)))))
+    (should (string= "Wikipedia" (mediawiki-site-config-name wikipedia-site)))
+    (should (string= "https://en.wikipedia.org/w/" (mediawiki-site-config-url wikipedia-site)))
+    (should (string= "testuser" (mediawiki-site-config-username wikipedia-site)))
+    (should (eq 'basic (mediawiki-site-config-auth-method wikipedia-site)))))
 
 (ert-deftest test-mediawiki-migration-with-domain ()
   "Test migration of site with LDAP domain."
@@ -119,7 +119,7 @@
   ;; Verify domain was preserved in auth-config
   (let ((site (mediawiki-get-site "TestSite")))
     (should site)
-    (should (equal '(:domain "TESTDOMAIN") (mediawiki-site-auth-config site)))))
+    (should (equal '(:domain "TESTDOMAIN") (mediawiki-site-config-auth-config site)))))
 
 (ert-deftest test-mediawiki-migration-skip-default-username ()
   "Test that default 'username' is not migrated."
@@ -135,7 +135,7 @@
   ;; Verify default username was not migrated
   (let ((site (mediawiki-get-site "TestSite")))
     (should site)
-    (should (null (mediawiki-site-username site)))))
+    (should (null (mediawiki-site-config-username site)))))
 
 (ert-deftest test-mediawiki-migration-empty-legacy-config ()
   "Test migration with empty legacy configuration."
@@ -188,7 +188,7 @@
 
     ;; Verify site properties
     (should (mediawiki-site-p wikipedia))
-    (should (string= "Wikipedia" (mediawiki-site-name wikipedia)))))
+    (should (string= "Wikipedia" (mediawiki-site-config-name wikipedia)))))
 
 (ert-deftest test-mediawiki-get-url-after-migration ()
   "Test that URLs can be retrieved after migration."
@@ -218,7 +218,7 @@
   (let ((initial-count (length mediawiki-site-alist)))
 
     ;; Add a new site
-    (let ((new-site (make-mediawiki-site
+    (let ((new-site (make-mediawiki-site-config
                      :name "NewSite"
                      :url "https://new.example.com/w/"
                      :username "newuser"
@@ -240,7 +240,7 @@
   (let ((initial-count (length mediawiki-site-alist)))
 
     ;; Update existing site
-    (let ((updated-site (make-mediawiki-site
+    (let ((updated-site (make-mediawiki-site-config
                          :name "Wikipedia"
                          :url "https://en.wikipedia.org/w/"
                          :username "updateduser"
@@ -252,8 +252,8 @@
 
     ;; Verify site was updated
     (let ((site (mediawiki-get-site "Wikipedia")))
-      (should (string= "updateduser" (mediawiki-site-username site)))
-      (should (eq 'oauth (mediawiki-site-auth-method site))))))
+      (should (string= "updateduser" (mediawiki-site-config-username site)))
+      (should (eq 'oauth (mediawiki-site-config-auth-method site))))))
 
 ;;; Data Structure Validation Tests
 
@@ -272,15 +272,15 @@
       (should (mediawiki-site-p site))
 
       ;; Verify required fields are present
-      (should (stringp (mediawiki-site-name site)))
-      (should (stringp (mediawiki-site-url site)))
-      (should (symbolp (mediawiki-site-auth-method site)))
+      (should (stringp (mediawiki-site-config-name site)))
+      (should (stringp (mediawiki-site-config-url site)))
+      (should (symbolp (mediawiki-site-config-auth-method site)))
 
       ;; Verify optional fields have correct types when present
-      (when (mediawiki-site-username site)
-        (should (stringp (mediawiki-site-username site))))
-      (when (mediawiki-site-auth-config site)
-        (should (listp (mediawiki-site-auth-config site)))))))
+      (when (mediawiki-site-config-username site)
+        (should (stringp (mediawiki-site-config-username site))))
+      (when (mediawiki-site-config-auth-config site)
+        (should (listp (mediawiki-site-config-auth-config site)))))))
 
 ;;; Integration Tests
 
@@ -308,9 +308,9 @@
   (should (mediawiki-get-site "TestWiki"))
 
   ;; Verify URL access works through site structures
-  (should (string= "https://en.wikipedia.org/w/" (mediawiki-site-url (mediawiki-get-site "Wikipedia"))))
-  (should (string= "https://en.wiktionary.org/w/" (mediawiki-site-url (mediawiki-get-site "Wiktionary"))))
-  (should (string= "https://test.example.com/w/" (mediawiki-site-url (mediawiki-get-site "TestWiki")))))
+  (should (string= "https://en.wikipedia.org/w/" (mediawiki-site-config-url (mediawiki-get-site "Wikipedia"))))
+  (should (string= "https://en.wiktionary.org/w/" (mediawiki-site-config-url (mediawiki-get-site "Wiktionary"))))
+  (should (string= "https://test.example.com/w/" (mediawiki-site-config-url (mediawiki-get-site "TestWiki")))))
 
 ;;; Edge Case Tests
 
@@ -350,10 +350,10 @@
   ;; Verify site was created with appropriate defaults
   (let ((site (mediawiki-get-site "TestSite")))
     (should site)
-    (should (string= "TestSite" (mediawiki-site-name site)))
-    (should (string= "https://test.example.com/w/" (mediawiki-site-url site)))
-    (should (null (mediawiki-site-username site)))
-    (should (eq 'basic (mediawiki-site-auth-method site)))))
+    (should (string= "TestSite" (mediawiki-site-config-name site)))
+    (should (string= "https://test.example.com/w/" (mediawiki-site-config-url site)))
+    (should (null (mediawiki-site-config-username site)))
+    (should (eq 'basic (mediawiki-site-config-auth-method site)))))
 
 (ert-deftest test-mediawiki-migration-duplicate-names ()
   "Test migration handles duplicate site names."
@@ -371,8 +371,8 @@
   (should (= 1 (length mediawiki-site-alist)))
   (let ((site (mediawiki-get-site "DuplicateSite")))
     (should site)
-    (should (string= "https://second.example.com/w/" (mediawiki-site-url site)))
-    (should (string= "user2" (mediawiki-site-username site)))))
+    (should (string= "https://second.example.com/w/" (mediawiki-site-config-url site)))
+    (should (string= "user2" (mediawiki-site-config-username site)))))
 
 ;;; Performance Tests
 

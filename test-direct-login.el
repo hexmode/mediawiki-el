@@ -15,7 +15,7 @@
   (setq mediawiki-debug t)
   
   ;; Set up the site
-  (let ((site (make-mediawiki-site
+  (let ((site (make-mediawiki-site-config
                :name "my-wiki"
                :url "https://wiki.nichework.com/"
                :api-url "https://wiki.nichework.com/w/api.php"
@@ -59,7 +59,7 @@
   (setq mediawiki-debug t)
   
   ;; Set up the site
-  (let ((site (make-mediawiki-site
+  (let ((site (make-mediawiki-site-config
                :name "my-wiki"
                :url "https://wiki.nichework.com/"
                :api-url "https://wiki.nichework.com/w/api.php")))

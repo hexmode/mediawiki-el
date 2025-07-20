@@ -24,10 +24,11 @@
 
 ;;; HTTP Request Functions
 
-(defun mediawiki-http-request-async (url method data callback &optional error-callback)
+(defun mediawiki-http-request-async (url method data callback &optional error-callback headers)
   "Make an asynchronous HTTP request to URL using METHOD with DATA.
 CALLBACK is called with the response on success.
 ERROR-CALLBACK is called with error information on failure.
+HEADERS is an optional alist of additional HTTP headers.
 
 This function implements requirement 4.1 by using asynchronous operations
 to prevent blocking the Emacs interface."
@@ -40,6 +41,9 @@ to prevent blocking the Emacs interface."
                              data)))
         (url-request-extra-headers
          (append
+          ;; Custom headers (including OAuth Authorization headers)
+          (when headers headers)
+          ;; Default headers
           (when data
             '(("Content-Type" . "application/x-www-form-urlencoded")))
           '(("User-Agent" . "MediaWiki.el/2.0 (Emacs)")))))
@@ -58,10 +62,11 @@ to prevent blocking the Emacs interface."
                    (format "Failed to initiate request: %s" (error-message-string err))
                    nil)))))))
 
-(defun mediawiki-http-request-sync (url method data &optional timeout)
+(defun mediawiki-http-request-sync (url method data &optional timeout headers)
   "Make a synchronous HTTP request to URL using METHOD with DATA.
 This is a wrapper around the async function that blocks until completion.
 TIMEOUT specifies the maximum time to wait (defaults to `mediawiki-request-timeout').
+HEADERS is an optional alist of additional HTTP headers.
 Returns the response data or signals an error.
 
 This function provides backward compatibility while leveraging the async
@@ -86,7 +91,7 @@ Supports cancellation via keyboard interrupt (\\[keyboard-quit])."
                    completed t))))
 
       ;; Start the async request
-      (mediawiki-http-request-async url method data success-callback error-callback)
+      (mediawiki-http-request-async url method data success-callback error-callback headers)
 
       ;; Set up timeout timer
       (when (> timeout 0)

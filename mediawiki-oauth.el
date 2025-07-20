@@ -31,7 +31,7 @@
 (defun mediawiki-oauth-login (sitename)
   "Perform OAuth authentication for SITENAME using OAuth 1.0a flow."
   (let* ((site (mediawiki-get-site sitename))
-         (oauth-config (mediawiki-site-auth-config site)))
+         (oauth-config (mediawiki-site-config-auth-config site)))
 
     (unless oauth-config
       (error "OAuth configuration required for %s. Use mediawiki-oauth-setup to configure" sitename))
@@ -59,9 +59,42 @@
 
     (mediawiki-debug-log "Verifying OAuth access tokens for %s" sitename)
 
-    ;; For now, OAuth verification requires HTTP module enhancement
-    ;; This is a placeholder that would test the access tokens
-    (error "OAuth token verification requires HTTP module enhancement for Authorization headers")))
+    ;; Test the access tokens by making a simple API call
+    (condition-case err
+        (let ((response (mediawiki-oauth-api-call
+                        sitename "query"
+                        (list (cons "meta" "userinfo"))
+                        oauth-config)))
+
+          (if (mediawiki-http-response-success-p response)
+              (let* ((json-data (mediawiki-http-parse-json-response response))
+                     (query (plist-get json-data :query))
+                     (userinfo (plist-get query :userinfo))
+                     (username (plist-get userinfo :name))
+                     (userid (plist-get userinfo :id)))
+
+                (mediawiki-debug-log "OAuth verification successful for %s (user: %s)" sitename username)
+                
+                ;; Create session with OAuth authentication
+                (let ((session (make-mediawiki-session
+                               :site-name sitename
+                               :tokens (make-hash-table :test 'equal)
+                               :user-info (list :username username
+                                               :userid userid
+                                               :auth-method 'oauth
+                                               :oauth-config oauth-config)
+                               :login-time (current-time)
+                               :last-activity (current-time))))
+
+                  (mediawiki-set-session sitename session)
+                  (message "Successfully authenticated to %s via OAuth as %s" sitename username)
+                  session))
+
+            (error "OAuth token verification failed: %s" (plist-get response :error))))
+
+      (error
+       (mediawiki-debug-log "OAuth verification failed for %s: %s" sitename (error-message-string err))
+       (error "OAuth authentication failed: %s" (error-message-string err))))))
 
 (defun mediawiki-oauth-authorize (sitename oauth-config)
   "Perform OAuth 1.0a authorization flow for SITENAME."
@@ -73,6 +106,48 @@
     ;; For now, OAuth authorization requires HTTP module enhancement
     ;; This would implement the full OAuth 1.0a flow
     (error "OAuth authorization requires HTTP module enhancement for Authorization headers")))
+
+;;; OAuth API Functions
+
+(defun mediawiki-oauth-api-call (sitename action params oauth-config)
+  "Make authenticated OAuth API call to SITENAME."
+  (require 'mediawiki-http)
+  (let* ((site (mediawiki-get-site sitename))
+         (api-url (or (mediawiki-site-config-api-url site)
+                     (concat (mediawiki-site-config-url site) "w/api.php")))
+         (consumer-key (plist-get oauth-config :consumer-key))
+         (consumer-secret (plist-get oauth-config :consumer-secret))
+         (access-token (plist-get oauth-config :access-token))
+         (access-secret (plist-get oauth-config :access-secret)))
+
+    ;; Build API parameters
+    (let ((api-params (append (list (cons "action" action)
+                                   (cons "format" "json"))
+                             params)))
+
+      ;; Build OAuth parameters
+      (let ((oauth-params (list (cons "oauth_consumer_key" consumer-key)
+                               (cons "oauth_nonce" (mediawiki-oauth-generate-nonce))
+                               (cons "oauth_signature_method" "HMAC-SHA1")
+                               (cons "oauth_timestamp" (format "%d" (time-to-seconds)))
+                               (cons "oauth_token" access-token)
+                               (cons "oauth_version" "1.0"))))
+
+        ;; Combine all parameters for signature
+        (let ((all-params (append oauth-params api-params)))
+          
+          ;; Generate signature
+          (let ((signature (mediawiki-oauth-generate-signature
+                           "POST" api-url all-params consumer-secret access-secret)))
+            
+            (push (cons "oauth_signature" signature) oauth-params)
+
+            ;; Make authenticated API call with OAuth Authorization header
+            (let ((auth-header (list (cons "Authorization" 
+                                          (mediawiki-oauth-build-auth-header oauth-params))))
+                  (post-data (mediawiki-oauth-build-post-data api-params)))
+
+              (mediawiki-http-request-sync api-url "POST" post-data nil auth-header))))))))
 
 ;;; OAuth Utility Functions
 
@@ -129,8 +204,8 @@
       (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
 
     ;; Set OAuth configuration
-    (setf (mediawiki-site-auth-method site) 'oauth)
-    (setf (mediawiki-site-auth-config site)
+    (setf (mediawiki-site-config-auth-method site) 'oauth)
+    (setf (mediawiki-site-config-auth-config site)
           (list :consumer-key consumer-key
                 :consumer-secret consumer-secret))
 
@@ -146,8 +221,8 @@ This is for when you already have all OAuth credentials from the OAuth provider.
       (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
 
     ;; Set OAuth configuration with all tokens
-    (setf (mediawiki-site-auth-method site) 'oauth)
-    (setf (mediawiki-site-auth-config site)
+    (setf (mediawiki-site-config-auth-method site) 'oauth)
+    (setf (mediawiki-site-config-auth-config site)
           (list :consumer-key consumer-key
                 :consumer-secret consumer-secret
                 :access-token access-token
@@ -163,11 +238,11 @@ This is for when you already have all OAuth credentials from the OAuth provider.
     (unless site
       (error "Site %s not found" sitename))
 
-    (when (eq (mediawiki-site-auth-method site) 'oauth)
-      (let ((oauth-config (mediawiki-site-auth-config site)))
+    (when (eq (mediawiki-site-config-auth-method site) 'oauth)
+      (let ((oauth-config (mediawiki-site-config-auth-config site)))
         (when oauth-config
           ;; Remove access tokens but keep consumer credentials
-          (setf (mediawiki-site-auth-config site)
+          (setf (mediawiki-site-config-auth-config site)
                 (list :consumer-key (plist-get oauth-config :consumer-key)
                       :consumer-secret (plist-get oauth-config :consumer-secret)))
           
@@ -181,7 +256,7 @@ This is for when you already have all OAuth credentials from the OAuth provider.
 (defun mediawiki-oauth-refresh-tokens (sitename)
   "Refresh OAuth tokens for SITENAME by verifying current tokens."
   (let* ((site (mediawiki-get-site sitename))
-         (oauth-config (mediawiki-site-auth-config site)))
+         (oauth-config (mediawiki-site-config-auth-config site)))
 
     (unless oauth-config
       (error "No OAuth configuration found for %s" sitename))

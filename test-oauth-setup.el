@@ -13,7 +13,7 @@
   (message "Testing OAuth setup functionality...")
   
   ;; Create a test site
-  (let ((test-site (make-mediawiki-site
+  (let ((test-site (make-mediawiki-site-config
                     :name "TestWiki"
                     :url "https://test.wiki.example/"
                     :api-url "https://test.wiki.example/w/api.php"
@@ -32,20 +32,20 @@
           
           ;; Verify configuration was set
           (let ((site (mediawiki-get-site "TestWiki")))
-            (if (and (eq (mediawiki-site-auth-method site) 'oauth)
-                     (equal (plist-get (mediawiki-site-auth-config site) :consumer-key) "test-consumer-key")
-                     (equal (plist-get (mediawiki-site-auth-config site) :consumer-secret) "test-consumer-secret"))
+            (if (and (eq (mediawiki-site-config-auth-method site) 'oauth)
+                     (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-key) "test-consumer-key")
+                     (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-secret) "test-consumer-secret"))
                 (message "✓ OAuth setup successful")
               (error "OAuth configuration not set correctly")))
           
           ;; Test OAuth reset
           (mediawiki-oauth-reset "TestWiki")
           (let ((site (mediawiki-get-site "TestWiki")))
-            (if (and (eq (mediawiki-site-auth-method site) 'oauth)
-                     (equal (plist-get (mediawiki-site-auth-config site) :consumer-key) "test-consumer-key")
-                     (equal (plist-get (mediawiki-site-auth-config site) :consumer-secret) "test-consumer-secret")
-                     (not (plist-get (mediawiki-site-auth-config site) :access-token))
-                     (not (plist-get (mediawiki-site-auth-config site) :access-secret)))
+            (if (and (eq (mediawiki-site-config-auth-method site) 'oauth)
+                     (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-key) "test-consumer-key")
+                     (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-secret) "test-consumer-secret")
+                     (not (plist-get (mediawiki-site-config-auth-config site) :access-token))
+                     (not (plist-get (mediawiki-site-config-auth-config site) :access-secret)))
                 (message "✓ OAuth reset successful")
               (error "OAuth reset did not work correctly")))
           

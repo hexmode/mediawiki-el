@@ -62,7 +62,7 @@
 (ert-deftest test-complete-auth-source-integration ()
   "Test complete auth-source integration workflow."
   ;; Set up test site
-  (let ((test-site (make-mediawiki-site
+  (let ((test-site (make-mediawiki-site-config
                     :name "demo-wiki"
                     :url "https://demo.example.com/wiki/"
                     :api-url "https://demo.example.com/wiki/api.php"
@@ -114,7 +114,7 @@
 (ert-deftest test-auth-source-security-features ()
   "Test security features of auth-source integration."
   ;; Set up test site
-  (let ((test-site (make-mediawiki-site
+  (let ((test-site (make-mediawiki-site-config
                     :name "security-wiki"
                     :url "https://security.example.com/wiki/"
                     :api-url "https://security.example.com/wiki/api.php"

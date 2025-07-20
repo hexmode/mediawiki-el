@@ -36,9 +36,15 @@ The modernized architecture will implement a layered approach:
 
 **Interface**:
 ```elisp
-(mediawiki-http-request-async url method data callback &optional error-callback)
-(mediawiki-http-request-sync url method data)
+(mediawiki-http-request-async url method data callback &optional error-callback headers)
+(mediawiki-http-request-sync url method data &optional timeout headers)
 ```
+
+**OAuth Header Support**:
+The HTTP layer needs enhancement to support custom Authorization headers for OAuth 1.0a authentication. This includes:
+- Custom header parameter support in HTTP request functions
+- OAuth Authorization header generation and validation
+- Proper header encoding and transmission
 
 ### 2. API Communication Module (`mediawiki-api.el`)
 
@@ -108,7 +114,7 @@ The modernized architecture will implement a layered approach:
 
 ### Site Configuration
 ```elisp
-(defstruct mediawiki-site
+(defstruct mediawiki-site-config
   name                    ; Site display name
   url                     ; Base URL
   api-url                 ; API endpoint URL

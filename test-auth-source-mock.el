@@ -57,7 +57,7 @@
 (ert-deftest test-auth-source-integration-basic ()
   "Test basic auth-source integration."
   ;; Set up test site
-  (let ((test-site (make-mediawiki-site
+  (let ((test-site (make-mediawiki-site-config
                     :name "test-wiki"
                     :url "https://test.example.com/wiki/"
                     :api-url "https://test.example.com/wiki/api.php"

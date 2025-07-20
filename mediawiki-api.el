@@ -56,14 +56,66 @@ Returns parsed API response or signals an error."
     (let ((response (mediawiki-http-request-sync url "POST" data)))
       (mediawiki-api-parse-response response))))
 
+(defun mediawiki-api-call-with-token (sitename action params token-type &optional retry-count)
+  "Make API call with automatic token handling and refresh.
+Implements automatic token refresh as required by requirement 2.3.
+SITENAME, ACTION, and PARAMS are standard API call parameters.
+TOKEN-TYPE specifies the type of token needed (e.g., 'csrf', 'login').
+RETRY-COUNT is used internally for retry logic."
+  (let ((retry-count (or retry-count 0))
+        (max-retries 2))
+    
+    (when (> retry-count max-retries)
+      (error "Maximum token refresh retries exceeded for %s" sitename))
+    
+    ;; Get token (will refresh automatically if needed)
+    (let* ((token (condition-case err
+                      (progn
+                        (require 'mediawiki-session)
+                        (mediawiki-session-get-token sitename token-type))
+                    (error
+                     (mediawiki-debug-log "Failed to get %s token for %s: %s"
+                                        token-type sitename (error-message-string err))
+                     nil)))
+           ;; Add token to parameters
+           (token-param (concat token-type "token"))
+           (params-with-token (if token
+                                 (cons (cons token-param token) params)
+                               params)))
+      
+      ;; Make the API call
+      (let ((response (mediawiki-api-call-sync sitename action params-with-token)))
+        
+        ;; Check if we got a token error and should retry
+        (if (and (not (mediawiki-api-response-success response))
+                 (mediawiki-api-has-token-error-p response)
+                 (< retry-count max-retries))
+            (progn
+              (mediawiki-debug-log "Token error detected, forcing refresh and retrying (attempt %d)"
+                                 (1+ retry-count))
+              ;; Force token refresh by clearing cache
+              (mediawiki-session-clear-token sitename token-type)
+              ;; Retry the call
+              (mediawiki-api-call-with-token sitename action params token-type (1+ retry-count)))
+          
+          ;; Return the response (success or final failure)
+          response)))))
+
+(defun mediawiki-api-has-token-error-p (response)
+  "Check if RESPONSE contains a token-related error."
+  (let ((error-codes (mediawiki-api-get-all-error-codes response)))
+    (cl-some (lambda (code)
+               (member code '("badtoken" "notoken" "sessionfailure" "assertuserfailed")))
+             error-codes)))
+
 ;;; Request Building
 
 (defun mediawiki-api-make-url (sitename)
   "Build API URL for SITENAME."
   (let ((site (mediawiki-get-site sitename)))
     (if site
-        (or (mediawiki-site-api-url site)
-            (concat (mediawiki-site-url site) "api.php"))
+        (or (mediawiki-site-config-api-url site)
+            (concat (mediawiki-site-config-url site) "api.php"))
       (error "Unknown site: %s" sitename))))
 
 (defun mediawiki-api-build-request-data (action params)

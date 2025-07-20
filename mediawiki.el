@@ -223,7 +223,7 @@ This will be automatically migrated to the new site configuration format."
              (first-page (nth 4 params)))
 
         ;; Create new site structure
-        (let ((site (make-mediawiki-site
+        (let ((site (make-mediawiki-site-config
                      :name name
                      :url url
                      :username (unless (string= username "username") username)
@@ -885,7 +885,7 @@ variables it sets there will be local to that buffer."
 (defun mediawiki-logged-in-p (&optional sitename)
   "Return t if we have cookies for the SITENAME."
   (let ((urlobj (url-generic-parse-url
-                 (mediawiki-site-url (or sitename mediawiki-site)))))
+                 (mediawiki-site-config-url (or sitename mediawiki-site)))))
     (url-cookie-retrieve
      (url-host urlobj)
      (url-filename urlobj)
@@ -1092,12 +1092,12 @@ Prompt for a SUMMARY if one isn't given."
   "Fetch the user or pass for SITENAME.
 Check if it is in our site-alist using INDEX or use METHOD to get it from authinfo."
   `(let* ((arg (mediawiki-site-extract ,sitename ,index))
-          (auth (funcall ,method (mediawiki-site-url ,sitename))))
+          (auth (funcall ,method (mediawiki-site-config-url ,sitename))))
      (if (and arg (> (string-width arg) 0))
          arg
        auth)))
 
-(defun mediawiki-site-username (sitename)
+(defun mediawiki-site-config-username (sitename)
   "Get the username for a given SITENAME."
   (mediawiki-site-user-pass sitename 2 'url-user-for-url))
 
@@ -1136,7 +1136,7 @@ Store cookies for future authentication."
                                         ; logged in
 
   ;; Possibly save info once we have it, eh?
-  (lexical-let* ((user (or (mediawiki-site-username sitename)
+  (lexical-let* ((user (or (mediawiki-site-config-username sitename)
                            username
                            (read-string "Username: ")))
                  (pass (or (mediawiki-site-password sitename)

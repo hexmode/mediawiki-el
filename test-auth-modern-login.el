@@ -29,7 +29,7 @@
 (defun test-auth-modern-setup ()
   "Set up test environment for modern login tests."
   ;; Create a test site
-  (let ((site (make-mediawiki-site
+  (let ((site (make-mediawiki-site-config
                :name test-auth-modern-sitename
                :url "https://test.example.com"
                :api-url "https://test.example.com/api.php")))

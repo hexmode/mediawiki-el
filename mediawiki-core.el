@@ -77,7 +77,7 @@ per-session later."
 
 ;;; Core Data Structures
 
-(cl-defstruct mediawiki-site
+(cl-defstruct mediawiki-site-config
   "Structure representing a MediaWiki site configuration."
   name                    ; Site display name
   url                     ; Base URL
@@ -128,7 +128,7 @@ Each entry is (SITE-NAME . MEDIAWIKI-SITE-STRUCT).")
   "Get the base URL for SITENAME."
   (let ((site (cdr (assoc sitename mediawiki-site-alist))))
     (if site
-        (mediawiki-site-url site)
+        (mediawiki-site-config-url site)
       (error "Unknown site: %s" sitename))))
 
 (defun mediawiki-get-site (sitename)
@@ -137,7 +137,7 @@ Each entry is (SITE-NAME . MEDIAWIKI-SITE-STRUCT).")
 
 (defun mediawiki-add-site (site)
   "Add or update a SITE in the site alist."
-  (let ((name (mediawiki-site-name site)))
+  (let ((name (mediawiki-site-config-name site)))
     (setq mediawiki-site-alist
           (cons (cons name site)
                 (assoc-delete-all name mediawiki-site-alist)))))

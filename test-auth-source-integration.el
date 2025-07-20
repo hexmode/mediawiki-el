@@ -17,28 +17,28 @@
 
 ;;; Test Setup
 
-(defvar test-mediawiki-site-name "test-wiki"
+(defvar test-mediawiki-site-config-name "test-wiki"
   "Test site name for auth-source integration tests.")
 
-(defvar test-mediawiki-site-url "https://test.example.com/wiki/"
+(defvar test-mediawiki-site-config-url "https://test.example.com/wiki/"
   "Test site URL for auth-source integration tests.")
 
 (defun test-mediawiki-setup-test-site ()
   "Set up a test MediaWiki site for testing."
-  (let ((test-site (make-mediawiki-site
-                    :name test-mediawiki-site-name
-                    :url test-mediawiki-site-url
-                    :api-url (concat test-mediawiki-site-url "api.php")
+  (let ((test-site (make-mediawiki-site-config
+                    :name test-mediawiki-site-config-name
+                    :url test-mediawiki-site-config-url
+                    :api-url (concat test-mediawiki-site-config-url "api.php")
                     :username "testuser"
                     :auth-method 'basic)))
     (mediawiki-add-site test-site)))
 
 (defun test-mediawiki-cleanup-test-site ()
   "Clean up test site and cached credentials."
-  (mediawiki-auth-clear-cached-credentials test-mediawiki-site-name)
-  (mediawiki-remove-session test-mediawiki-site-name)
+  (mediawiki-auth-clear-cached-credentials test-mediawiki-site-config-name)
+  (mediawiki-remove-session test-mediawiki-site-config-name)
   (setq mediawiki-site-alist
-        (assoc-delete-all test-mediawiki-site-name mediawiki-site-alist)))
+        (assoc-delete-all test-mediawiki-site-config-name mediawiki-site-alist)))
 
 ;;; Credential Cache Tests
 
@@ -51,7 +51,7 @@
   "Test credential caching functionality."
   (test-mediawiki-setup-test-site)
   (unwind-protect
-      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-name))
+      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name))
             (test-credentials '(:username "testuser" :password "testpass")))
         
         ;; Test caching credentials
@@ -76,7 +76,7 @@
   "Test credential cache cleanup functionality."
   (test-mediawiki-setup-test-site)
   (unwind-protect
-      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-name)))
+      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name)))
         
         ;; Add expired entry
         (let ((expired-entry (list :username "testuser" 
@@ -159,27 +159,27 @@
   "Test credential invalidation functionality."
   (test-mediawiki-setup-test-site)
   (unwind-protect
-      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-name))
+      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name))
             (test-credentials '(:username "testuser" :password "testpass")))
         
         ;; Cache credentials and create session
         (mediawiki-auth-cache-credentials cache-key test-credentials)
         (let ((session (make-mediawiki-session
-                        :site-name test-mediawiki-site-name
+                        :site-name test-mediawiki-site-config-name
                         :tokens (make-hash-table :test 'equal)
                         :login-time (current-time))))
-          (mediawiki-set-session test-mediawiki-site-name session))
+          (mediawiki-set-session test-mediawiki-site-config-name session))
         
         ;; Verify credentials and session exist
         (should (mediawiki-auth-get-cached-credentials cache-key))
-        (should (mediawiki-get-session test-mediawiki-site-name))
+        (should (mediawiki-get-session test-mediawiki-site-config-name))
         
         ;; Invalidate credentials
-        (mediawiki-auth-invalidate-credentials test-mediawiki-site-name)
+        (mediawiki-auth-invalidate-credentials test-mediawiki-site-config-name)
         
         ;; Verify credentials and session are cleared
         (should-not (mediawiki-auth-get-cached-credentials cache-key))
-        (should-not (mediawiki-get-session test-mediawiki-site-name)))
+        (should-not (mediawiki-get-session test-mediawiki-site-config-name)))
     
     (test-mediawiki-cleanup-test-site)))
 
@@ -187,16 +187,16 @@
   "Test that logout clears cached credentials."
   (test-mediawiki-setup-test-site)
   (unwind-protect
-      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-name))
+      (let ((cache-key (mediawiki-auth-make-cache-key test-mediawiki-site-config-name))
             (test-credentials '(:username "testuser" :password "testpass")))
         
         ;; Cache credentials and create session
         (mediawiki-auth-cache-credentials cache-key test-credentials)
         (let ((session (make-mediawiki-session
-                        :site-name test-mediawiki-site-name
+                        :site-name test-mediawiki-site-config-name
                         :tokens (make-hash-table :test 'equal)
                         :login-time (current-time))))
-          (mediawiki-set-session test-mediawiki-site-name session))
+          (mediawiki-set-session test-mediawiki-site-config-name session))
         
         ;; Verify credentials exist
         (should (mediawiki-auth-get-cached-credentials cache-key))
@@ -204,7 +204,7 @@
         ;; Mock the API call to avoid actual network request
         (cl-letf (((symbol-function 'mediawiki-api-call-sync)
                    (lambda (&rest _args) nil)))
-          (mediawiki-auth-logout test-mediawiki-site-name))
+          (mediawiki-auth-logout test-mediawiki-site-config-name))
         
         ;; Verify credentials are cleared
         (should-not (mediawiki-auth-get-cached-credentials cache-key)))
@@ -225,7 +225,7 @@
                   ((symbol-function 'read-passwd)
                    (lambda (_prompt) "manual-pass")))
           
-          (let ((credentials (mediawiki-auth-get-credentials test-mediawiki-site-name)))
+          (let ((credentials (mediawiki-auth-get-credentials test-mediawiki-site-config-name)))
             (should (string= (plist-get credentials :username) "manual-user"))
             (should (string= (plist-get credentials :password) "manual-pass")))))
     
