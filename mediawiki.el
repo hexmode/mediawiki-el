@@ -10,7 +10,7 @@
 ;; Package-Requires: ((emacs "26.1") (web "0.5.2"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2025-07-18 00:25:12 mah>
+;; Last Modified: <2025-07-19 20:54:00 mah>
 
 (defconst mediawiki-version "2.4.1"
   "Current version of mediawiki.el.")
@@ -167,7 +167,7 @@
   (require 'cl))
 
 (defgroup mediawiki nil
-  "A mode for editting pages on MediaWiki sites."
+  "A mode for editing pages on MediaWiki sites."
   :tag "MediaWiki"
   :group 'applications)
 
@@ -221,7 +221,7 @@ This will be automatically migrated to the new site configuration format."
              (password (nth 2 params))
              (domain (nth 3 params))
              (first-page (nth 4 params)))
-        
+
         ;; Create new site structure
         (let ((site (make-mediawiki-site
                      :name name
@@ -231,12 +231,12 @@ This will be automatically migrated to the new site configuration format."
                      :auth-config (when domain (list :domain domain))
                      :capabilities nil
                      :session-info nil)))
-          
+
           (mediawiki-add-site site))))
-    
+
     ;; Clear legacy configuration after migration
     (setq mediawiki-legacy-site-alist nil)
-    (message "Migrated %d sites to new configuration format" 
+    (message "Migrated %d sites to new configuration format"
              (length mediawiki-site-alist))))
 
 ;; Migrate on load
@@ -684,7 +684,7 @@ Right now, this only means replacing \"_\" with \" \"."
 	    (url-recreate-url my-parsed))))
 
 (defun mediawiki-raise (result type notif)
-  "Show a TYPE of information from the RESULT to the user using NOTIF"
+  "Show a TYPE of information from the RESULT to the user using NOTIF."
   (when (assq type (cddr result))
     (mapc (lambda (err)
             (let ((label (or (cdr (assq 'code err))
@@ -923,7 +923,7 @@ fetch.  LIMIT is the upper bound on the number of results to give."
                (cons "rvprop" (mediawiki-api-param props))
                (cons "rvslots" "main")))))
     (if (eq t qresult)
-        (error "No results for revision query.")
+        (error "No results for revision query")
       (cddr qresult))))
 
 (defun mediawiki-page-get-title (page)
@@ -972,7 +972,7 @@ return the whole revision structure."
    (t nil)))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
-  "Given PAGELIST, extract the informaton for TITLE."
+  "Given PAGELIST, extract the information for TITLE."
   (let ((pl (cddr (assq 'pages pagelist)))
         page current)
     (while (and (not page)
@@ -1089,7 +1089,8 @@ Prompt for a SUMMARY if one isn't given."
 
 
 (defmacro mediawiki-site-user-pass (sitename index method)
-  "Fetch the user or pass if provided, or use authinfo if not."
+  "Fetch the user or pass for SITENAME.
+Check if it is in our site-alist using INDEX or use METHOD to get it from authinfo."
   `(let* ((arg (mediawiki-site-extract ,sitename ,index))
           (auth (funcall ,method (mediawiki-site-url ,sitename))))
      (if (and arg (> (string-width arg) 0))
@@ -1174,10 +1175,11 @@ Store cookies for future authentication."
   (setq mediawiki-site nil))
 
 (defun mediawiki-save-page (sitename title summary content &optional trynum)
-  "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT."
+  "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT.
+TRYNUM is used if this command is being retried."
   ;; FIXME error checking, conflicts!
   (when (and trynum (< trynum 0))
-    (error "Too many tries."))
+    (error "Too many tries"))
   (let ((trynum (or trynum 3))
         (token (mediawiki-site-get-token sitename "csrf")))
     (condition-case err
@@ -1200,8 +1202,8 @@ Store cookies for future authentication."
   (set-buffer-modified-p nil))
 
 (defun mediawiki-retry-save-page (sitename title summary content trynum)
-  "Refresh the edit token and then try to save the current page using TITLE,
-SUMMARY, and CONTENT on SITENAME."
+  "Refresh the edit token and then try to save the current page.
+Use TITLE, SUMMARY, and CONTENT on SITENAME."
   (let ((try (if trynum
                  (- trynum 1)
                3)))
@@ -1362,7 +1364,7 @@ entries, etc."
 After finishing the editing: either use `mediawiki-draft-buffer'
 to send the data into the `mediawiki-draft-data-file'.  Check the
 variable mediawiki-draft-send-archive."
-  (interactive)
+   (interactive)
   (mediawiki-reply-at-point-simple)
   (beginning-of-line 1)
   (kill-line nil)
@@ -1640,7 +1642,7 @@ as does mediawiki-unfill-region."
        "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
 (defun mediawiki-hardlines ()
-  "Set `use-hard-newlines' to NIL."
+  "Set variable `use-hard-newlines' to NIL."
   (interactive)
   (setq use-hard-newlines nil))
 
@@ -1991,13 +1993,12 @@ latter retrieval, and possible indexing.
     'mediawiki-open-page-at-point))
 
 (define-derived-mode mediawiki-mode text-mode "MW"
-  "Major mode for editing articles written in the markup language
-used by Mediawiki.
+  "Major mode for editing articles written in the markup language used by Mediawiki.
 
-Wikipedia articles are usually unfilled: newline characters are not
-used for breaking paragraphs into lines. Unfortunately, Emacs does not
-handle word wrapping yet. As a workaround, mediawiki-mode turns on
-longlines-mode automatically. In case something goes wrong, the
+Wikipedia articles are usually unfilled: newline characters are not used
+for breaking paragraphs into lines.  Unfortunately, Emacs does not
+handle word wrapping yet.  As a workaround, mediawiki-mode turns on
+longlines-mode automatically.  In case something goes wrong, the
 following commands may come in handy:
 
 \\[mediawiki-fill-article] fills the buffer.
