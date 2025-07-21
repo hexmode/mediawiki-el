@@ -10,7 +10,7 @@
 ;; Package-Requires: ((emacs "26.1") (web "0.5.2"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2025-07-19 20:54:00 mah>
+;; Last Modified: <2025-07-21 01:43:27 mah>
 
 (defconst mediawiki-version "2.4.1"
   "Current version of mediawiki.el.")
@@ -155,6 +155,7 @@
 (require 'mediawiki-api)
 (require 'mediawiki-auth)
 (require 'mediawiki-session)
+(require 'mediawiki-page)
 
 ;; Legacy dependencies for backward compatibility
 (require 'mml)
@@ -811,6 +812,7 @@ ACTION is the API action.  ARGS is a list of arguments."
       (mediawiki-mode)
       (setq mediawiki-site sitename)
       (set-buffer-file-coding-system 'utf-8)
+      (require 'mediawiki-page)
       (insert (or (mediawiki-get sitename pagetitle) ""))
 
       (set-buffer-modified-p nil)
@@ -991,7 +993,7 @@ return the whole revision structure."
                     (list "ids" "timestamp" "flags" "comment" "user" "content"))))
     (mediawiki-pagelist-find-page pagelist title)))
 
-(defun mediawiki-get (sitename title)
+(defun mediawiki-get-old (sitename title)
   "Query SITENAME for the content of TITLE."
   (let ((page (mediawiki-api-query-title sitename title)))
     (mediawiki-save-metadata sitename page)
@@ -2099,6 +2101,32 @@ Some simple editing commands.
 ;; (define-derived-mode mw-pagelist-mode special-mode "MW-PageList")
 
 (provide 'mediawiki)
+
+;; Updated implementation of mediawiki-get
+(defun mediawiki-get (sitename title)
+  "Query SITENAME for the content of TITLE.
+Uses the modern page retrieval functionality."
+  (require 'mediawiki-page)
+  (let ((page-data (mediawiki-page-get sitename title)))
+    (when page-data
+      ;; Save metadata for backward compatibility
+      (mediawiki-save-metadata-from-page-data sitename page-data)
+      ;; Return the content
+      (mediawiki-page-data-content page-data))))
+
+(defun mediawiki-save-metadata-from-page-data (sitename page-data)
+  "Set per-buffer variables for all the SITENAME data for PAGE-DATA.
+This function provides backward compatibility with the old metadata handling."
+  (when page-data
+    (setq mediawiki-site sitename)
+    (setq mediawiki-page-title (mediawiki-page-data-title page-data))
+
+    ;; Extract edit token from metadata if available
+    (let ((metadata (mediawiki-page-data-metadata page-data)))
+      (when metadata
+        (let ((edit-tokens (cdr (assq 'edittoken metadata))))
+          (when edit-tokens
+            (setq mediawiki-edittoken edit-tokens)))))))
 
 ;; Local Variables:
 ;; time-stamp-pattern: "20/^;; Last Modified: <%%>$"
