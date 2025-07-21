@@ -142,6 +142,11 @@ Each entry is (SITE-NAME . MEDIAWIKI-SITE-STRUCT).")
           (cons (cons name site)
                 (assoc-delete-all name mediawiki-site-alist)))))
 
+(defun mediawiki-remove-site (site)
+  "Add or update a SITE in the site alist."
+  (setq mediawiki-site-alist
+        (assoc-delete-all site mediawiki-site-alist)))
+
 (defun mediawiki-get-session (sitename)
   "Get the session for SITENAME."
   (gethash sitename mediawiki-sessions))
