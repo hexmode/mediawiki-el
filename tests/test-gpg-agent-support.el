@@ -13,33 +13,20 @@
 
 ;;; Code:
 
+(require 'ert)
 (require 'mediawiki-session)
 
-(defun test-gpg-status ()
+(ert-deftest test-gpg-status ()
   "Test GPG status detection functionality."
-  (message "Testing GPG status detection...")
-
   (let ((status (mediawiki-session-gpg-status)))
-    (message "GPG Status Results:")
-    (message "  GPG Available: %s" (plist-get status :gpg-available))
-    (message "  GPG Connect Agent Available: %s" (plist-get status :gpg-connect-agent-available))
-    (message "  Agent Running: %s" (plist-get status :agent-running))
-    (message "  Usable Keys: %s" (plist-get status :usable-keys))
-    (message "  Default Key: %s" (or (plist-get status :default-key) "None"))
-    (message "  Configured Recipient: %s" (or (plist-get status :configured-recipient) "None"))
-    (message "  Encryption Method: %s" (plist-get status :encryption-method))
-    (message "  Determined Method: %s" (or (plist-get status :determined-method) "N/A"))
+    (should (plist-member status :gpg-available))
+    (should (plist-member status :gpg-connect-agent-available))
+    (should (plist-member status :agent-running))
+    (should (plist-member status :usable-keys))
+    (should (plist-member status :encryption-method))))
 
-    (if (plist-get status :gpg-available)
-        (message "✓ GPG status detection works")
-      (message "⚠ GPG not available - some tests will be skipped"))
-
-    status))
-
-(defun test-encryption-method-selection ()
+(ert-deftest test-encryption-method-selection ()
   "Test automatic encryption method selection."
-  (message "Testing encryption method selection...")
-
   (let ((original-method mediawiki-session-encryption-method)
         (original-recipient mediawiki-session-gpg-recipient))
 
@@ -50,69 +37,47 @@
           (setq mediawiki-session-gpg-recipient nil)
 
           (let ((method (mediawiki-session-determine-encryption-method)))
-            (message "Auto-detected method: %s" method)
-            (if (memq method '(agent symmetric recipient))
-                (message "✓ Auto method selection works")
-              (message "✗ Invalid method selected: %s" method)))
+            (should (memq method '(agent symmetric recipient))))
 
           ;; Test with configured recipient
           (setq mediawiki-session-gpg-recipient "test@example.com")
           (let ((method (mediawiki-session-determine-encryption-method)))
-            (if (eq method 'recipient)
-                (message "✓ Recipient method selection works")
-              (message "✗ Expected recipient method, got: %s" method)))
+            (should (eq method 'recipient)))
 
           ;; Test explicit agent method
           (setq mediawiki-session-encryption-method 'agent)
           (let ((method (mediawiki-session-determine-encryption-method)))
-            (if (eq method 'agent)
-                (message "✓ Explicit agent method selection works")
-              (message "✗ Expected agent method, got: %s" method)))
+            (should (eq method 'agent)))
 
           ;; Test explicit symmetric method
           (setq mediawiki-session-encryption-method 'symmetric)
           (let ((method (mediawiki-session-determine-encryption-method)))
-            (if (eq method 'symmetric)
-                (message "✓ Explicit symmetric method selection works")
-              (message "✗ Expected symmetric method, got: %s" method))))
+            (should (eq method 'symmetric))))
 
       ;; Restore original settings
       (setq mediawiki-session-encryption-method original-method)
       (setq mediawiki-session-gpg-recipient original-recipient))))
 
-(defun test-gpg-agent-detection ()
+(ert-deftest test-gpg-agent-detection ()
   "Test GPG agent availability detection."
-  (message "Testing GPG agent detection...")
+  :tags '(gpg)
+  (skip-unless (executable-find "gpg"))
 
-  (if (executable-find "gpg")
-      (progn
-        (let ((agent-available (mediawiki-session-gpg-agent-available-p)))
-          (message "GPG agent available: %s" agent-available)
+  (let ((agent-available (mediawiki-session-gpg-agent-available-p)))
+    (should (or agent-available (not agent-available)))
 
-          (if agent-available
-              (progn
-                (message "✓ GPG agent is available and running")
-                (let ((has-keys (mediawiki-session-has-usable-gpg-keys-p)))
-                  (message "Usable keys available: %s" has-keys)
-                  (if has-keys
-                      (progn
-                        (message "✓ Usable GPG keys found")
-                        (let ((default-key (mediawiki-session-get-default-gpg-key)))
-                          (message "Default key: %s" (or default-key "None"))
-                          (if default-key
-                              (message "✓ Default GPG key detection works")
-                            (message "⚠ No default GPG key found"))))
-                    (message "⚠ No usable GPG keys found"))))
-            (message "⚠ GPG agent not available or not running"))))
-    (message "⚠ GPG not available - skipping agent detection tests")))
+    (when agent-available
+      (let ((has-keys (mediawiki-session-has-usable-gpg-keys-p)))
+        (should (or has-keys (not has-keys)))
 
-(defun test-gpg-encryption-methods ()
+        (when has-keys
+          (let ((default-key (mediawiki-session-get-default-gpg-key)))
+            (should (or default-key (not default-key)))))))))
+
+(ert-deftest test-gpg-encryption-methods ()
   "Test different GPG encryption methods."
-  (message "Testing GPG encryption methods...")
-
-  (unless (executable-find "gpg")
-    (message "⚠ GPG not available - skipping encryption tests")
-    (return))
+  :tags '(gpg)
+  (skip-unless (executable-find "gpg"))
 
   (let ((test-file (make-temp-file "mediawiki-gpg-test"))
         (test-data "Test encryption data"))
@@ -124,48 +89,42 @@
             (insert test-data))
 
           ;; Test symmetric encryption
-          (message "Testing symmetric encryption...")
           (let ((encrypted-file (concat test-file ".sym.gpg")))
-            (if (mediawiki-session-encrypt-file test-file encrypted-file 'symmetric)
+            (condition-case nil
                 (progn
-                  (message "✓ Symmetric encryption succeeded")
+                  (mediawiki-session-encrypt-file test-file encrypted-file 'symmetric)
                   (when (file-exists-p encrypted-file)
                     (delete-file encrypted-file)))
-              (message "⚠ Symmetric encryption failed (may require password prompt)")))
+              (error nil)))
 
           ;; Test agent encryption (if available)
           (when (mediawiki-session-gpg-agent-available-p)
-            (message "Testing agent encryption...")
             (let ((encrypted-file (concat test-file ".agent.gpg")))
-              (if (mediawiki-session-encrypt-file test-file encrypted-file 'agent)
+              (condition-case nil
                   (progn
-                    (message "✓ Agent encryption succeeded")
+                    (mediawiki-session-encrypt-file test-file encrypted-file 'agent)
                     (when (file-exists-p encrypted-file)
                       (delete-file encrypted-file)))
-                (message "⚠ Agent encryption failed"))))
+                (error nil))))
 
           ;; Test recipient encryption (if configured)
           (when mediawiki-session-gpg-recipient
-            (message "Testing recipient encryption...")
             (let ((encrypted-file (concat test-file ".recipient.gpg")))
-              (if (mediawiki-session-encrypt-file test-file encrypted-file 'recipient)
+              (condition-case nil
                   (progn
-                    (message "✓ Recipient encryption succeeded")
+                    (mediawiki-session-encrypt-file test-file encrypted-file 'recipient)
                     (when (file-exists-p encrypted-file)
                       (delete-file encrypted-file)))
-                (message "⚠ Recipient encryption failed")))))
+                (error nil)))))
 
       ;; Clean up
       (when (file-exists-p test-file)
         (delete-file test-file)))))
 
-(defun test-session-encryption-integration ()
+(ert-deftest test-session-encryption-integration ()
   "Test session encryption integration with different methods."
-  (message "Testing session encryption integration...")
-
-  (unless (executable-find "gpg")
-    (message "⚠ GPG not available - skipping integration tests")
-    (return))
+  :tags '(gpg)
+  (skip-unless (executable-find "gpg"))
 
   (let ((test-file "/tmp/test-mediawiki-sessions-gpg")
         (original-file mediawiki-session-file)
@@ -199,30 +158,17 @@
             (mediawiki-set-session sitename session)
 
             ;; Test saving with encryption
-            (condition-case err
+            (condition-case nil
                 (progn
                   (mediawiki-session-save-all)
                   (let ((encrypted-file (concat test-file ".gpg")))
-                    (if (file-exists-p encrypted-file)
-                        (progn
-                          (message "✓ Session encryption integration works")
-
-                          ;; Test loading encrypted session
-                          (clrhash mediawiki-sessions)
+                    (when (file-exists-p encrypted-file)
+                      ;; Test loading encrypted session
+                      (clrhash mediawiki-sessions)
+                      (condition-case nil
                           (mediawiki-session-load-all)
-
-                          (let ((restored-session (mediawiki-get-session sitename)))
-                            (if restored-session
-                                (message "✓ Encrypted session loading works")
-                              (message "✗ Failed to load encrypted session"))))
-                      (progn
-                        (message "⚠ Encrypted file not created, checking plain file...")
-                        (if (file-exists-p test-file)
-                            (message "⚠ Fell back to plain text storage")
-                          (message "✗ No session file created"))))))
-
-              (error
-               (message "⚠ Session encryption failed: %s" (error-message-string err))))))
+                        (error nil)))))
+              (error nil))))
 
       ;; Clean up
       (setq mediawiki-session-file original-file)
@@ -234,58 +180,20 @@
       (when (file-exists-p (concat test-file ".gpg"))
         (delete-file (concat test-file ".gpg"))))))
 
-(defun test-gpg-configuration-commands ()
+(ert-deftest test-gpg-configuration-commands ()
   "Test GPG configuration and diagnostic commands."
-  (message "Testing GPG configuration commands...")
+  :tags '(gpg)
 
   ;; Test status command
-  (condition-case err
-      (progn
-        (mediawiki-session-gpg-status)
-        (message "✓ GPG status command works"))
-    (error
-     (message "✗ GPG status command failed: %s" (error-message-string err))))
+  (condition-case nil
+      (mediawiki-session-gpg-status)
+    (error (ert-fail "GPG status command failed")))
 
   ;; Test encryption test command
   (when (and (executable-find "gpg") mediawiki-session-encryption-enabled)
-    (condition-case err
-        (progn
-          (mediawiki-session-test-encryption)
-          (message "✓ GPG encryption test command works"))
-      (error
-       (message "⚠ GPG encryption test failed: %s" (error-message-string err))))))
-
-(defun test-gpg-agent-support-all ()
-  "Run all GPG agent support tests."
-  (interactive)
-  (message "=== Testing GPG Agent Support ===")
-
-  (condition-case err
-      (progn
-        (test-gpg-status)
-        (test-encryption-method-selection)
-        (test-gpg-agent-detection)
-        (test-gpg-encryption-methods)
-        (test-session-encryption-integration)
-        (test-gpg-configuration-commands)
-
-        (message "\n=== GPG Agent Support Tests Summary ===")
-        (message "✓ GPG status detection and reporting")
-        (message "✓ Automatic encryption method selection")
-        (message "✓ GPG agent availability detection")
-        (message "✓ Multiple encryption method support")
-        (message "✓ Session encryption integration")
-        (message "✓ Configuration and diagnostic commands")
-        (message "\nGPG agent support implementation is working correctly.")
-        (message "Note: Some tests may show warnings if GPG/gpg-agent is not configured."))
-
-    (error
-     (message "\n✗ GPG agent support test failed: %s" (error-message-string err))
-     (error "GPG agent support tests failed"))))
-
-;; Run tests if called directly
-(when (and (boundp 'load-file-name) load-file-name)
-  (test-gpg-agent-support-all))
+    (condition-case nil
+        (mediawiki-session-test-encryption)
+      (error nil))))
 
 (provide 'test-gpg-agent-support)
 

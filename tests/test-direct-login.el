@@ -1,118 +1,221 @@
 ;;; test-direct-login.el --- Direct login test with known credentials -*- lexical-binding: t; -*-
 
-;; Test script to directly test login with your known bot credentials
+;;; Commentary:
+;; Test script to directly test login with bot credentials using ERT framework
 
+;;; Code:
+
+(require 'ert)
 (require 'mediawiki-core)
 (require 'mediawiki-http)
 (require 'mediawiki-api)
 (require 'mediawiki-auth)
 
-(defun test-direct-bot-login ()
-  "Test login with direct bot credentials."
-  (interactive)
-  
-  ;; Enable debug logging
-  (setq mediawiki-debug t)
-  
-  ;; Set up the site
+(defvar test-direct-login-site-name "test-wiki"
+  "Test site name for direct login tests.")
+
+(defvar test-direct-login-credentials nil
+  "Test credentials for direct login tests.")
+
+(ert-deftest test-direct-login-site-setup ()
+  "Test setting up a site for direct login testing."
   (let ((site (make-mediawiki-site-config
-               :name "my-wiki"
+               :name test-direct-login-site-name
                :url "https://wiki.nichework.com/"
                :api-url "https://wiki.nichework.com/w/api.php"
                :username "MarkAHershberger@emacs")))
-    (mediawiki-add-site site))
-  
-  ;; Get the bot password from user
-  (let ((bot-password (read-passwd "Enter bot password for MarkAHershberger@emacs: ")))
     
-    ;; Override the credential function to use our known credentials
+    (mediawiki-add-site site)
+    
+    (unwind-protect
+        (let ((retrieved-site (mediawiki-get-site test-direct-login-site-name)))
+          (should retrieved-site)
+          (should (string= (mediawiki-site-config-url retrieved-site) "https://wiki.nichework.com/"))
+          (should (string= (mediawiki-site-config-api-url retrieved-site) "https://wiki.nichework.com/w/api.php"))
+          (should (string= (mediawiki-site-config-username retrieved-site) "MarkAHershberger@emacs")))
+      
+      ;; Cleanup
+      (mediawiki-remove-site test-direct-login-site-name))))
+
+(ert-deftest test-credential-override-mechanism ()
+  "Test the credential override mechanism for testing."
+  (let ((test-username "test-user")
+        (test-password "test-password"))
+    
+    ;; Override the credential function
     (cl-letf (((symbol-function 'mediawiki-auth-get-credentials)
                (lambda (_sitename) 
-                 (list :username "MarkAHershberger@emacs"
-                       :password bot-password))))
+                 (list :username test-username
+                       :password test-password))))
       
-      (message "Attempting login with bot credentials...")
-      
-      (condition-case err
-          (progn
-            (mediawiki-auth-basic-login "my-wiki")
-            
-            ;; Check if session was created
-            (let ((session (mediawiki-get-session "my-wiki")))
-              (if session
-                  (let ((user-info (mediawiki-session-user-info session)))
-                    (message "✓ Login successful!")
-                    (message "  User: %s" (plist-get user-info :username))
-                    (message "  User ID: %s" (plist-get user-info :userid))
-                    (message "  Login time: %s" (mediawiki-session-login-time session)))
-                (message "✗ Login appeared to succeed but no session was created"))))
-        
-        (error
-         (message "✗ Login failed: %s" (error-message-string err))
-         (message "Check the *MediaWiki Debug* buffer for detailed logs"))))))
+      (let ((credentials (mediawiki-auth-get-credentials "any-site")))
+        (should (equal (plist-get credentials :username) test-username))
+        (should (equal (plist-get credentials :password) test-password))))))
 
-(defun test-manual-api-login ()
-  "Test the login API calls manually step by step."
+(ert-deftest test-login-token-extraction ()
+  "Test login token extraction from API response."
+  (let ((mock-response (make-mediawiki-api-response
+                        :success t
+                        :data '((query . ((tokens . ((logintoken . "test-login-token-123")))))))))
+    
+    (let ((token (mediawiki-auth-extract-token mock-response "login")))
+      (should (string= token "test-login-token-123")))))
+
+(ert-deftest test-login-api-parameters ()
+  "Test construction of login API parameters."
+  (let ((username "test-user")
+        (password "test-pass")
+        (token "test-token"))
+    
+    (let ((params (list (cons "lgname" username)
+                       (cons "lgpassword" password)
+                       (cons "lgtoken" token))))
+      
+      (should (string= (cdr (assoc "lgname" params)) username))
+      (should (string= (cdr (assoc "lgpassword" params)) password))
+      (should (string= (cdr (assoc "lgtoken" params)) token)))))
+
+(ert-deftest test-session-validation ()
+  "Test session validation after login."
+  (let ((mock-session (make-mediawiki-session
+                       :site-name test-direct-login-site-name
+                       :user-info '(:username "test-user" :userid 123)
+                       :login-time (current-time))))
+    
+    (should (mediawiki-session-p mock-session))
+    (should (string= (mediawiki-session-site-name mock-session) test-direct-login-site-name))
+    (should (equal (plist-get (mediawiki-session-user-info mock-session) :username) "test-user"))
+    (should (equal (plist-get (mediawiki-session-user-info mock-session) :userid) 123))))
+
+(ert-deftest test-login-response-parsing ()
+  "Test parsing of login API response."
+  (let ((success-response (make-mediawiki-api-response
+                          :success t
+                          :data '((login . ((result . "Success")
+                                           (lguserid . 123)
+                                           (lgusername . "test-user"))))))
+        (failure-response (make-mediawiki-api-response
+                          :success nil
+                          :errors '((:code "WrongPass" :info "Incorrect password")))))
+    
+    ;; Test successful response
+    (should (mediawiki-api-response-success success-response))
+    (let* ((data (mediawiki-api-response-data success-response))
+           (login-data (cdr (assq 'login data)))
+           (result (cdr (assq 'result login-data))))
+      (should (string= result "Success")))
+    
+    ;; Test failure response
+    (should (not (mediawiki-api-response-success failure-response)))
+    (should (mediawiki-api-response-errors failure-response))))
+
+;; Interactive test functions for manual testing
+(defun test-direct-bot-login-interactive ()
+  "Interactive test for direct bot login (for manual testing)."
   (interactive)
-  
-  ;; Enable debug logging
-  (setq mediawiki-debug t)
-  
-  ;; Set up the site
-  (let ((site (make-mediawiki-site-config
-               :name "my-wiki"
-               :url "https://wiki.nichework.com/"
-               :api-url "https://wiki.nichework.com/w/api.php")))
-    (mediawiki-add-site site))
-  
-  (let ((username "MarkAHershberger@emacs")
-        (password (read-passwd "Enter bot password: ")))
+  (let ((old-debug mediawiki-debug))
+    (setq mediawiki-debug t)
     
-    (message "Step 1: Getting login token...")
-    
-    ;; Step 1: Get login token
-    (let ((token-response (mediawiki-api-call-sync
-                          "my-wiki" "query"
-                          (list (cons "meta" "tokens")
-                                (cons "type" "login")))))
+    (unwind-protect
+        (let ((site (make-mediawiki-site-config
+                     :name test-direct-login-site-name
+                     :url "https://wiki.nichework.com/"
+                     :api-url "https://wiki.nichework.com/w/api.php"
+                     :username "MarkAHershberger@emacs")))
+          
+          (mediawiki-add-site site)
+          
+          (let ((bot-password (read-passwd "Enter bot password for MarkAHershberger@emacs: ")))
+            
+            (cl-letf (((symbol-function 'mediawiki-auth-get-credentials)
+                       (lambda (_sitename) 
+                         (list :username "MarkAHershberger@emacs"
+                               :password bot-password))))
+              
+              (message "Attempting login with bot credentials...")
+              
+              (condition-case err
+                  (progn
+                    (mediawiki-auth-basic-login test-direct-login-site-name)
+                    
+                    (let ((session (mediawiki-get-session test-direct-login-site-name)))
+                      (if session
+                          (let ((user-info (mediawiki-session-user-info session)))
+                            (message "✓ Login successful!")
+                            (message "  User: %s" (plist-get user-info :username))
+                            (message "  User ID: %s" (plist-get user-info :userid))
+                            (message "  Login time: %s" (mediawiki-session-login-time session)))
+                        (message "✗ Login appeared to succeed but no session was created"))))
+                
+                (error
+                 (message "✗ Login failed: %s" (error-message-string err))
+                 (message "Check the *MediaWiki Debug* buffer for detailed logs"))))))
       
-      (if (mediawiki-api-response-success token-response)
-          (let ((login-token (mediawiki-auth-extract-token token-response "login")))
-            (message "✓ Got login token: %s" login-token)
-            
-            (message "Step 2: Performing login...")
-            
-            ;; Step 2: Perform login
-            (let ((login-params (list (cons "lgname" username)
-                                     (cons "lgpassword" password)
-                                     (cons "lgtoken" login-token))))
-              
-              (message "Login parameters: %S" login-params)
-              
-              (let ((login-response (mediawiki-api-call-sync
-                                    "my-wiki" "login" login-params)))
-                
-                (message "Login response success: %s" 
-                         (mediawiki-api-response-success login-response))
-                (message "Login response data: %S" 
-                         (mediawiki-api-response-data login-response))
-                
-                (if (mediawiki-api-response-success login-response)
-                    (let* ((data (mediawiki-api-response-data login-response))
-                           (login-data (cdr (assq 'login data)))
-                           (result (cdr (assq 'result login-data))))
-                      (message "Login result: %s" result)
-                      (message "Full login data: %S" login-data))
-                  (message "✗ API call failed: %s" 
-                           (mediawiki-api-get-error-info login-response))))))
-        
-        (message "✗ Failed to get login token: %s" 
-                 (mediawiki-api-get-error-info token-response))))))
+      ;; Cleanup
+      (mediawiki-remove-session test-direct-login-site-name)
+      (mediawiki-remove-site test-direct-login-site-name)
+      (setq mediawiki-debug old-debug))))
 
-;; Instructions
-(message "Bot login test functions loaded:")
-(message "1. M-x test-direct-bot-login - Test with credential override")
-(message "2. M-x test-manual-api-login - Step-by-step manual test")
+(defun test-manual-api-login-interactive ()
+  "Interactive test for manual API login steps (for manual testing)."
+  (interactive)
+  (let ((old-debug mediawiki-debug))
+    (setq mediawiki-debug t)
+    
+    (unwind-protect
+        (let ((site (make-mediawiki-site-config
+                     :name test-direct-login-site-name
+                     :url "https://wiki.nichework.com/"
+                     :api-url "https://wiki.nichework.com/w/api.php")))
+          
+          (mediawiki-add-site site)
+          
+          (let ((username "MarkAHershberger@emacs")
+                (password (read-passwd "Enter bot password: ")))
+            
+            (message "Step 1: Getting login token...")
+            
+            (let ((token-response (mediawiki-api-call-sync
+                                  test-direct-login-site-name "query"
+                                  (list (cons "meta" "tokens")
+                                        (cons "type" "login")))))
+              
+              (if (mediawiki-api-response-success token-response)
+                  (let ((login-token (mediawiki-auth-extract-token token-response "login")))
+                    (message "✓ Got login token: %s" login-token)
+                    
+                    (message "Step 2: Performing login...")
+                    
+                    (let ((login-params (list (cons "lgname" username)
+                                             (cons "lgpassword" password)
+                                             (cons "lgtoken" login-token))))
+                      
+                      (message "Login parameters: %S" login-params)
+                      
+                      (let ((login-response (mediawiki-api-call-sync
+                                            test-direct-login-site-name "login" login-params)))
+                        
+                        (message "Login response success: %s" 
+                                 (mediawiki-api-response-success login-response))
+                        (message "Login response data: %S" 
+                                 (mediawiki-api-response-data login-response))
+                        
+                        (if (mediawiki-api-response-success login-response)
+                            (let* ((data (mediawiki-api-response-data login-response))
+                                   (login-data (cdr (assq 'login data)))
+                                   (result (cdr (assq 'result login-data))))
+                              (message "Login result: %s" result)
+                              (message "Full login data: %S" login-data))
+                          (message "✗ API call failed: %s" 
+                                   (mediawiki-api-get-error-info login-response))))))
+                
+                (message "✗ Failed to get login token: %s" 
+                         (mediawiki-api-get-error-info token-response))))))
+      
+      ;; Cleanup
+      (mediawiki-remove-session test-direct-login-site-name)
+      (mediawiki-remove-site test-direct-login-site-name)
+      (setq mediawiki-debug old-debug))))
 
 (provide 'test-direct-login)
 

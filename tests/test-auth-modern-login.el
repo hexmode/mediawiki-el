@@ -41,9 +41,7 @@
 (defun test-auth-modern-teardown ()
   "Clean up test environment."
   (mediawiki-remove-session test-auth-modern-sitename)
-  ;; Remove site from alist manually since there's no remove-site function
-  (setq mediawiki-site-alist
-        (assoc-delete-all test-auth-modern-sitename mediawiki-site-alist)))
+  (mediawiki-remove-site test-auth-modern-sitename))
 
 ;;; Mock Functions for Testing
 

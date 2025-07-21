@@ -107,8 +107,7 @@
               (should (>= (plist-get status :total-entries) 0))))))
 
     ;; Cleanup
-    (setq mediawiki-site-alist
-          (assoc-delete-all "demo-wiki" mediawiki-site-alist))
+    (mediawiki-remove-site "demo-wiki")
     (mediawiki-auth-clear-all-cached-credentials)))
 
 (ert-deftest test-auth-source-security-features ()
@@ -145,8 +144,7 @@
             (should (numberp (plist-get status :total-entries))))))
 
     ;; Cleanup
-    (setq mediawiki-site-alist
-          (assoc-delete-all "security-wiki" mediawiki-site-alist))
+    (mediawiki-remove-site "security-wiki")
     (mediawiki-auth-clear-all-cached-credentials)))
 
 ;;; test-auth-integration-demo.el ends here

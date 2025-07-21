@@ -5,65 +5,82 @@
 
 ;;; Code:
 
+(require 'ert)
 (require 'mediawiki-core)
 (require 'mediawiki-http)
 (require 'mediawiki-oauth)
 
+(defconst test-wikipedia-oauth-site "Wikipedia")
 (defun test-wikipedia-oauth-setup ()
-  "Test Wikipedia OAuth setup readiness."
-  (message "Testing Wikipedia OAuth setup readiness...")
-  
+  "Set up test environment for modern login tests."
   ;; Set up Wikipedia site (if not already done)
-  (unless (mediawiki-get-site "Wikipedia")
-    (let ((wikipedia-site (make-mediawiki-site-config
-                          :name "Wikipedia"
-                          :url "https://en.wikipedia.org/"
-                          :api-url "https://en.wikipedia.org/w/api.php"
-                          :username nil
-                          :auth-method 'basic
-                          :auth-config nil
-                          :capabilities nil
-                          :session-info nil)))
-      (mediawiki-add-site wikipedia-site)
-      (message "✓ Wikipedia site added")))
-  
+  (let ((wikipedia-site (make-mediawiki-site-config
+                         :name test-wikipedia-oauth-site
+                         :url "https://en.wikipedia.org/"
+                         :api-url "https://en.wikipedia.org/w/api.php"
+                         :username nil
+                         :auth-method 'basic
+                         :auth-config nil
+                         :capabilities nil
+                         :session-info nil)))
+    (mediawiki-add-site wikipedia-site)))
+
+(defun test-wikipedia-oauth-teardown ()
+  "Clean up test environment."
+  (mediawiki-remove-session test-wikipedia-oauth-site)
+  (mediawiki-remove-site test-wikipedia-oauth-site))
+
+(ert-deftest test-wikipedia-oauth-configuration ()
+  "Test Wikipedia OAuth configuration."
+  (test-wikipedia-oauth-setup)
+
   ;; Test OAuth setup with dummy credentials
-  (mediawiki-oauth-setup-with-tokens "Wikipedia" 
+  (mediawiki-oauth-setup-with-tokens "Wikipedia"
                                     "dummy-consumer-key"
                                     "dummy-consumer-secret"
                                     "dummy-access-token"
                                     "dummy-access-secret")
-  
+
   (let ((site (mediawiki-get-site "Wikipedia")))
-    (if (and (eq (mediawiki-site-config-auth-method site) 'oauth)
-             (plist-get (mediawiki-site-config-auth-config site) :consumer-key)
-             (plist-get (mediawiki-site-config-auth-config site) :access-token))
-        (message "✓ Wikipedia OAuth configuration successful")
-      (error "Wikipedia OAuth configuration failed")))
-  
-  ;; Test OAuth signature generation for Wikipedia API
+    (should (eq (mediawiki-site-config-auth-method site) 'oauth))
+    (should (plist-get (mediawiki-site-config-auth-config site) :consumer-key))
+    (should (plist-get (mediawiki-site-config-auth-config site) :access-token)))
+  (test-wikipedia-oauth-teardown))
+
+(ert-deftest test-wikipedia-oauth-signature ()
+  "Test OAuth signature generation for Wikipedia API."
+  (test-wikipedia-oauth-setup)
+
   (let ((signature (mediawiki-oauth-generate-signature
                    "POST" "https://en.wikipedia.org/w/api.php"
                    '(("action" . "query") ("meta" . "userinfo") ("format" . "json"))
                    "dummy-consumer-secret" "dummy-access-secret")))
-    (if (and signature (stringp signature) (> (length signature) 0))
-        (message "✓ Wikipedia OAuth signature generation working")
-      (error "Wikipedia OAuth signature generation failed")))
-  
-  ;; Test OAuth API call structure (will fail with dummy credentials, but structure should work)
-  (condition-case err
-      (let ((site (mediawiki-get-site "Wikipedia")))
-        (mediawiki-oauth-api-call "Wikipedia" "query" 
-                                 '(("meta" . "userinfo"))
-                                 (mediawiki-site-config-auth-config site))
-        (message "✓ OAuth API call structure working (unexpected success with dummy credentials)"))
-    (error
-     (let ((err-msg (error-message-string err)))
-       (if (or (string-match-p "HTTP\\|network\\|401\\|403\\|invalid" err-msg)
-               (string-match-p "OAuth\\|signature" err-msg))
-           (message "✓ OAuth API call structure working (expected failure with dummy credentials)")
-         (message "✗ OAuth API call structure failed: %s" err-msg)))))
-  
+    (should signature)
+    (should (stringp signature))
+    (should (> (length signature) 0)))
+  (test-wikipedia-oauth-teardown))
+
+(ert-deftest test-wikipedia-oauth-api-call-structure ()
+  "Test OAuth API call structure with dummy credentials."
+  :expected-result :failed
+  (test-wikipedia-oauth-setup)
+
+  (let ((site (mediawiki-get-site "Wikipedia")))
+    (condition-case err
+        (progn
+          (mediawiki-oauth-api-call "Wikipedia" "query"
+                                   '(("meta" . "userinfo"))
+                                   (mediawiki-site-config-auth-config site))
+          (ert-fail "API call should have failed with dummy credentials"))
+      (error
+       (let ((err-msg (error-message-string err)))
+         (should (or (string-match-p "HTTP\\|network\\|401\\|403\\|invalid" err-msg)
+                     (string-match-p "OAuth\\|signature" err-msg)))))))
+  (test-wikipedia-oauth-teardown))
+
+(defun show-wikipedia-oauth-instructions ()
+  "Show instructions for using real Wikipedia OAuth credentials."
+  (interactive)
   (message "Wikipedia OAuth setup is ready for your real credentials!")
   (message "")
   (message "To use your real Wikipedia OAuth credentials, run:")
@@ -76,7 +93,6 @@
   (message "Then try: (mediawiki-auth-login \"Wikipedia\")")
   (message ""))
 
-;; Run the test
-(test-wikipedia-oauth-setup)
+(provide 'test-wikipedia-oauth-ready)
 
 ;;; test-wikipedia-oauth-ready.el ends here

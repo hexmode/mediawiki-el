@@ -908,8 +908,8 @@ Returns t on success, nil on failure."
       (let ((gpg-args (mediawiki-session-build-gpg-encrypt-args method)))
         (when gpg-args
           (let ((result (apply #'call-process "gpg" nil nil nil
-                              (append gpg-args
-                                     (list "--output" output-file input-file)))))
+                               (append gpg-args
+                                       (list "--output" output-file input-file)))))
             (zerop result))))
     (error
      (mediawiki-debug-log "GPG encryption failed: %s" (error-message-string err))
@@ -917,11 +917,12 @@ Returns t on success, nil on failure."
 
 (defun mediawiki-session-build-gpg-encrypt-args (method)
   "Build GPG command arguments for encryption METHOD."
-  (let ((inter-args '("--batch" "--passphrase" "this-is-not-random-and-is-only-for-testing"))
-        (baser-args '("--cipher-algo" "AES256" "--compress-algo" "2"))
-        (base-args (if (string= "1" (getenv "NO_INTERACTION"))
-                       (append inter-args baser-args)
-                     baser-args)))
+  (let* ((inter-args '("--batch" "--no-use-agent"
+                       "--passphrase" "this-is-not-random-and-is-only-for-testing"))
+         (baser-args '("--cipher-algo" "AES256" "--compress-algo" "2"))
+         (base-args (if (string= "1" (getenv "NO_INTERACTION"))
+                        (append inter-args baser-args)
+                      baser-args)))
     (cond
      ((eq method 'symmetric)
       (append base-args '("--symmetric")))

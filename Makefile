@@ -26,7 +26,7 @@ define TEST_RULES
 $(1): $(2)
 	@echo "Running $(1)"
 	@$(BATCH) -l mediawiki-core.el -l mediawiki-session.el -l mediawiki-http.el -l mediawiki-api.el -l mediawiki-auth.el \
-		-l tests/$(1).el -f ert-run-tests-batch-and-exit;
+		-l mediawiki-oauth.el -l tests/$(1).el -f ert-run-tests-batch-and-exit;
 endef
 
 # Generate rules for each test file
@@ -48,18 +48,9 @@ test-integration:
 	@echo "Running integration demo tests..."
 	$(BATCH) -l test-auth-integration-demo.el
 
-# GPG and session persistence tests
-test-session-persistence:
-	@echo "Running session persistence tests..."
-	$(BATCH) -l mediawiki-core.el -l mediawiki-session.el -l test-session-persistence.el
-
 test-gpg-agent:
 	@echo "Running GPG agent support tests..."
 	$(BATCH) -l mediawiki-core.el -l mediawiki-session.el -l test-gpg-agent-support.el
-
-test-gpg-integration:
-	@echo "Running automated GPG integration tests..."
-	$(BATCH) -l mediawiki-core.el -l mediawiki-session.el -l test-gpg-integration.el
 
 test-gpg: test-session-persistence test-gpg-agent test-gpg-integration
 	@echo "All GPG tests completed!"

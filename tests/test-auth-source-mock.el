@@ -80,8 +80,7 @@
             (should (string= (plist-get credentials :password) "testpass")))))
     
     ;; Cleanup
-    (setq mediawiki-site-alist
-          (assoc-delete-all "test-wiki" mediawiki-site-alist))
+    (mediawiki-remove-site "test-wiki")
     (mediawiki-auth-clear-all-cached-credentials)))
 
 (ert-deftest test-auth-source-host-extraction ()

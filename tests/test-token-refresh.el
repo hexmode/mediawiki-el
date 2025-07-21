@@ -48,8 +48,7 @@
 
 (defun test-token-refresh-teardown ()
   "Clean up test environment."
-  (setq mediawiki-site-alist
-        (assoc-delete-all test-token-refresh-sitename mediawiki-site-alist))
+  (mediawiki-remove-site test-token-refresh-sitename)
   (mediawiki-remove-session test-token-refresh-sitename)
   (setq test-token-refresh-mock-responses nil))
 

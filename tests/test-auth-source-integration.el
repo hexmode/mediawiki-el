@@ -37,8 +37,7 @@
   "Clean up test site and cached credentials."
   (mediawiki-auth-clear-cached-credentials test-mediawiki-site-config-name)
   (mediawiki-remove-session test-mediawiki-site-config-name)
-  (setq mediawiki-site-alist
-        (assoc-delete-all test-mediawiki-site-config-name mediawiki-site-alist)))
+  (mediawiki-remove-site test-mediawiki-site-config-name))
 
 ;;; Credential Cache Tests
 

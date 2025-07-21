@@ -11,10 +11,70 @@
 
 ;;; Code:
 
+(require 'ert)
 (require 'mediawiki-core)
 (require 'mediawiki-http)
 (require 'mediawiki-api)
 (require 'mediawiki-auth)
+
+;;; Test Variables
+
+(defvar test-real-wiki-name "test-wiki"
+  "Test site name for real wiki login tests.")
+
+;;; ERT Tests
+
+(ert-deftest test-wiki-site-setup ()
+  "Test setting up a wiki site configuration."
+  (let ((site (make-mediawiki-site-config
+               :name test-real-wiki-name
+               :url "https://wiki.example.com/"
+               :api-url "https://wiki.example.com/w/api.php"
+               :username "test-user")))
+    
+    (mediawiki-add-site site)
+    
+    (unwind-protect
+        (let ((retrieved-site (mediawiki-get-site test-real-wiki-name)))
+          (should retrieved-site)
+          (should (string= (mediawiki-site-config-url retrieved-site) "https://wiki.example.com/"))
+          (should (string= (mediawiki-site-config-api-url retrieved-site) "https://wiki.example.com/w/api.php"))
+          (should (string= (mediawiki-site-config-username retrieved-site) "test-user")))
+      
+      ;; Cleanup
+      (mediawiki-remove-site test-real-wiki-name))))
+
+(ert-deftest test-wiki-credential-handling ()
+  "Test credential handling for wiki login."
+  (let ((username "test-user")
+        (password "test-password"))
+    
+    ;; Override the credential function
+    (cl-letf (((symbol-function 'mediawiki-auth-get-credentials)
+               (lambda (_sitename) 
+                 (list :username username :password password))))
+      
+      (let ((credentials (mediawiki-auth-get-credentials "any-site")))
+        (should (equal (plist-get credentials :username) username))
+        (should (equal (plist-get credentials :password) password))))))
+
+(ert-deftest test-wiki-api-response-parsing ()
+  "Test parsing of wiki API responses."
+  (let ((success-response (make-mediawiki-api-response
+                          :success t
+                          :data '((query . ((userinfo . ((name . "test-user")
+                                                       (id . 123)
+                                                       (groups . ("user" "autoconfirmed")))))))
+                          :warnings nil
+                          :errors nil)))
+    
+    (should (mediawiki-api-response-success success-response))
+    (let* ((data (mediawiki-api-response-data success-response))
+           (query (cdr (assq 'query data)))
+           (userinfo (cdr (assq 'userinfo query))))
+      (should (string= (cdr (assq 'name userinfo)) "test-user"))
+      (should (= (cdr (assq 'id userinfo)) 123))
+      (should (equal (cdr (assq 'groups userinfo)) '("user" "autoconfirmed"))))))
 
 ;;; Interactive Test Functions
 
@@ -74,8 +134,7 @@
          (message "Check the debug messages above for more details")))
 
       ;; Clean up
-      (setq mediawiki-site-alist
-            (assoc-delete-all wiki-name mediawiki-site-alist)))))
+      (mediawiki-remove-site wiki-name))))
 
 (defun test-authenticated-api-call (wiki-name)
   "Test an authenticated API call against WIKI-NAME to verify the session works."
@@ -136,7 +195,7 @@ Usage: (setup-test-wiki \"mywiki\" \"https://wiki.example.com\" \"https://wiki.e
 ;;; Usage Instructions
 
 (defun show-test-instructions ()
-A  "Show instructions for testing the wiki login."
+  "Show instructions for testing the wiki login."
   (interactive)
   (with-output-to-temp-buffer "*Wiki Login Test Instructions*"
     (princ "MediaWiki Modern Login Test Instructions\n")
@@ -159,9 +218,6 @@ A  "Show instructions for testing the wiki login."
     (princ "- Verify your username and password are correct\n")
     (princ "- Some wikis may require 2FA (will prompt if needed)\n")
     (princ "- Check if your wiki uses OAuth (not yet implemented)\n")))
-
-;; Show instructions when loaded
-(show-test-instructions)
 
 (provide 'test-real-wiki-login)
 
