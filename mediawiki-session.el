@@ -30,7 +30,7 @@
   :type 'file
   :group 'mediawiki)
 
-(defcustom mediawiki-session-storage-version 2
+(defcustom mediawiki-session-storage-version 1
   "Version number for session storage format.
 Used for migration and upgrade handling."
   :type 'integer
