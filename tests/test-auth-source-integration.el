@@ -218,6 +218,16 @@
   (test-mediawiki-setup-test-site)
   (unwind-protect
       (let ((mediawiki-auth-source-backend 'manual))
+        ;; Clear any cached credentials to ensure we test the manual backend
+        (mediawiki-auth-clear-cached-credentials test-mediawiki-site-config-name)
+
+        ;; Create a site without pre-configured username for manual testing
+        (let ((manual-test-site (make-mediawiki-site-config
+                                :name test-mediawiki-site-config-name
+                                :url test-mediawiki-site-config-url
+                                :api-url (concat test-mediawiki-site-config-url "api.php")
+                                :auth-method 'basic)))
+          (mediawiki-add-site manual-test-site))
 
         ;; Mock user input
         (cl-letf (((symbol-function 'read-string)
