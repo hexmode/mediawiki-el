@@ -168,8 +168,13 @@
                           :errors ((:code "badtoken" :info "Invalid token"))))))
 
   ;; Mock the API call function
-  (cl-letf (((symbol-function 'mediawiki-api-call-sync)
-             #'test-token-refresh-mock-api-call))
+  (cl-letf (((symbol-function 'mediawiki-api-call-sync) #'test-token-refresh-mock-api-call)
+            ((symbol-function 'auth-source-netrc-parse) (lambda (&key file max host user port require
+                                                                      allow-null &allow-other-keys)
+                                                          '()))
+            ((symbol-function 'auth-source-netrc-saver) (lambda (_file _add) t))
+            ((symbol-function 'read-string) (lambda (_prompt) "test-user"))
+            ((symbol-function 'read-passwd) (lambda (_prompt) "test-pass")))
 
     ;; Test that error is properly handled
     (should-error (mediawiki-session-get-token test-token-refresh-sitename "csrf")))
