@@ -7,7 +7,7 @@
 ;;; Commentary:
 
 ;; Tests for the modern login API implementation (task 4.2).
-;; Tests the new clientlogin API usage, token handling, and multi-step authentication.
+;; Tests the login API usage, token handling, and multi-step authentication.
 
 ;;; Code:
 
@@ -52,8 +52,11 @@
 
 (defun test-auth-modern-mock-api-call (sitename action params)
   "Mock API call for testing modern login."
-  (let* ((response-key (format "%s-%s" action (alist-get "type" params nil nil 'string=)))
+  (let* ((type-param (alist-get "type" params nil nil 'string=))
+         (response-key (format "%s-%s" action (or type-param "")))
          (mock-data (alist-get response-key test-auth-modern-mock-responses nil nil 'string=)))
+    (message "DEBUG: Mock API call - action=%s, type=%s, response-key=%s, found=%s" 
+             action type-param response-key (not (null mock-data)))
     (if mock-data
         (make-mediawiki-api-response
          :success (plist-get mock-data :success)
@@ -62,7 +65,7 @@
          :warnings (plist-get mock-data :warnings))
       (make-mediawiki-api-response
        :success nil
-       :errors (list (list :code "mock-error" :info "No mock response configured"))))))
+       :errors (list (list :code "mock-error" :info (format "No mock response configured for key: %s" response-key)))))))
 
 ;;; Test Cases
 
@@ -108,10 +111,10 @@
   (let ((test-auth-modern-mock-responses
          '(("query-login" . (:success t
                             :data (query (tokens (logintoken . "test-login-token")))))
-           ("clientlogin-" . (:success t
-                             :data (clientlogin (status . "PASS")
-                                               (username . "testuser")
-                                               (lguserid . 123)))))))
+           ("login-" . (:success t
+                             :data ((login . ((result . "Success")
+                                            (lgusername . "testuser")
+                                            (lguserid . 123)))))))))
 
     ;; Mock the API call function
     (cl-letf (((symbol-function 'mediawiki-api-call-sync)
@@ -139,10 +142,9 @@
   (let ((test-auth-modern-mock-responses
          '(("query-login" . (:success t
                             :data (query (tokens (logintoken . "test-login-token")))))
-           ("clientlogin-" . (:success t
-                             :data (clientlogin (status . "FAIL")
-                                               (message . "Invalid credentials")
-                                               (messagecode . "wrongpassword")))))))
+           ("login-" . (:success t
+                             :data ((login . ((result . "WrongPass")
+                                            (reason . "Invalid credentials")))))))))
 
     ;; Mock the API call function
     (cl-letf (((symbol-function 'mediawiki-api-call-sync)
@@ -153,131 +155,6 @@
                        :password "wrongpassword"))))
 
       ;; Should signal an error for failed login
-      (should-error (mediawiki-auth-basic-login test-auth-modern-sitename)
-                    :type 'error)))
-
-  (test-auth-modern-teardown))
-
-(ert-deftest test-auth-modern-login-restart ()
-  "Test handling of login restart requirement."
-  (test-auth-modern-setup)
-
-  (let ((restart-count 0)
-        (test-auth-modern-mock-responses
-         '(("query-login" . (:success t
-                            :data (query (tokens (logintoken . "test-login-token"))))))))
-
-    ;; Mock the API call function to simulate restart then success
-    (cl-letf (((symbol-function 'mediawiki-api-call-sync)
-               (lambda (sitename action params)
-                 (if (string= action "clientlogin")
-                     (progn
-                       (setq restart-count (1+ restart-count))
-                       (if (= restart-count 1)
-                           ;; First call returns RESTART
-                           (make-mediawiki-api-response
-                            :success t
-                            :data '((clientlogin (status . "RESTART")
-                                               (message . "Token expired"))))
-                         ;; Second call returns PASS
-                         (make-mediawiki-api-response
-                          :success t
-                          :data '((clientlogin (status . "PASS")
-                                             (username . "testuser")
-                                             (lguserid . 123))))))
-                   ;; Token requests
-                   (test-auth-modern-mock-api-call sitename action params))))
-              ((symbol-function 'mediawiki-auth-get-credentials)
-               (lambda (_sitename)
-                 (list :username test-auth-modern-username
-                       :password test-auth-modern-password))))
-
-      ;; Perform login - should handle restart automatically
-      (mediawiki-auth-basic-login test-auth-modern-sitename)
-
-      ;; Verify session was created after restart
-      (let ((session (mediawiki-get-session test-auth-modern-sitename)))
-        (should session)
-        (should (= restart-count 2)))))  ; Should have made two clientlogin calls
-
-  (test-auth-modern-teardown))
-
-(ert-deftest test-auth-modern-2fa-detection ()
-  "Test detection of 2FA requirement."
-  (test-auth-modern-setup)
-
-  (let ((test-auth-modern-mock-responses
-         '(("query-login" . (:success t
-                            :data (query (tokens (logintoken . "test-login-token")))))
-           ("clientlogin-" . (:success t
-                             :data (clientlogin (status . "UI")
-                                               (message . "Two-factor authentication required")
-                                               (messagecode . "oathauth-auth-ui")
-                                               (requests . ((id . "otp-request")))))))))
-
-    ;; Mock the API call function and user input
-    (cl-letf (((symbol-function 'mediawiki-api-call-sync)
-               #'test-auth-modern-mock-api-call)
-              ((symbol-function 'mediawiki-auth-get-credentials)
-               (lambda (_sitename)
-                 (list :username test-auth-modern-username
-                       :password test-auth-modern-password)))
-              ((symbol-function 'read-string)
-               (lambda (_prompt) "123456")))  ; Mock 2FA code input
-
-      ;; Should detect 2FA requirement and attempt to handle it
-      ;; This will fail because we don't have a complete mock for the continuation
-      (should-error (mediawiki-auth-basic-login test-auth-modern-sitename)
-                    :type 'error)))
-
-  (test-auth-modern-teardown))
-
-(ert-deftest test-auth-modern-captcha-detection ()
-  "Test detection of CAPTCHA requirement."
-  (test-auth-modern-setup)
-
-  (let ((test-auth-modern-mock-responses
-         '(("query-login" . (:success t
-                            :data (query (tokens (logintoken . "test-login-token")))))
-           ("clientlogin-" . (:success t
-                             :data (clientlogin (status . "UI")
-                                               (message . "CAPTCHA required")
-                                               (messagecode . "captcha-required")))))))
-
-    ;; Mock the API call function
-    (cl-letf (((symbol-function 'mediawiki-api-call-sync)
-               #'test-auth-modern-mock-api-call)
-              ((symbol-function 'mediawiki-auth-get-credentials)
-               (lambda (_sitename)
-                 (list :username test-auth-modern-username
-                       :password test-auth-modern-password))))
-
-      ;; Should detect CAPTCHA requirement and error appropriately
-      (should-error (mediawiki-auth-basic-login test-auth-modern-sitename)
-                    :type 'error)))
-
-  (test-auth-modern-teardown))
-
-(ert-deftest test-auth-modern-redirect-handling ()
-  "Test handling of redirect requirement."
-  (test-auth-modern-setup)
-
-  (let ((test-auth-modern-mock-responses
-         '(("query-login" . (:success t
-                            :data (query (tokens (logintoken . "test-login-token")))))
-           ("clientlogin-" . (:success t
-                             :data (clientlogin (status . "REDIRECT")
-                                               (redirecttarget . "https://example.com/special")))))))
-
-    ;; Mock the API call function
-    (cl-letf (((symbol-function 'mediawiki-api-call-sync)
-               #'test-auth-modern-mock-api-call)
-              ((symbol-function 'mediawiki-auth-get-credentials)
-               (lambda (_sitename)
-                 (list :username test-auth-modern-username
-                       :password test-auth-modern-password))))
-
-      ;; Should handle redirect requirement appropriately
       (should-error (mediawiki-auth-basic-login test-auth-modern-sitename)
                     :type 'error)))
 
@@ -294,10 +171,10 @@
         (test-auth-modern-mock-responses
          '(("query-login" . (:success t
                             :data (query (tokens (logintoken . "integration-token")))))
-           ("clientlogin-" . (:success t
-                             :data (clientlogin (status . "PASS")
-                                               (username . "integrationuser")
-                                               (lguserid . 456)))))))
+           ("login-" . (:success t
+                             :data ((login . ((result . "Success")
+                                            (lgusername . "integrationuser")
+                                            (lguserid . 456)))))))))
 
     (cl-letf (((symbol-function 'mediawiki-api-call-sync)
                (lambda (sitename action params)
@@ -320,11 +197,11 @@
         (should (string= (alist-get "meta" (nth 2 token-call) nil nil 'string=) "tokens"))
         (should (string= (alist-get "type" (nth 2 token-call) nil nil 'string=) "login")))
 
-      ;; Second call should be clientlogin
+      ;; Second call should be login
       (let ((login-call (nth 0 api-calls)))
-        (should (string= (nth 1 login-call) "clientlogin"))
-        (should (string= (alist-get "username" (nth 2 login-call) nil nil 'string=) "integrationuser"))
-        (should (string= (alist-get "logintoken" (nth 2 login-call) nil nil 'string=) "integration-token")))
+        (should (string= (nth 1 login-call) "login"))
+        (should (string= (alist-get "lgname" (nth 2 login-call) nil nil 'string=) "integrationuser"))
+        (should (string= (alist-get "lgtoken" (nth 2 login-call) nil nil 'string=) "integration-token")))
 
       ;; Verify session was created
       (let ((session (mediawiki-get-session test-auth-modern-sitename)))

@@ -80,19 +80,17 @@
           (let ((login-token (mediawiki-auth-extract-token token-response "login")))
             (message "✓ Got login token: %s" login-token)
             
-            (message "Step 2: Performing clientlogin...")
+            (message "Step 2: Performing login...")
             
             ;; Step 2: Perform login
-            (let ((login-params (list (cons "loginreturnurl" "http://localhost/")
-                                     (cons "username" username)
-                                     (cons "password" password)
-                                     (cons "logintoken" login-token)
-                                     (cons "rememberme" "1"))))
+            (let ((login-params (list (cons "lgname" username)
+                                     (cons "lgpassword" password)
+                                     (cons "lgtoken" login-token))))
               
               (message "Login parameters: %S" login-params)
               
               (let ((login-response (mediawiki-api-call-sync
-                                    "my-wiki" "clientlogin" login-params)))
+                                    "my-wiki" "login" login-params)))
                 
                 (message "Login response success: %s" 
                          (mediawiki-api-response-success login-response))
@@ -101,10 +99,10 @@
                 
                 (if (mediawiki-api-response-success login-response)
                     (let* ((data (mediawiki-api-response-data login-response))
-                           (clientlogin-data (cdr (assq 'clientlogin data)))
-                           (status (cdr (assq 'status clientlogin-data))))
-                      (message "Login status: %s" status)
-                      (message "Full clientlogin data: %S" clientlogin-data))
+                           (login-data (cdr (assq 'login data)))
+                           (result (cdr (assq 'result login-data))))
+                      (message "Login result: %s" result)
+                      (message "Full login data: %S" login-data))
                   (message "✗ API call failed: %s" 
                            (mediawiki-api-get-error-info login-response))))))
         

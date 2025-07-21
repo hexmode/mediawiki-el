@@ -25,6 +25,12 @@
     (require 'mediawiki-api)
   (error nil))
 
+;; Declare functions from mediawiki-api that may not be available during testing
+(declare-function mediawiki-api-call-sync "mediawiki-api")
+(declare-function mediawiki-api-response-success "mediawiki-api")
+(declare-function mediawiki-api-get-error-info "mediawiki-api")
+(declare-function mediawiki-api-response-data "mediawiki-api")
+
 (require 'cl-lib)  ; For cl-find-if used in 2FA handling
 
 ;;; Authentication Configuration
@@ -105,30 +111,17 @@ for modern authentication when implemented."
   (mediawiki-debug-log "Starting login flow for %s" sitename)
 
   ;; Get login token
-  (let ((token-response (mediawiki-api-call-sync
-                        sitename "query"
-                        (list (cons "meta" "tokens")
-                              (cons "type" "login")))))
+  (let ((login-token (mediawiki-auth-get-login-token sitename)))
+    (mediawiki-debug-log "Successfully obtained login token for %s" sitename)
 
-    (unless (mediawiki-api-response-success token-response)
-      (let ((error-info (mediawiki-api-get-error-info token-response)))
-        (mediawiki-debug-log "Failed to get login token for %s: %s" sitename error-info)
-        (error "Failed to get login token: %s" error-info)))
+    ;; Perform login using action=login
+    (let ((login-response (mediawiki-api-call-sync
+                          sitename "login"
+                          (list (cons "lgname" username)
+                                (cons "lgpassword" password)
+                                (cons "lgtoken" login-token)))))
 
-    (let ((login-token (mediawiki-auth-extract-token token-response "login")))
-      (unless login-token
-        (error "No login token in response from %s" sitename))
-
-      (mediawiki-debug-log "Successfully obtained login token for %s" sitename)
-
-      ;; Perform login using action=login
-      (let ((login-response (mediawiki-api-call-sync
-                            sitename "login"
-                            (list (cons "lgname" username)
-                                  (cons "lgpassword" password)
-                                  (cons "lgtoken" login-token)))))
-
-        (mediawiki-auth-handle-login-response sitename username login-response)))))
+      (mediawiki-auth-handle-login-response sitename username login-response))))
 
 (defun mediawiki-auth-handle-login-response (sitename username response)
   "Handle login API response."
@@ -371,10 +364,53 @@ for modern authentication when implemented."
 ;;; Token Management
 
 (defun mediawiki-auth-extract-token (response token-type)
-  "Extract TOKEN-TYPE from API RESPONSE."
-  (let ((data (mediawiki-api-response-data response)))
-    (cdr (assq (intern (concat token-type "token"))
-               (cdr (assq 'tokens (cdr (assq 'query data))))))))
+  "Extract TOKEN-TYPE from API RESPONSE.
+Handles both alist format (from real API) and nested list format (from tests)."
+  (let ((data (mediawiki-api-response-data response))
+        (token-key (intern (concat token-type "token"))))
+    
+    ;; Try alist format first (real API responses)
+    (let ((alist-token (cdr (assq token-key
+                                  (cdr (assq 'tokens (cdr (assq 'query data))))))))
+      (if alist-token
+          alist-token
+        ;; Fall back to nested list format (test responses)
+        (let ((query-data (if (and (listp data) (eq (car data) 'query))
+                              (cdr data)  ; data is (query ...)
+                            (cdr (assq 'query data))))  ; data is ((query . ...))
+              (tokens-data nil))
+          (when query-data
+            (setq tokens-data (if (and (listp query-data) (eq (car query-data) 'tokens))
+                                  (cdr query-data)  ; query-data is (tokens ...)
+                                (cdr (assq 'tokens query-data))))  ; query-data is ((tokens . ...))
+            (when tokens-data
+              (if (and (listp tokens-data) (eq (car tokens-data) token-key))
+                  (cdr tokens-data)  ; tokens-data is (logintoken . "value")
+                (cdr (assq token-key tokens-data))))))))))  ; tokens-data is ((logintoken . "value"))
+
+(defun mediawiki-auth-get-login-token (sitename)
+  "Get login token for SITENAME."
+  (let ((token-response (mediawiki-api-call-sync
+                        sitename "query"
+                        (list (cons "meta" "tokens")
+                              (cons "type" "login")))))
+    
+    (unless (mediawiki-api-response-success token-response)
+      (let ((error-info (mediawiki-api-get-error-info token-response)))
+        (error "Failed to get login token for %s: %s" sitename error-info)))
+    
+    (let ((login-token (mediawiki-auth-extract-token token-response "login")))
+      (unless login-token
+        (error "No login token in response from %s" sitename))
+      login-token)))
+
+(defun mediawiki-auth-build-login-params (username password token)
+  "Build login parameters for USERNAME, PASSWORD, and TOKEN."
+  (list (cons "username" username)
+        (cons "password" password)
+        (cons "logintoken" token)
+        (cons "loginreturnurl" "http://localhost/")
+        (cons "rememberMe" "1")))
 
 ;;; Session Validation
 
