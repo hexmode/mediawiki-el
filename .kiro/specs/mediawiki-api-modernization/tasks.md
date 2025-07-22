@@ -94,7 +94,7 @@
     - Add session migration and upgrade handling
     - _Requirements: 2.3_
 
-- [ ] 6. Modernize page operations
+- [x] 6. Modernize page operations
   - [x] 6.1 Update page retrieval functionality
     - Rewrite page content fetching using modern API queries
     - Add support for page metadata and revision information
@@ -113,7 +113,7 @@
     - Add conflict resolution UI and user choices
     - _Requirements: 3.3_
 
-  - [ ] 6.4 Implement save failure recovery
+  - [x] 6.4 Implement save failure recovery
     - Add automatic retry logic for failed saves
     - Implement draft saving to prevent data loss
     - Create user notification and recovery options

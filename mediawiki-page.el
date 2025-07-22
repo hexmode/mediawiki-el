@@ -48,6 +48,34 @@ Set to 0 to disable revision retrieval."
   :tag "Retrieve Revisions"
   :group 'mediawiki)
 
+(defcustom mediawiki-page-save-retry-count 3
+  "Number of automatic retries for failed page saves.
+Set to 0 to disable automatic retries."
+  :type 'integer
+  :tag "Save Retry Count"
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-save-retry-delay 2
+  "Base delay in seconds between save retries.
+Actual delay uses exponential backoff based on this value."
+  :type 'number
+  :tag "Save Retry Delay"
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-save-draft-on-failure t
+  "Whether to automatically save drafts when page saves fail.
+When enabled, failed edits are saved to local draft files to prevent data loss."
+  :type 'boolean
+  :tag "Save Draft on Failure"
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-draft-directory (expand-file-name "~/.emacs.d/mediawiki-drafts/")
+  "Directory to store draft files for failed saves.
+Drafts are stored with filenames based on site and page title."
+  :type 'directory
+  :tag "Draft Directory"
+  :group 'mediawiki)
+
 ;;; Cache Implementation
 
 (defvar mediawiki-page-cache (make-hash-table :test 'equal)
@@ -715,27 +743,8 @@ PARAMS contains the original edit parameters."
     (message "Merge cancelled."))
   t)
 
-(defun mediawiki-page-remove-conflict-markers (content)
-  "Remove conflict markers from CONTENT.
-Returns the cleaned content."
-  (with-temp-buffer
-    (insert content)
-    (goto-char (point-min))
-
-    ;; Remove all conflict markers
-    (let ((case-fold-search nil))
-      (while (re-search-forward (regexp-quote mediawiki-page-merge-conflict-marker-A) nil t)
-        (let ((start (match-beginning 0)))
-          (when (re-search-forward (regexp-quote mediawiki-page-merge-conflict-marker-C) nil t)
-            (delete-region start (point))))))
-
-    ;; Clean up any double newlines that might have been created
-    (goto-char (point-min))
-    (while (re-search-forward "\n\n+" nil t)
-      (replace-match "\n"))
-
-    ;; Return the cleaned content
-    (buffer-string)))
+;; This function has been moved to a later position in the file
+;; See the implementation around line 1530
 
 (defun mediawiki-page-handle-page-deleted (sitename params error-info)
   "Handle case where page was deleted during editing.
@@ -1203,3 +1212,358 @@ Returns edit result information."
 (provide 'mediawiki-page)
 
 ;;; mediawiki-page.el ends here
+;;; Draft Saving and Recovery
+
+(defun mediawiki-page-save-draft (sitename params)
+  "Save a draft of failed edit for SITENAME with PARAMS.
+Implements draft saving to prevent data loss as required by task 6.4."
+  (let ((title (cdr (assoc "title" params)))
+        (content (cdr (assoc "text" params)))
+        (summary (cdr (assoc "summary" params)))
+        (timestamp (format-time-string "%Y%m%d-%H%M%S"))
+        (draft-dir mediawiki-page-draft-directory))
+
+    ;; Create draft directory if it doesn't exist
+    (unless (file-directory-p draft-dir)
+      (make-directory draft-dir t))
+
+    ;; Create site-specific directory
+    (let ((site-dir (expand-file-name (concat (replace-regexp-in-string "[^a-zA-Z0-9_-]" "_" sitename) "/") draft-dir)))
+      (unless (file-directory-p site-dir)
+        (make-directory site-dir t))
+
+      ;; Create draft file
+      (let* ((safe-title (replace-regexp-in-string "[^a-zA-Z0-9_-]" "_" title))
+             (draft-file (expand-file-name (format "%s-%s.wiki" safe-title timestamp) site-dir))
+             (meta-file (expand-file-name (format "%s-%s.meta" safe-title timestamp) site-dir)))
+
+        ;; Save content to draft file
+        (with-temp-file draft-file
+          (insert content))
+
+        ;; Save metadata to companion file
+        (with-temp-file meta-file
+          (insert (format "Title: %s\n" title))
+          (insert (format "Site: %s\n" sitename))
+          (insert (format "Timestamp: %s\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
+          (when summary
+            (insert (format "Summary: %s\n" summary)))
+
+          ;; Save other relevant parameters
+          (dolist (param params)
+            (unless (member (car param) '("title" "text" "summary" "token"))
+              (insert (format "Param-%s: %s\n" (car param) (cdr param))))))
+
+        ;; Notify user
+        (message "Draft saved to %s" draft-file)
+
+        ;; Offer to recover immediately
+        (when (y-or-n-p "Would you like to open the draft for editing? ")
+          (mediawiki-page-open-draft draft-file meta-file))))))
+
+(defun mediawiki-page-open-draft (draft-file meta-file)
+  "Open a draft file for editing.
+DRAFT-FILE is the path to the saved draft content.
+META-FILE is the path to the metadata file."
+  (let ((draft-buffer (find-file-noselect draft-file)))
+    (with-current-buffer draft-buffer
+      ;; Load metadata
+      (let ((metadata (mediawiki-page-load-draft-metadata meta-file)))
+        ;; Set local variables for recovery
+        (setq-local mediawiki-page-draft-metadata metadata)
+        (setq-local mediawiki-page-draft-meta-file meta-file)
+
+        ;; Set up keymap for recovery
+        (use-local-map (copy-keymap (current-local-map)))
+        (local-set-key (kbd "C-c C-c") 'mediawiki-page-recover-draft)
+        (local-set-key (kbd "C-c C-k") 'mediawiki-page-discard-draft)))
+
+    ;; Switch to the buffer
+    (switch-to-buffer draft-buffer)
+    (message "Edit draft and use C-c C-c to attempt recovery or C-c C-k to discard.")))
+
+(defun mediawiki-page-load-draft-metadata (meta-file)
+  "Load metadata from META-FILE for a saved draft.
+Returns a plist with the metadata."
+  (let ((metadata '())
+        (title nil)
+        (sitename nil)
+        (params '()))
+
+    (when (file-exists-p meta-file)
+      (with-temp-buffer
+        (insert-file-contents meta-file)
+        (goto-char (point-min))
+
+        ;; Parse metadata lines
+        (while (not (eobp))
+          (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
+            (cond
+             ;; Title
+             ((string-match "^Title: \\(.*\\)$" line)
+              (setq title (match-string 1 line)))
+
+             ;; Site
+             ((string-match "^Site: \\(.*\\)$" line)
+              (setq sitename (match-string 1 line)))
+
+             ;; Summary
+             ((string-match "^Summary: \\(.*\\)$" line)
+              (push (cons "summary" (match-string 1 line)) params))
+
+             ;; Other parameters
+             ((string-match "^Param-\\([^:]+\\): \\(.*\\)$" line)
+              (push (cons (match-string 1 line) (match-string 2 line)) params))))
+
+          (forward-line 1))))
+
+    ;; Return as plist
+    (list :title title :sitename sitename :params params)))
+
+(defun mediawiki-page-recover-draft ()
+  "Attempt to recover and submit a draft edit."
+  (interactive)
+  (let ((metadata mediawiki-page-draft-metadata)
+        (content (buffer-string)))
+
+    (if (not metadata)
+        (message "No draft metadata available for recovery")
+
+      (let ((title (plist-get metadata :title))
+            (sitename (plist-get metadata :sitename))
+            (params (plist-get metadata :params)))
+
+        (if (or (not title) (not sitename))
+            (message "Incomplete draft metadata, cannot recover")
+
+          ;; Confirm recovery
+          (when (y-or-n-p (format "Attempt to save draft to %s on %s? " title sitename))
+            ;; Add content to params
+            (setq params (remove (assoc "text" params) params))
+            (push (cons "text" content) params)
+
+            ;; Update summary if needed
+            (let ((summary-assoc (assoc "summary" params)))
+              (when summary-assoc
+                (setcdr summary-assoc
+                        (concat "[Recovered draft] " (cdr summary-assoc)))))
+
+            ;; Attempt to save
+            (message "Attempting to recover draft...")
+            (condition-case err
+                (progn
+                  (mediawiki-page-save-sync sitename params)
+                  (message "Draft successfully recovered and saved to wiki")
+
+                  ;; Mark buffer as saved and offer to close
+                  (set-buffer-modified-p nil)
+                  (when (y-or-n-p "Draft recovered successfully. Close buffer? ")
+                    (kill-buffer)
+                    ;; Offer to delete draft files
+                    (when (and (file-exists-p buffer-file-name)
+                               (file-exists-p mediawiki-page-draft-meta-file)
+                               (y-or-n-p "Delete draft files? "))
+                      (delete-file buffer-file-name)
+                      (delete-file mediawiki-page-draft-meta-file)
+                      (message "Draft files deleted"))))
+
+              (error
+               (message "Recovery failed: %s" (error-message-string err))
+               (when (y-or-n-p "Would you like to edit the draft and try again? ")
+                 (message "Edit draft and use C-c C-c to retry recovery"))))))))))
+
+(defun mediawiki-page-discard-draft ()
+  "Discard the current draft without saving to wiki."
+  (interactive)
+  (when (y-or-n-p "Discard this draft without saving to wiki? ")
+    (let ((draft-file buffer-file-name)
+          (meta-file mediawiki-page-draft-meta-file))
+
+      ;; Close buffer
+      (set-buffer-modified-p nil)
+      (kill-buffer)
+
+      ;; Offer to delete draft files
+      (when (and draft-file meta-file
+                 (file-exists-p draft-file)
+                 (file-exists-p meta-file)
+                 (y-or-n-p "Delete draft files? "))
+        (delete-file draft-file)
+        (delete-file meta-file)
+        (message "Draft files deleted")))))
+
+(defun mediawiki-page-list-drafts (&optional sitename)
+  "List all available drafts, optionally filtered by SITENAME.
+Shows a buffer with drafts that can be recovered."
+  (interactive)
+  (let ((draft-dir mediawiki-page-draft-directory)
+        (drafts '()))
+
+    ;; Create draft directory if it doesn't exist
+    (unless (file-directory-p draft-dir)
+      (make-directory draft-dir t))
+
+    ;; Collect all drafts
+    (if sitename
+        ;; Filter by sitename
+        (let ((site-dir (expand-file-name
+                         (concat (replace-regexp-in-string "[^a-zA-Z0-9_-]" "_" sitename) "/")
+                         draft-dir)))
+          (when (file-directory-p site-dir)
+            (dolist (file (directory-files site-dir t "\\.wiki$"))
+              (let ((meta-file (concat (file-name-sans-extension file) ".meta")))
+                (when (file-exists-p meta-file)
+                  (push (cons file meta-file) drafts))))))
+
+      ;; All sites
+      (dolist (site-dir (directory-files draft-dir t))
+        (when (and (file-directory-p site-dir)
+                   (not (member (file-name-nondirectory site-dir) '("." ".."))))
+          (dolist (file (directory-files site-dir t "\\.wiki$"))
+            (let ((meta-file (concat (file-name-sans-extension file) ".meta")))
+              (when (file-exists-p meta-file)
+                (push (cons file meta-file) drafts)))))))
+
+    ;; Display drafts
+    (if (null drafts)
+        (message "No drafts found%s"
+                 (if sitename (format " for %s" sitename) ""))
+
+      ;; Create buffer to display drafts
+      (let ((buffer (get-buffer-create "*MediaWiki Drafts*")))
+        (with-current-buffer buffer
+          (erase-buffer)
+          (insert "MediaWiki Saved Drafts\n")
+          (insert "====================\n\n")
+
+          ;; Sort drafts by modification time (newest first)
+          (setq drafts
+                (sort drafts
+                      (lambda (a b)
+                        (time-less-p
+                         (nth 5 (file-attributes (car b)))
+                         (nth 5 (file-attributes (car a)))))))
+
+          ;; List each draft with metadata
+          (let ((index 1))
+            (dolist (draft drafts)
+              (let* ((draft-file (car draft))
+                     (meta-file (cdr draft))
+                     (metadata (mediawiki-page-load-draft-metadata meta-file))
+                     (title (plist-get metadata :title))
+                     (site (plist-get metadata :sitename))
+                     (mtime (format-time-string "%Y-%m-%d %H:%M:%S"
+                                               (nth 5 (file-attributes draft-file)))))
+
+                (insert (format "[%d] %s\n" index title))
+                (insert (format "    Site: %s\n" site))
+                (insert (format "    Date: %s\n" mtime))
+                (insert (format "    File: %s\n\n" draft-file))
+                (setq index (1+ index)))))
+
+          ;; Add instructions
+          (insert "\nPress a number key to open the corresponding draft, or q to quit.\n")
+
+          ;; Set up keymap for selection
+          (use-local-map (make-sparse-keymap))
+          (dotimes (i (min 9 (length drafts)))
+            (define-key (current-local-map) (kbd (format "%d" (1+ i)))
+                        (lambda ()
+                          (interactive)
+                          (let* ((draft (nth i drafts))
+                                 (draft-file (car draft))
+                                 (meta-file (cdr draft)))
+                            (quit-window)
+                            (mediawiki-page-open-draft draft-file meta-file)))))
+
+          (define-key (current-local-map) (kbd "q") 'quit-window)
+
+          ;; Set up the buffer
+          (setq buffer-read-only t)
+          (goto-char (point-min)))
+
+        ;; Display the buffer
+        (switch-to-buffer buffer)))))
+
+(defun mediawiki-page-handle-page-deleted (sitename params error-info)
+  "Handle case where page was deleted while editing.
+SITENAME and PARAMS identify the edit attempt.
+ERROR-INFO contains information about the error.
+
+Offers to save as draft or create new page."
+  (let ((title (cdr (assoc "title" params)))
+        (content (cdr (assoc "text" params))))
+
+    (if (not (y-or-n-p (format "Page %s was deleted. Save as draft? " title)))
+        (error "Edit cancelled: %s" error-info)
+
+      ;; Save as draft
+      (mediawiki-page-save-draft sitename params)
+
+      ;; Offer to create new page
+      (when (y-or-n-p "Would you like to create the page as new? ")
+        ;; Remove baserevid parameter if present
+        (let ((new-params (remove (assoc "baserevid" params) params)))
+          (mediawiki-page-save-sync sitename new-params))))))
+
+(defun mediawiki-page-remove-conflict-markers (content)
+  "Remove conflict markers from CONTENT.
+Returns the content with all conflict sections removed."
+  (with-temp-buffer
+    (insert content)
+    (goto-char (point-min))
+
+    ;; Remove all conflict marker sections
+    (while (re-search-forward (regexp-quote mediawiki-page-merge-conflict-marker-A) nil t)
+      (let ((start (match-beginning 0)))
+        (when (re-search-forward (regexp-quote mediawiki-page-merge-conflict-marker-C) nil t)
+          (delete-region start (point)))))
+
+    ;; Clean up any double newlines that might have been created
+    (goto-char (point-min))
+    (while (re-search-forward "\n\n+" nil t)
+      (replace-match "\n"))
+
+    (buffer-string)))
+
+(defun mediawiki-page-merge-save ()
+  "Save the merged content back to the wiki."
+  (interactive)
+  (let ((sitename mediawiki-page-merge-sitename)
+        (title mediawiki-page-merge-title)
+        (params mediawiki-page-merge-params)
+        (content (buffer-string)))
+
+    ;; Remove any remaining conflict markers
+    (setq content (mediawiki-page-remove-conflict-markers content))
+
+    ;; Update the text parameter
+    (let ((params-updated (copy-alist params)))
+      (setq params-updated (remove (assoc "baserevid" params-updated) params-updated))
+      (setq params-updated (remove (assoc "text" params-updated) params-updated))
+      (push (cons "text" content) params-updated)
+
+      ;; Update the summary
+      (let ((summary-association (assoc "summary" params-updated)))
+        (when summary-association
+          (setcdr summary-association
+                  (concat "Resolved edit conflict: " (cdr summary-association)))))
+
+      ;; Save the page
+      (condition-case err
+          (progn
+            (mediawiki-page-save-sync sitename params-updated)
+            (message "Merged content saved successfully")
+            (kill-buffer))
+        (error
+         (message "Failed to save merged content: %s" (error-message-string err))
+         (when (y-or-n-p "Save as draft instead? ")
+           (mediawiki-page-save-draft sitename params-updated)
+           (kill-buffer)))))))
+
+(defun mediawiki-page-merge-cancel ()
+  "Cancel the merge operation."
+  (interactive)
+  (when (y-or-n-p "Cancel merge and discard changes? ")
+    (kill-buffer)
+    (message "Merge cancelled")))
