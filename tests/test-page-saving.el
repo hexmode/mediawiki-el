@@ -4,10 +4,10 @@
 ;; Tests page saving with proper edit tokens, conflict detection, and edit summary support
 
 (require 'ert)
-(require 'mediawiki-page)
 (require 'mediawiki-core)
 (require 'mediawiki-api)
 (require 'mediawiki-session)
+(require 'mediawiki-page)
 
 ;;; Test Configuration
 
@@ -61,6 +61,7 @@
 
    ;; Edit conflict
    ((and (string= action "edit")
+         (string= (cdr (assoc "summary" params)) test-page-save-summary)
          (string= sitename "conflict-wiki"))
     (make-mediawiki-api-response
      :success nil
@@ -199,7 +200,7 @@
                                   test-page-save-content
                                   (list :summary test-page-save-summary))
             (error
-             (should (string-match-p "Failed to save page" (error-message-string err))))))
+             (should (string-match-p "Permission denied: Permission denied" (error-message-string err))))))
 
         ;; Test 2: Rate limit error with retry disabled
         (let ((mediawiki-page-save-retry-count 0))
@@ -209,7 +210,7 @@
                                   test-page-save-content
                                   (list :summary test-page-save-summary))
             (error
-             (should (string-match-p "Failed to save page" (error-message-string err)))))))
+             (should (string-match-p "Rate limited: Rate limit exceeded" (error-message-string err)))))))
 
     ;; Cleanup
     (advice-remove 'mediawiki-api-call-with-token #'test-page-save-mock-api-call-with-token)

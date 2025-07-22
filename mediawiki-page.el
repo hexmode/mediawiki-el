@@ -32,7 +32,6 @@ Set to 0 to disable caching."
 
 (defcustom mediawiki-page-cache-size 50
   "Maximum number of pages to keep in cache."
-  :type 'integer
   :tag "Page Cache Size"
   :group 'mediawiki)
 
@@ -140,6 +139,658 @@ If TITLE is provided, only clear that specific page."
       (dolist (key keys-to-remove)
         (remhash key mediawiki-page-cache)))))
 
+;;; Page Saving Functions
+
+(defun mediawiki-page-save (sitename title content &optional options)
+  "Save page CONTENT to SITENAME with TITLE.
+OPTIONS is a plist with the following keys:
+- :summary - Edit summary (defaults to empty string)
+- :minor - Whether this is a minor edit (defaults to nil)
+- :bot - Whether to mark as bot edit (defaults to nil)
+- :section - Section number to edit (nil for whole page)
+- :base-revision - Base revision ID for conflict detection
+- :watch - Whether to add page to watchlist (nil, 'watch, 'unwatch, 'preferences)
+- :tags - List of change tags to apply to the edit
+- :captchaid - CAPTCHA ID if responding to a CAPTCHA challenge
+- :captchaword - CAPTCHA response if responding to a CAPTCHA challenge
+- :maxlag - Maximum lag in seconds (for busy wikis)
+- :callback - Function to call with result (for async)
+- :error-callback - Function to call on error (for async)
+- :retry - Number of automatic retries on failure (defaults to mediawiki-page-save-retry-count)
+
+Returns a plist with edit result information or signals an error."
+  (let ((summary (or (plist-get options :summary) ""))
+        (minor (plist-get options :minor))
+        (bot (plist-get options :bot))
+        (section (plist-get options :section))
+        (base-revision (plist-get options :base-revision))
+        (watch (plist-get options :watch))
+        (tags (plist-get options :tags))
+        (captchaid (plist-get options :captchaid))
+        (captchaword (plist-get options :captchaword))
+        (maxlag (plist-get options :maxlag))
+        (callback (plist-get options :callback))
+        (error-callback (plist-get options :error-callback))
+        (retry-count (or (plist-get options :retry) mediawiki-page-save-retry-count)))
+
+    ;; Clear cache for this page
+    (mediawiki-page-cache-clear sitename title)
+
+    ;; Build parameters for edit
+    (let ((params (mediawiki-page-build-edit-params
+                  title content summary minor bot section base-revision watch
+                  tags captchaid captchaword maxlag)))
+
+      (if callback
+          ;; Async save
+          (mediawiki-page-save-async sitename params callback error-callback retry-count)
+        ;; Sync save
+        (mediawiki-page-save-sync sitename params retry-count)))))
+
+(defun mediawiki-page-save-sync (sitename params &optional retry-count)
+  "Synchronously save page using PARAMS to SITENAME.
+Uses proper edit tokens and conflict detection as required by requirement 3.2.
+RETRY-COUNT is the number of retries remaining.
+Returns a plist with edit result information or signals an error."
+  (let* ((retry-count (or retry-count mediawiki-page-save-retry-count))
+         (response (mediawiki-api-call-with-token sitename "edit" params "csrf")))
+    (if (mediawiki-api-response-success response)
+        (mediawiki-page-parse-edit-response response)
+      ;; Handle error with potential retry
+      (let* ((errors (mediawiki-api-response-errors response))
+             (primary-error (car errors))
+             (error-code (plist-get primary-error :code)))
+
+        ;; Check if this is a retryable error
+        (if (and (> retry-count 0)
+                 (member error-code '("ratelimited" "readonly" "timeout" "maxlag")))
+            (progn
+              ;; Calculate delay with exponential backoff
+              (let ((delay (* mediawiki-page-save-retry-delay
+                             (expt 2 (- mediawiki-page-save-retry-count retry-count)))))
+                (message "Save failed (%s). Retrying in %.1f seconds... (%d retries left)"
+                         error-code delay retry-count)
+                (sit-for delay)
+                ;; Retry the save
+                (mediawiki-page-save-sync sitename params (1- retry-count))))
+
+          ;; Not retryable or out of retries
+          (when (and (= retry-count 0) mediawiki-page-save-draft-on-failure)
+            (mediawiki-page-save-draft sitename params))
+
+          ;; Handle the error normally
+          (mediawiki-page-handle-edit-error response sitename params))))))
+
+(defun mediawiki-page-save-async (sitename params callback error-callback &optional retry-count)
+  "Asynchronously save page using PARAMS to SITENAME.
+Uses proper edit tokens and conflict detection as required by requirement 3.2.
+CALLBACK is called with edit result on success.
+ERROR-CALLBACK is called with error information on failure.
+RETRY-COUNT is the number of retries remaining."
+  (let ((retry-count (or retry-count mediawiki-page-save-retry-count)))
+    ;; Get CSRF token first
+    (condition-case err
+        (let ((token (mediawiki-session-get-token sitename "csrf")))
+          (if token
+              (let ((params-with-token (cons (cons "token" token) params)))
+                (mediawiki-api-call-async
+                 sitename "edit" params-with-token
+                 (lambda (response)
+                   (if (mediawiki-api-response-success response)
+                       (when callback
+                         (funcall callback (mediawiki-page-parse-edit-response response)))
+                     ;; Handle error with potential retry
+                     (let* ((errors (mediawiki-api-response-errors response))
+                            (primary-error (car errors))
+                            (error-code (plist-get primary-error :code)))
+
+                       ;; Check if this is a retryable error
+                       (if (and (> retry-count 0)
+                                (member error-code '("ratelimited" "readonly" "timeout" "maxlag")))
+                           (progn
+                             ;; Calculate delay with exponential backoff
+                             (let ((delay (* mediawiki-page-save-retry-delay
+                                            (expt 2 (- mediawiki-page-save-retry-count retry-count)))))
+                               (message "Save failed (%s). Retrying in %.1f seconds... (%d retries left)"
+                                        error-code delay retry-count)
+                               ;; Use run-with-timer for async retry after delay
+                               (run-with-timer delay nil
+                                              #'mediawiki-page-save-async
+                                              sitename params callback error-callback (1- retry-count))))
+
+                         ;; Not retryable or out of retries
+                         (when (and (= retry-count 0) mediawiki-page-save-draft-on-failure)
+                           (mediawiki-page-save-draft sitename params))
+
+                         ;; Call error callback with the error
+                         (when error-callback
+                           (funcall error-callback
+                                   (mediawiki-page-handle-edit-error response sitename params)))))))
+
+                 ;; HTTP error callback
+                 (lambda (response)
+                   (when error-callback
+                     (funcall error-callback
+                             (mediawiki-page-handle-edit-error response sitename params))))))
+
+            ;; No token available
+            (when error-callback
+              (funcall error-callback
+                      (list :error "token-error"
+                            :message "Failed to obtain CSRF token")))))
+
+      ;; Handle any errors in the token retrieval process
+      (error
+       (when error-callback
+         (funcall error-callback
+                 (list :error "token-error"
+                       :message (format "Token error: %s" (error-message-string err)))))))))
+
+(defun mediawiki-page-parse-edit-response (response)
+  "Parse edit RESPONSE into a structured result.
+Returns a plist with edit information."
+  (let* ((data (mediawiki-api-response-data response))
+         (edit-data (cdr (assq 'edit data))))
+
+    (list :success t
+          :result (cdr (assq 'result edit-data))
+          :pageid (cdr (assq 'pageid edit-data))
+          :title (cdr (assq 'title edit-data))
+          :contentmodel (cdr (assq 'contentmodel edit-data))
+          :oldrevid (cdr (assq 'oldrevid edit-data))
+          :newrevid (cdr (assq 'newrevid edit-data))
+          :newtimestamp (cdr (assq 'newtimestamp edit-data))
+          :watched (cdr (assq 'watched edit-data))
+          :nochange (cdr (assq 'nochange edit-data)))))
+
+ (defun mediawiki-page-handle-edit-error (response sitename params)
+  "Handle edit error from RESPONSE for SITENAME with PARAMS.
+Implements edit conflict detection and handling as required by requirement 3.3.
+Returns error information or re-signals error."
+  (let* ((errors (mediawiki-api-response-errors response))
+         (primary-error (car errors))
+         (error-code (plist-get primary-error :code))
+         (error-info (plist-get primary-error :info)))
+
+    (cond
+     ;; Edit conflict handling (requirement 3.3)
+     ((string= error-code "editconflict")
+      (mediawiki-page-handle-edit-conflict sitename params error-info))
+
+     ;; Page was deleted while editing
+     ((string= error-code "pagedeleted")
+      (mediawiki-page-handle-page-deleted sitename params error-info))
+
+     ;; Permission errors
+     ((member error-code '("permissiondenied" "protectedpage" "cascadeprotected"))
+      (error "Permission denied: %s" error-info))
+
+     ;; Rate limiting
+     ((string= error-code "ratelimited")
+      (error "Rate limited: %s" error-info))
+
+     ;; Token errors (should be handled by token refresh)
+     ((member error-code '("badtoken" "notoken"))
+      (error "Token error: %s" error-info))
+
+     ;; Generic error
+     (t
+      (error "Edit failed: %s (%s)" error-info error-code)))))
+
+;;; Edit Conflict Resolution
+
+(defcustom mediawiki-page-edit-conflict-resolution 'prompt
+  "How to handle edit conflicts.
+- 'prompt: Ask user what to do
+- 'mine: Use local changes (overwrite)
+- 'theirs: Use server version (discard local changes)
+- 'merge: Attempt automatic merge"
+  :type '(choice (const :tag "Prompt user" prompt)
+                 (const :tag "Use my changes" mine)
+                 (const :tag "Use server version" theirs)
+                 (const :tag "Attempt merge" merge))
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-merge-conflict-marker-A "<<<<<<< LOCAL VERSION"
+  "Marker for the start of local version in conflict markers."
+  :type 'string
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-merge-conflict-marker-B "======="
+  "Marker for the separator between versions in conflict markers."
+  :type 'string
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-merge-conflict-marker-C ">>>>>>> SERVER VERSION"
+  "Marker for the end of server version in conflict markers."
+  :type 'string
+  :group 'mediawiki)
+
+(defun mediawiki-page-handle-edit-conflict (sitename params error-info)
+  "Handle edit conflict for SITENAME with PARAMS.
+Implements requirement 3.3 for clear conflict resolution options.
+ERROR-INFO contains information about the conflict."
+  (let ((title (cdr (assoc "title" params)))
+        (local-content (cdr (assoc "text" params)))
+        (base-revision (cdr (assoc "baserevid" params))))
+
+    (cond
+     ((eq mediawiki-page-edit-conflict-resolution 'prompt)
+      (mediawiki-page-prompt-conflict-resolution sitename title local-content base-revision params error-info))
+
+     ((eq mediawiki-page-edit-conflict-resolution 'mine)
+      (mediawiki-page-force-save sitename params))
+
+     ((eq mediawiki-page-edit-conflict-resolution 'theirs)
+      (error "Edit conflict: Server version kept, local changes discarded"))
+
+     ((eq mediawiki-page-edit-conflict-resolution 'merge)
+      (mediawiki-page-attempt-merge sitename title local-content base-revision params))
+
+     (t
+      (error "Edit conflict: %s" error-info)))))
+
+(defun mediawiki-page-prompt-conflict-resolution (sitename title local-content base-revision params error-info)
+  "Prompt user for edit conflict resolution.
+SITENAME, TITLE, LOCAL-CONTENT are the edit details.
+BASE-REVISION is the revision ID the edit was based on.
+PARAMS contains the original edit parameters.
+ERROR-INFO contains the conflict information."
+  (let ((choice (read-char-choice
+                (format "Edit conflict on %s: %s\n(m)ine, (t)heirs, (d)iff, (3)way merge, (e)dit merged, (c)ancel: "
+                        title error-info)
+                '(?m ?t ?d ?3 ?e ?c))))
+    (cond
+     ((eq choice ?m)
+      (when (y-or-n-p "Force save your changes (will overwrite server version)? ")
+        (mediawiki-page-force-save sitename params)))
+
+     ((eq choice ?t)
+      (message "Edit conflict resolved: keeping server version")
+      (error "Edit cancelled: server version kept"))
+
+     ((eq choice ?d)
+      (mediawiki-page-show-conflict-diff sitename title local-content)
+      ;; After showing diff, prompt again
+      (mediawiki-page-prompt-conflict-resolution sitename title local-content base-revision params error-info))
+
+     ((eq choice ?3)
+      ;; Attempt three-way merge and show result
+      (mediawiki-page-attempt-merge sitename title local-content base-revision params))
+
+     ((eq choice ?e)
+      ;; Edit merged content in a buffer
+      (mediawiki-page-edit-merged-content sitename title local-content base-revision params))
+
+     ((eq choice ?c)
+      (error "Edit cancelled by user"))
+
+     (t
+      (error "Invalid choice")))))
+
+(defun mediawiki-page-force-save (sitename params)
+  "Force save by modifying the summary and removing baserevid parameter.
+SITENAME is the wiki site name.
+PARAMS are the edit parameters."
+  (let ((params-no-base (remove (assoc "baserevid" params) params)))
+    ;; Find the association for "summary"
+    (let ((summary-association (assoc "summary" params-no-base)))
+      (when summary-association
+        (setcdr summary-association
+                (concat "Edit conflict, choosing mine: "
+                        (cdr summary-association)))))
+    (mediawiki-page-save-sync sitename params-no-base)))
+
+(defun mediawiki-page-show-conflict-diff (sitename title local-content)
+  "Show diff between local content and server version.
+SITENAME, TITLE identify the page, LOCAL-CONTENT is the local version."
+  (let ((server-content (mediawiki-page-get-content sitename title '(:force-refresh t))))
+    (if server-content
+        (let ((diff-buffer (get-buffer-create "*MediaWiki Edit Conflict*")))
+          (with-current-buffer diff-buffer
+            (erase-buffer)
+            (insert "=== LOCAL VERSION ===\n")
+            (insert local-content)
+            (insert "\n\n=== SERVER VERSION ===\n")
+            (insert server-content)
+            (insert "\n\n=== END ===\n")
+            (goto-char (point-min))
+            (diff-mode))
+          (display-buffer diff-buffer))
+      (message "Could not retrieve server version for comparison"))))
+
+(defun mediawiki-page-attempt-merge (sitename title local-content base-revision params)
+  "Attempt automatic three-way merge of conflicting changes.
+SITENAME and TITLE identify the page.
+LOCAL-CONTENT is the local version of the content.
+BASE-REVISION is the revision ID the edit was based on.
+PARAMS contains the original edit parameters.
+
+Implements three-way merge capabilities as required by task 6.3."
+  (let ((server-content (mediawiki-page-get-content sitename title '(:force-refresh t)))
+        (base-content (when base-revision
+                        (mediawiki-page-get-revision-content sitename title base-revision))))
+
+    (if (not server-content)
+        (error "Could not retrieve server version for merge")
+
+      (if (not base-content)
+          ;; Fall back to two-way merge if base revision is not available
+          (mediawiki-page-two-way-merge sitename title local-content server-content params)
+
+        ;; Perform three-way merge
+        (mediawiki-page-three-way-merge sitename title local-content server-content base-content params)))))
+
+(defun mediawiki-page-get-revision-content (sitename title revision-id)
+  "Get content of a specific REVISION-ID for TITLE on SITENAME.
+Returns the content as a string or nil if not found."
+  (condition-case nil
+      (let* ((params `(("prop" . "revisions")
+                       ("titles" . ,title)
+                       ("rvprop" . "content")
+                       ("rvslots" . "main")
+                       ("revids" . ,(if (numberp revision-id)
+                                       (number-to-string revision-id)
+                                     revision-id))))
+             (response (mediawiki-api-call-sync sitename "query" params)))
+
+        (when (mediawiki-api-response-success response)
+          (let* ((data (mediawiki-api-response-data response))
+                 (query (cdr (assq 'query data)))
+                 (pages (cdr (assq 'pages query))))
+
+            ;; Find the page in the response
+            (catch 'found
+              (dolist (page pages)
+                (let* ((revisions (cdr (assq 'revisions page)))
+                       (revision (car revisions)))
+                  (when revision
+                    ;; Extract content from revision
+                    (let* ((slots (cdr (assq 'slots revision)))
+                           (main-slot (cdr (assq 'main slots))))
+                      (when main-slot
+                        (throw 'found (cdr (assq 'content main-slot)))))))))))
+    (error nil))))
+
+(defun mediawiki-page-two-way-merge (sitename title local-content server-content params)
+  "Perform a two-way merge between LOCAL-CONTENT and SERVER-CONTENT.
+SITENAME and TITLE identify the page.
+PARAMS contains the original edit parameters.
+
+This is used when base revision content is not available."
+  (let ((merge-buffer (get-buffer-create "*MediaWiki Merge*")))
+    (with-current-buffer merge-buffer
+      (erase-buffer)
+      (insert server-content)
+
+      ;; Create a temporary file for diff
+      (let ((local-file (make-temp-file "mediawiki-local-"))
+            (server-file (make-temp-file "mediawiki-server-")))
+        (unwind-protect
+            (progn
+              ;; Write content to temp files
+              (with-temp-file local-file
+                (insert local-content))
+              (with-temp-file server-file
+                (insert server-content))
+
+              ;; Use diff to create an ed script
+              (let ((diff-output (with-temp-buffer
+                                   (call-process "diff" nil t nil "-e" local-file server-file)
+                                   (buffer-string))))
+
+                ;; Apply the ed script if non-empty
+                (when (and diff-output (not (string-empty-p diff-output)))
+                  (let ((ed-buffer (get-buffer-create "*MediaWiki ED Script*")))
+                    (with-current-buffer ed-buffer
+                      (erase-buffer)
+                      (insert diff-output)
+                      (goto-char (point-min)))
+
+                    ;; Apply the ed script
+                    (with-current-buffer merge-buffer
+                      (let ((ed-program (or (executable-find "ed") "ed")))
+                        (call-process-region (point-min) (point-max)
+                                            ed-program t t nil "-")
+                        (goto-char (point-min))))))))
+
+          ;; Clean up temp files
+          (when (file-exists-p local-file)
+            (delete-file local-file))
+          (when (file-exists-p server-file)
+            (delete-file server-file))))
+
+      ;; Show the merged result
+      (goto-char (point-min))
+      (mediawiki-page-edit-mode)
+      (rename-buffer (format "*MediaWiki Merge: %s*" title)))
+
+    ;; Display the merge buffer
+    (switch-to-buffer merge-buffer)
+    (message "Review merged content. Use C-c C-c to save or C-c C-k to cancel.")
+
+    ;; Set up local variables for saving
+    (setq-local mediawiki-page-merge-sitename sitename)
+    (setq-local mediawiki-page-merge-title title)
+    (setq-local mediawiki-page-merge-params params)))
+
+(defun mediawiki-page-three-way-merge (sitename title local-content server-content base-content params)
+  "Perform a three-way merge between versions.
+SITENAME and TITLE identify the page.
+LOCAL-CONTENT is the local version.
+SERVER-CONTENT is the server version.
+BASE-CONTENT is the common ancestor version.
+PARAMS contains the original edit parameters.
+
+Implements three-way merge capabilities as required by task 6.3."
+  (let ((merge-buffer (get-buffer-create "*MediaWiki Merge*")))
+    (with-current-buffer merge-buffer
+      (erase-buffer)
+
+      ;; Create temporary files for the three versions
+      (let ((base-file (make-temp-file "mediawiki-base-"))
+            (local-file (make-temp-file "mediawiki-local-"))
+            (server-file (make-temp-file "mediawiki-server-")))
+        (unwind-protect
+            (progn
+              ;; Write content to temp files
+              (with-temp-file base-file
+                (insert base-content))
+              (with-temp-file local-file
+                (insert local-content))
+              (with-temp-file server-file
+                (insert server-content))
+
+              ;; Use diff3 to create a merged file with conflict markers
+              (call-process "diff3" nil t nil "-m"
+                           "-L" "LOCAL VERSION"
+                           "-L" "BASE VERSION"
+                           "-L" "SERVER VERSION"
+                           local-file base-file server-file))
+
+          ;; Clean up temp files
+          (when (file-exists-p base-file)
+            (delete-file base-file))
+          (when (file-exists-p local-file)
+            (delete-file local-file))
+          (when (file-exists-p server-file)
+            (delete-file server-file))))
+
+      ;; Set up the buffer for editing
+      (goto-char (point-min))
+      (mediawiki-page-edit-mode)
+      (smerge-mode 1)
+      (rename-buffer (format "*MediaWiki Merge: %s*" title)))
+
+    ;; Display the merge buffer
+    (switch-to-buffer merge-buffer)
+    (message "Review merged content. Resolve conflicts with smerge commands. Use C-c C-c to save or C-c C-k to cancel.")
+
+    ;; Set up local variables for saving
+    (setq-local mediawiki-page-merge-sitename sitename)
+    (setq-local mediawiki-page-merge-title title)
+    (setq-local mediawiki-page-merge-params params)))
+
+(defun mediawiki-page-edit-merged-content (sitename title local-content base-revision params)
+  "Edit merged content in a buffer for manual conflict resolution.
+SITENAME and TITLE identify the page.
+LOCAL-CONTENT is the local version.
+BASE-REVISION is the revision ID the edit was based on.
+PARAMS contains the original edit parameters."
+  (let ((server-content (mediawiki-page-get-content sitename title '(:force-refresh t)))
+        (merge-buffer (get-buffer-create "*MediaWiki Manual Merge*")))
+
+    (with-current-buffer merge-buffer
+      (erase-buffer)
+      (insert mediawiki-page-merge-conflict-marker-A "\n")
+      (insert local-content)
+      (insert "\n" mediawiki-page-merge-conflict-marker-B "\n")
+      (insert server-content)
+      (insert "\n" mediawiki-page-merge-conflict-marker-C "\n")
+
+      ;; Set up the buffer for editing
+      (goto-char (point-min))
+      (mediawiki-page-edit-mode)
+      (rename-buffer (format "*MediaWiki Manual Merge: %s*" title)))
+
+    ;; Display the merge buffer
+    (switch-to-buffer merge-buffer)
+    (message "Edit to resolve conflicts. Remove conflict markers when done. Use C-c C-c to save or C-c C-k to cancel.")
+
+    ;; Set up local variables for saving
+    (setq-local mediawiki-page-merge-sitename sitename)
+    (setq-local mediawiki-page-merge-title title)
+    (setq-local mediawiki-page-merge-params params)))
+
+(defvar mediawiki-page-edit-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") 'mediawiki-page-merge-save)
+    (define-key map (kbd "C-c C-k") 'mediawiki-page-merge-cancel)
+    map)
+  "Keymap for MediaWiki page edit mode.")
+
+(define-derived-mode mediawiki-page-edit-mode text-mode "MW-Edit"
+  "Major mode for editing MediaWiki page content during conflict resolution."
+  :group 'mediawiki
+  (setq-local font-lock-defaults '(wiki-font-lock-keywords t))
+  (when (fboundp 'wiki-mode)
+    (set (make-local-variable 'font-lock-defaults)
+         '(wiki-font-lock-keywords t))))
+
+(defun mediawiki-page-merge-save ()
+  "Save the merged content back to the wiki."
+  (interactive)
+  (let ((sitename mediawiki-page-merge-sitename)
+        (title mediawiki-page-merge-title)
+        (params mediawiki-page-merge-params)
+        (content (buffer-string)))
+
+    ;; Remove any remaining conflict markers
+    (setq content (mediawiki-page-remove-conflict-markers content))
+
+    ;; Update the text parameter
+    (let ((params-updated (copy-alist params)))
+      (setq params-updated (remove (assoc "baserevid" params-updated) params-updated))
+      (setq params-updated (remove (assoc "text" params-updated) params-updated))
+      (push (cons "text" content) params-updated)
+
+      ;; Update the summary
+      (let ((summary-association (assoc "summary" params-updated)))
+        (when summary-association
+          (setcdr summary-association
+                  (concat "Resolved edit conflict: " (cdr summary-association)))))
+
+      ;; Save the page
+      (let ((result (mediawiki-page-save-sync sitename params-updated)))
+        (when result
+          (message "Page saved successfully after conflict resolution.")
+          (kill-buffer)))))
+  t)
+
+(defun mediawiki-page-merge-cancel ()
+  "Cancel the merge operation."
+  (interactive)
+  (when (y-or-n-p "Cancel merge and discard changes? ")
+    (kill-buffer)
+    (message "Merge cancelled."))
+  t)
+
+(defun mediawiki-page-remove-conflict-markers (content)
+  "Remove conflict markers from CONTENT.
+Returns the cleaned content."
+  (with-temp-buffer
+    (insert content)
+    (goto-char (point-min))
+
+    ;; Remove all conflict markers
+    (let ((case-fold-search nil))
+      (while (re-search-forward (regexp-quote mediawiki-page-merge-conflict-marker-A) nil t)
+        (let ((start (match-beginning 0)))
+          (when (re-search-forward (regexp-quote mediawiki-page-merge-conflict-marker-C) nil t)
+            (delete-region start (point))))))
+
+    ;; Clean up any double newlines that might have been created
+    (goto-char (point-min))
+    (while (re-search-forward "\n\n+" nil t)
+      (replace-match "\n"))
+
+    ;; Return the cleaned content
+    (buffer-string)))
+
+(defun mediawiki-page-handle-page-deleted (sitename params error-info)
+  "Handle case where page was deleted during editing.
+SITENAME, PARAMS are the edit details, ERROR-INFO contains deletion info."
+  (let ((title (cdr (assoc "title" params))))
+    (if (y-or-n-p (format "Page %s was deleted: %s\nRecreate page? " title error-info))
+        ;; Remove baserevid and try to create new page
+        (let ((params-no-base (remove (assoc "baserevid" params) params)))
+          (mediawiki-page-save-sync sitename params-no-base))
+      (error "Edit cancelled: page was deleted"))))
+
+;;; Save Failure Recovery
+
+(defcustom mediawiki-page-save-draft-on-failure t
+  "Whether to save draft when page save fails.
+Implements requirement 3.4 for preserving user work."
+  :type 'boolean
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-save-retry-count 3
+  "Number of times to retry failed saves.
+Set to 0 to disable automatic retry."
+  :type 'integer
+  :group 'mediawiki)
+
+(defcustom mediawiki-page-save-retry-delay 2
+  "Initial delay in seconds between save retries.
+Uses exponential backoff for subsequent retries."
+  :type 'number
+  :group 'mediawiki)
+
+(defun mediawiki-page-save-draft (sitename params)
+  "Save draft of failed edit to prevent data loss.
+Implements requirement 3.4 for work preservation."
+  (when mediawiki-page-save-draft-on-failure
+    (let* ((title (cdr (assoc "title" params)))
+           (content (cdr (assoc "text" params)))
+           (timestamp (format-time-string "%Y%m%d-%H%M%S"))
+           (draft-file (expand-file-name
+                       (format "mediawiki-draft-%s-%s-%s.wiki"
+                               sitename
+                               (replace-regexp-in-string "[^a-zA-Z0-9-]" "_" title)
+                               timestamp)
+                       temporary-file-directory)))
+
+      (condition-case err
+          (progn
+            (with-temp-file draft-file
+              (insert content))
+            (message "Draft saved to: %s" draft-file)
+            draft-file)
+        (error
+         (message "Failed to save draft: %s" (error-message-string err))
+         nil)))))
+
 ;;; Page Retrieval Functions
 
 (defun mediawiki-page-get (sitename title &optional options)
@@ -234,6 +885,60 @@ CALLBACK is called with the page data."
                            title
                            (mediawiki-api-format-error-summary response))
        (funcall callback nil)))))
+
+(defun mediawiki-page-build-edit-params (title content summary minor &optional bot section base-revision watch
+                                                tags captchaid captchaword maxlag)
+  "Build API query parameters for page editing.
+TITLE is the page title to edit.
+CONTENT is the content for this edit.
+SUMMARY is the summary for this edit.
+MINOR indicates this is a minor edit if t.
+BOT indicates this is a bot edit if t.
+SECTION integer for the section being edited, if any.
+BASE-REVISION the base revision we're working against.
+WATCH indicates this page should be added to our watchlist if t.
+TAGS is a list of change tags to apply to the edit.
+CAPTCHAID is the CAPTCHA ID if responding to a CAPTCHA challenge.
+CAPTCHAWORD is the CAPTCHA response if responding to a CAPTCHA challenge.
+MAXLAG is the maximum lag in seconds (for busy wikis)."
+  (let ((params '()))
+    (push (cons "title" title) params)
+    (push (cons "text" content) params)  ; Use 'text' parameter for edit API
+    (push (cons "summary" summary) params)  ; Fix: use summary, not content
+    (when minor
+      (push (cons "minor" "1") params))  ; Use string values for API
+    (when bot
+      (push (cons "bot" "1") params))
+    (when section
+      (push (cons "section" (if (numberp section)
+                               (number-to-string section)
+                               section)) params))
+    (when base-revision
+      (push (cons "baserevid" (if (numberp base-revision)
+                                 (number-to-string base-revision)
+                                 base-revision)) params))
+    (when watch
+      (cond
+       ((eq watch 'watch) (push (cons "watchlist" "watch") params))
+       ((eq watch 'unwatch) (push (cons "watchlist" "unwatch") params))
+       ((eq watch 'preferences) (push (cons "watchlist" "preferences") params))
+       (t (push (cons "watchlist" "watch") params))))  ; Default to watch if t
+
+    ;; Add modern MediaWiki API parameters
+    (when tags
+      (push (cons "tags" (if (listp tags)
+                            (mapconcat 'identity tags "|")
+                          tags)) params))
+    (when captchaid
+      (push (cons "captchaid" captchaid) params))
+    (when captchaword
+      (push (cons "captchaword" captchaword) params))
+    (when maxlag
+      (push (cons "maxlag" (if (numberp maxlag)
+                              (number-to-string maxlag)
+                              maxlag)) params))
+
+    params))
 
 (defun mediawiki-page-build-query-params (title get-metadata get-revisions section follow-redirect)
   "Build API query parameters for page retrieval.
@@ -420,6 +1125,80 @@ OPTIONS is passed to `mediawiki-page-get'.
 Returns the section content as a string or nil if not found."
   (let ((options (plist-put options :section section)))
     (mediawiki-page-get-content sitename title options)))
+
+;;; Page Saving Convenience Functions
+
+(defun mediawiki-page-save-section (sitename title section content &optional summary minor)
+  "Save CONTENT to SECTION of page TITLE on SITENAME.
+SUMMARY is the edit summary, MINOR indicates if this is a minor edit.
+Returns edit result information."
+  (mediawiki-page-save sitename title content
+                      (list :section section
+                            :summary (or summary "")
+                            :minor minor)))
+
+(defun mediawiki-page-save-minor (sitename title content &optional summary)
+  "Save CONTENT to page TITLE on SITENAME as a minor edit.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (mediawiki-page-save sitename title content
+                      (list :summary (or summary "")
+                            :minor t)))
+
+(defun mediawiki-page-save-with-base (sitename title content base-revision &optional summary)
+  "Save CONTENT to page TITLE on SITENAME with BASE-REVISION for conflict detection.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (mediawiki-page-save sitename title content
+                      (list :base-revision base-revision
+                            :summary (or summary ""))))
+
+(defun mediawiki-page-save-and-watch (sitename title content &optional summary)
+  "Save CONTENT to page TITLE on SITENAME and add to watchlist.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (mediawiki-page-save sitename title content
+                      (list :summary (or summary "")
+                            :watch 'watch)))
+
+(defun mediawiki-page-create (sitename title content &optional summary)
+  "Create new page TITLE on SITENAME with CONTENT.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (mediawiki-page-save sitename title content
+                      (list :summary (or summary "Created page"))))
+
+(defun mediawiki-page-append (sitename title content &optional summary)
+  "Append CONTENT to existing page TITLE on SITENAME.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (let ((existing-content (mediawiki-page-get-content sitename title)))
+    (if existing-content
+        (mediawiki-page-save sitename title
+                            (concat existing-content "\n" content)
+                            (list :summary (or summary "Appended content")))
+      (error "Page %s does not exist on %s" title sitename))))
+
+(defun mediawiki-page-prepend (sitename title content &optional summary)
+  "Prepend CONTENT to existing page TITLE on SITENAME.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (let ((existing-content (mediawiki-page-get-content sitename title)))
+    (if existing-content
+        (mediawiki-page-save sitename title
+                            (concat content "\n" existing-content)
+                            (list :summary (or summary "Prepended content")))
+      (error "Page %s does not exist on %s" title sitename))))
+
+(defun mediawiki-page-replace (sitename title old-content content &optional summary)
+  "Replace TITLE on SITENAME with CONTENT.
+SUMMARY is the edit summary.
+Returns edit result information."
+  (let ((existing-content (mediawiki-page-get-content sitename title)))
+    (if (string= existing-content old-content)
+        (mediawiki-page-save sitename title content
+                             (list :summary (or summary "Replaced content")))
+      (error "The content to replace on %s is not what we expect" title))))
 
 (provide 'mediawiki-page)
 

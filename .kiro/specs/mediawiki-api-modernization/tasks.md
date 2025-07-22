@@ -101,13 +101,13 @@
     - Implement efficient caching of page data
     - _Requirements: 3.1_
 
-  - [ ] 6.2 Implement modern page saving
+  - [x] 6.2 Implement modern page saving
     - Update page saving to use current edit API
     - Add proper edit conflict detection and handling
     - Implement edit summary and minor edit support
     - _Requirements: 3.2, 3.3_
 
-  - [ ] 6.3 Add edit conflict resolution
+  - [x] 6.3 Add edit conflict resolution
     - Create conflict detection and user notification
     - Implement three-way merge capabilities
     - Add conflict resolution UI and user choices
