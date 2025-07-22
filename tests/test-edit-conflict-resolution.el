@@ -170,6 +170,16 @@
     (advice-remove 'y-or-n-p #'test-conflict-mock-y-or-n-p)
     (mediawiki-remove-session test-conflict-sitename)))
 
+(defun test-conflict-mock-three-way-merge (sitename title local-content server-content base-content params)
+  "Mock three-way merge function for testing.
+Just returns success without actually doing the merge."
+  t)
+
+(defun test-conflict-mock-attempt-merge (sitename title local-content base-revision params)
+  "Mock attempt merge function for testing.
+Bypasses the actual merge logic to avoid UI interaction."
+  t)
+
 (ert-deftest test-conflict-three-way-merge ()
   "Test three-way merge functionality."
   ;; Set up test environment
@@ -181,12 +191,8 @@
   (advice-add 'mediawiki-page-get-revision-content :override #'test-conflict-mock-page-get-revision-content)
   (advice-add 'call-process :override #'test-conflict-mock-call-process)
   (advice-add 'switch-to-buffer :override #'test-conflict-mock-switch-to-buffer)
-
-  ;; Mock the three-way merge function to avoid UI interaction
-  (advice-add 'mediawiki-page-three-way-merge :override
-              (lambda (sitename title local-content server-content base-content params)
-                ;; Just return success for the test
-                t))
+  (advice-add 'mediawiki-page-three-way-merge :override #'test-conflict-mock-three-way-merge)
+  (advice-add 'mediawiki-page-attempt-merge :override #'test-conflict-mock-attempt-merge)
 
   (unwind-protect
       (progn
@@ -207,7 +213,8 @@
     (advice-remove 'mediawiki-page-get-revision-content #'test-conflict-mock-page-get-revision-content)
     (advice-remove 'call-process #'test-conflict-mock-call-process)
     (advice-remove 'switch-to-buffer #'test-conflict-mock-switch-to-buffer)
-    (advice-remove 'mediawiki-page-three-way-merge)
+    (advice-remove 'mediawiki-page-three-way-merge #'test-conflict-mock-three-way-merge)
+    (advice-remove 'mediawiki-page-attempt-merge #'test-conflict-mock-attempt-merge)
     (mediawiki-remove-session test-conflict-sitename)))
 
 (ert-deftest test-conflict-user-prompt ()
