@@ -19,6 +19,7 @@
 (require 'json)
 (require 'mediawiki-core)
 (require 'mediawiki-http)
+(require 'mediawiki-errors)
 
 ;;; API Communication Functions
 
@@ -64,10 +65,10 @@ TOKEN-TYPE specifies the type of token needed (e.g., 'csrf', 'login').
 RETRY-COUNT is used internally for retry logic."
   (let ((retry-count (or retry-count 0))
         (max-retries 2))
-    
+
     (when (> retry-count max-retries)
       (error "Maximum token refresh retries exceeded for %s" sitename))
-    
+
     ;; Get token (will refresh automatically if needed)
     (let* ((token (condition-case err
                       (progn
@@ -82,10 +83,10 @@ RETRY-COUNT is used internally for retry logic."
            (params-with-token (if token
                                  (cons (cons token-param token) params)
                                params)))
-      
+
       ;; Make the API call
       (let ((response (mediawiki-api-call-sync sitename action params-with-token)))
-        
+
         ;; Check if we got a token error and should retry
         (if (and (not (mediawiki-api-response-success response))
                  (mediawiki-api-has-token-error-p response)
@@ -97,7 +98,7 @@ RETRY-COUNT is used internally for retry logic."
               (mediawiki-session-clear-token sitename token-type)
               ;; Retry the call
               (mediawiki-api-call-with-token sitename action params token-type (1+ retry-count)))
-          
+
           ;; Return the response (success or final failure)
           response)))))
 
@@ -936,3 +937,156 @@ ARGS should be alternating parameter names and values."
 (provide 'mediawiki-api)
 
 ;;; mediawiki-api.el ends here
+
+;;; Error Handling with New Error System
+
+(defun mediawiki-api-handle-error (response &optional context options)
+  "Handle errors in API RESPONSE with CONTEXT and handling OPTIONS.
+CONTEXT is a plist with additional context information.
+OPTIONS is a plist with handling options (see `mediawiki-error-handle').
+
+Returns t if the error was handled, nil otherwise."
+  (when (not (mediawiki-api-response-success response))
+    (let* ((error-obj (or (plist-get response :error-object)
+                         (mediawiki-error-from-response response context))))
+      (mediawiki-error-handle error-obj options))))
+
+(defun mediawiki-api-call-with-error-handling (sitename action params &optional options)
+  "Make API call to SITENAME with ACTION and PARAMS with error handling.
+OPTIONS is a plist with the following keys:
+- :token-type - Token type to use (defaults to nil)
+- :max-retries - Maximum number of retries (defaults to 2)
+- :context - Additional context information
+- :on-success - Function to call on success
+- :on-error - Function to call on error
+- :quiet - If non-nil, suppress messages
+
+Returns the API response or nil if an error occurred and was handled."
+  (let* ((token-type (plist-get options :token-type))
+         (max-retries (or (plist-get options :max-retries) 2))
+         (context (or (plist-get options :context)
+                     (list :sitename sitename :action action)))
+         (on-success (plist-get options :on-success))
+         (on-error (plist-get options :on-error))
+         (quiet (plist-get options :quiet))
+         (response (if token-type
+                      (mediawiki-api-call-with-token sitename action params token-type)
+                    (mediawiki-api-call-sync sitename action params))))
+
+    (if (mediawiki-api-response-success response)
+        (progn
+          (when on-success
+            (funcall on-success response))
+          response)
+
+      ;; Handle error
+      (let* ((error-obj (mediawiki-error-from-response response context))
+             (handled (mediawiki-error-handle error-obj
+                                            (list :retry-function #'mediawiki-api-call-with-error-handling
+                                                  :retry-args (list sitename action params options)
+                                                  :max-retries max-retries
+                                                  :on-user-intervention on-error
+                                                  :on-fatal on-error
+                                                  :quiet quiet))))
+        (unless handled
+          (when on-error
+            (funcall on-error error-obj response)))
+
+        nil))))  ; Return nil to indicate error
+
+(defun mediawiki-api-call-async-with-error-handling (sitename action params callback &optional options)
+  "Make async API call to SITENAME with ACTION and PARAMS with error handling.
+CALLBACK is called with the response on success.
+OPTIONS is a plist with the following keys:
+- :token-type - Token type to use (defaults to nil)
+- :error-callback - Function to call on error
+- :max-retries - Maximum number of retries (defaults to 2)
+- :context - Additional context information
+- :quiet - If non-nil, suppress messages"
+  (let* ((token-type (plist-get options :token-type))
+         (error-callback (plist-get options :error-callback))
+         (max-retries (or (plist-get options :max-retries) 2))
+         (context (or (plist-get options :context)
+                     (list :sitename sitename :action action)))
+         (quiet (plist-get options :quiet))
+         (current-retry (or (plist-get options :current-retry) 0)))
+
+    (if token-type
+        ;; With token
+        (condition-case err
+            (let ((token (mediawiki-session-get-token sitename token-type)))
+              (if token
+                  (let ((params-with-token (cons (cons (concat token-type "token") token) params)))
+                    (mediawiki-api-call-async
+                     sitename action params-with-token
+                     ;; Success callback
+                     callback
+                     ;; Error callback with retry logic
+                     (lambda (response)
+                       (let* ((error-obj (mediawiki-error-from-response response context))
+                              (retryable (mediawiki-error-retryable-p error-obj))
+                              (should-retry (and retryable (< current-retry max-retries))))
+
+                         (if should-retry
+                             ;; Retry the request
+                             (progn
+                               (unless quiet
+                                 (message "API error: %s. Retrying (%d/%d)..."
+                                          (mediawiki-error-message error-obj)
+                                          (1+ current-retry)
+                                          max-retries))
+
+                               ;; Calculate exponential backoff delay
+                               (let ((delay (* 1.0 (expt 2 current-retry))))
+                                 (run-with-timer delay nil
+                                                #'mediawiki-api-call-async-with-error-handling
+                                                sitename action params callback
+                                                (plist-put options :current-retry (1+ current-retry)))))
+
+                           ;; No retry, call error callback
+                           (when error-callback
+                             (funcall error-callback error-obj response)))))))
+
+                ;; No token available
+                (when error-callback
+                  (let ((error-obj (mediawiki-error-create
+                                   'auth 'error
+                                   (format "Failed to obtain %s token" token-type)
+                                   "token-error" 'user nil 'client context)))
+                    (funcall error-callback error-obj nil)))))
+
+          ;; Handle any errors in the token retrieval process
+          (error
+           (when error-callback
+             (let ((error-obj (mediawiki-error-create-from-exception
+                              (car err) (error-message-string err) context)))
+               (funcall error-callback error-obj nil)))))
+
+      ;; Without token (simple async call)
+      (mediawiki-api-call-async
+       sitename action params
+       callback
+       (lambda (response)
+         (let* ((error-obj (mediawiki-error-from-response response context))
+                (retryable (mediawiki-error-retryable-p error-obj))
+                (should-retry (and retryable (< current-retry max-retries))))
+
+           (if should-retry
+               ;; Retry the request
+               (progn
+                 (unless quiet
+                   (message "API error: %s. Retrying (%d/%d)..."
+                            (mediawiki-error-message error-obj)
+                            (1+ current-retry)
+                            max-retries))
+
+                 ;; Calculate exponential backoff delay
+                 (let ((delay (* 1.0 (expt 2 current-retry))))
+                   (run-with-timer delay nil
+                                  #'mediawiki-api-call-async-with-error-handling
+                                  sitename action params callback
+                                  (plist-put options :current-retry (1+ current-retry)))))
+
+             ;; No retry, call error callback
+             (when error-callback
+               (funcall error-callback error-obj response)))))))))

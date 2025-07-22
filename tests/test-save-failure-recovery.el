@@ -95,7 +95,7 @@
                       (contentmodel . "wikitext")
                       (oldrevid . 100)
                       (newrevid . 101)
-                      (newtimestamp . "2025-07-20T12:34:56Z")))))))
+                      (newtimestamp . "2025-07-20T12:34:56Z"))))))))
 
 (defun test-recovery-mock-y-or-n-p (prompt)
   "Mock y-or-n-p to simulate user confirmation during tests."
@@ -158,14 +158,14 @@
               (mediawiki-page-save-retry-delay 0.1)
               (success-called nil)
               (error-called nil))
-          
+
           (mediawiki-page-save "retry-test-wiki"
                               test-recovery-title
                               test-recovery-content
                               (list :summary "Test edit"
                                     :callback (lambda (_) (setq success-called t))
                                     :error-callback (lambda (_) (setq error-called t))))
-          
+
           ;; Should have succeeded after retries
           (should success-called)
           (should-not error-called)
@@ -181,10 +181,10 @@
   "Test draft saving functionality for failed edits."
   ;; Set up test environment
   (test-recovery-setup-mock-session)
-  
+
   ;; Create temporary directory for drafts
   (setq test-recovery-temp-dir (make-temp-file "mediawiki-test-drafts-" t))
-  
+
   ;; Mock the necessary functions
   (advice-add 'mediawiki-api-call-with-token :override #'test-recovery-mock-api-call-with-token)
   (advice-add 'y-or-n-p :override #'test-recovery-mock-y-or-n-p)
@@ -196,7 +196,7 @@
               (mediawiki-page-save-retry-delay 0.1)
               (mediawiki-page-save-draft-on-failure t)
               (mediawiki-page-draft-directory test-recovery-temp-dir))
-          
+
           ;; Should fail but save draft
           (condition-case err
               (mediawiki-page-save "draft-test-wiki"
@@ -206,17 +206,17 @@
             (error
              ;; Should have error message about permission denied
              (should (string-match-p "Permission denied" (error-message-string err)))))
-          
+
           ;; Check if draft was saved
           (let* ((site-dir (expand-file-name "draft-test-wiki/" test-recovery-temp-dir))
                  (draft-files (directory-files site-dir t "\\.wiki$")))
             (should (= (length draft-files) 1))
-            
+
             ;; Check content of draft file
             (with-temp-buffer
               (insert-file-contents (car draft-files))
               (should (string= (buffer-string) test-recovery-content)))
-            
+
             ;; Check metadata file
             (let ((meta-file (concat (file-name-sans-extension (car draft-files)) ".meta")))
               (should (file-exists-p meta-file))
@@ -229,7 +229,7 @@
     (advice-remove 'mediawiki-api-call-with-token #'test-recovery-mock-api-call-with-token)
     (advice-remove 'y-or-n-p #'test-recovery-mock-y-or-n-p)
     (mediawiki-remove-session test-recovery-sitename)
-    
+
     ;; Delete temporary directory
     (when (and test-recovery-temp-dir (file-directory-p test-recovery-temp-dir))
       (delete-directory test-recovery-temp-dir t))))
@@ -238,10 +238,10 @@
   "Test handling of page deleted errors."
   ;; Set up test environment
   (test-recovery-setup-mock-session)
-  
+
   ;; Create temporary directory for drafts
   (setq test-recovery-temp-dir (make-temp-file "mediawiki-test-drafts-" t))
-  
+
   ;; Mock the necessary functions
   (advice-add 'mediawiki-api-call-with-token :override #'test-recovery-mock-api-call-with-token)
   (advice-add 'y-or-n-p :override #'test-recovery-mock-y-or-n-p)
@@ -250,13 +250,13 @@
       (progn
         ;; Test: Page deleted handling
         (let ((mediawiki-page-draft-directory test-recovery-temp-dir))
-          
+
           ;; Should handle page deleted error
           (mediawiki-page-save "page-deleted-wiki"
                               test-recovery-title
                               test-recovery-content
                               (list :summary "Test edit"))
-          
+
           ;; Check if draft was saved
           (let* ((site-dir (expand-file-name "page-deleted-wiki/" test-recovery-temp-dir))
                  (draft-files (directory-files site-dir t "\\.wiki$")))
@@ -266,7 +266,7 @@
     (advice-remove 'mediawiki-api-call-with-token #'test-recovery-mock-api-call-with-token)
     (advice-remove 'y-or-n-p #'test-recovery-mock-y-or-n-p)
     (mediawiki-remove-session test-recovery-sitename)
-    
+
     ;; Delete temporary directory
     (when (and test-recovery-temp-dir (file-directory-p test-recovery-temp-dir))
       (delete-directory test-recovery-temp-dir t))))
@@ -275,7 +275,7 @@
   "Test loading and handling of draft metadata."
   ;; Create temporary directory for drafts
   (setq test-recovery-temp-dir (make-temp-file "mediawiki-test-drafts-" t))
-  
+
   (unwind-protect
       (progn
         ;; Create test metadata file
@@ -283,7 +283,7 @@
                (expected-title "Test Title")
                (expected-site "test-site")
                (expected-summary "Test summary"))
-          
+
           ;; Write test metadata
           (with-temp-file meta-file
             (insert (format "Title: %s\n" expected-title))
@@ -291,18 +291,18 @@
             (insert (format "Summary: %s\n" expected-summary))
             (insert "Param-minor: 1\n")
             (insert "Param-section: 2\n"))
-          
+
           ;; Test loading metadata
           (let ((metadata (mediawiki-page-load-draft-metadata meta-file)))
             (should (string= (plist-get metadata :title) expected-title))
             (should (string= (plist-get metadata :sitename) expected-site))
-            
+
             ;; Check params
             (let ((params (plist-get metadata :params)))
               (should (string= (cdr (assoc "summary" params)) expected-summary))
               (should (string= (cdr (assoc "minor" params)) "1"))
               (should (string= (cdr (assoc "section" params)) "2"))))))
-    
+
     ;; Delete temporary directory
     (when (and test-recovery-temp-dir (file-directory-p test-recovery-temp-dir))
       (delete-directory test-recovery-temp-dir t))))

@@ -21,6 +21,7 @@
 (require 'url-http)
 (require 'json)
 (require 'mediawiki-core)
+(require 'mediawiki-errors)
 
 ;;; HTTP Request Functions
 
@@ -340,16 +341,37 @@ different types of errors (network, authentication, server errors)."
             (when callback
               (funcall callback response))
           (when error-callback
-            (funcall error-callback response))))
+            ;; Create structured error object for better error handling
+            (let* ((context (list :url url :method method))
+                   (error-obj (if (plist-get response :status-code)
+                                 ;; HTTP error
+                                 (mediawiki-error-create-from-http
+                                  (plist-get response :status-code)
+                                  (plist-get response :error)
+                                  context)
+                               ;; Network or other error
+                               (mediawiki-error-create
+                                'network
+                                'error
+                                (or (plist-get response :error) "Unknown error")
+                                (plist-get response :error-type)
+                                'retry
+                                nil
+                                'http
+                                context))))
+              ;; Pass both the original response and the structured error
+              (funcall error-callback (plist-put response :error-object error-obj))))))
     (error
-     (let ((error-response (mediawiki-http-create-error-response
-                           'parsing-error
-                           (format "Failed to parse response: %s" (error-message-string err))
-                           nil)))
+     (let* ((context (list :url url :method method))
+            (error-obj (mediawiki-error-create-from-exception
+                        (car err) (error-message-string err) context))
+            (error-response (mediawiki-http-create-error-response
+                            'parsing-error
+                            (format "Failed to parse response: %s" (error-message-string err))
+                            nil)))
        (mediawiki-debug-log "Response parsing error: %s" (error-message-string err))
        (when error-callback
-         (funcall error-callback error-response))))))
-
+         (funcall error-callback (plist-put error-response :error-object error-obj)))))))
 
 
 (defun mediawiki-http-parse-response (status &optional url method)
@@ -431,7 +453,9 @@ STATUS-CODE is the HTTP status code if available."
 
 (defun mediawiki-http-classify-error (status-code)
   "Classify error type based on HTTP STATUS-CODE.
-Returns a symbol indicating the error category for requirement 5.3."
+Returns a symbol indicating the error category for requirement 5.3.
+This function is maintained for backward compatibility.
+New code should use `mediawiki-error-create-from-http' instead."
   (cond
    ((not status-code) 'network-error)
    ((= status-code 401) 'auth-error)

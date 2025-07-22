@@ -23,8 +23,10 @@ test: $(patsubst tests/%.el,%,$(ERT_TESTS))
 define TEST_RULES
 $(1): $(2)
 	@echo "Running $(1)"
-	@$(BATCH) -l mediawiki-core.el -l mediawiki-session.el -l mediawiki-http.el -l mediawiki-api.el -l mediawiki-auth.el \
-		-l mediawiki-oauth.el -l mediawiki-page.el -l tests/$(1).el -f ert-run-tests-batch-and-exit;
+	@$(BATCH) -l mediawiki-core.el -l mediawiki-errors.el -l mediawiki-session.el -l mediawiki-http.el \
+		-l mediawiki-api.el -l mediawiki-auth.el -l mediawiki-oauth.el -l mediawiki-page.el \
+		-l tests/$(1).el \
+		-f ert-run-tests-batch-and-exit;
 endef
 
 # Generate rules for each test file

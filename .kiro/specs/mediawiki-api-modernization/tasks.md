@@ -108,14 +108,16 @@
     - _Requirements: 3.2, 3.3_
 
   - [x] 6.3 Add edit conflict resolution
-    - Create conflict detection and user notification
+    - Create conflict detection and user notification 
     - Implement three-way merge capabilities
     - Add conflict resolution UI and user choices
     - _Requirements: 3.3_
 
-  - [x] 6.4 Implement save failure recovery
-    - Add automatic retry logic for failed saves
+  - [ ] 6.4 Implement save failure recovery
     - Implement draft saving to prevent data loss
+    - Add automatic retry logic for failed save
+    - Ensure drafts are saved to disk before saving to server is attempted
+    - When saving to server is completed, remove the draft for that attempt from disk.
     - Create user notification and recovery options
     - _Requirements: 3.4_
 
