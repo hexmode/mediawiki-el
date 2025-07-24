@@ -63,9 +63,9 @@
          (string= sitename "force-save-wiki"))
     (make-mediawiki-api-response
      :success t
-     :data '((edit . ((result . "Success")
+     :data `((edit . ((result . "Success")
                       (pageid . 12345)
-                      (title . "Test Conflict Page")
+                      (title . ,test-conflict-title)
                       (contentmodel . "wikitext")
                       (oldrevid . 100)
                       (newrevid . 101)
@@ -112,6 +112,25 @@
   "Mock y-or-n-p to simulate user confirmation during tests."
   t)  ; Always confirm
 
+(defun test-conflict-mock-three-way-merge (sitename title local-content server-content base-content params)
+  "Mock three-way merge function for testing.
+Just returns success without actually doing the merge."
+  t)
+
+(defun test-conflict-mock-attempt-merge (sitename title local-content base-revision params)
+  "Mock attempt merge function for testing.
+Bypasses the actual merge logic to avoid UI interaction."
+  t)
+
+(defun test-conflict-mock-page-save-draft (sitename params)
+  "Mock draft saving function to avoid file system operations."
+  (when mediawiki-page-save-draft-on-failure
+    "/tmp/test-draft-file"))
+
+(defun test-conflict-mock-page-remove-draft (sitename title)
+  "Mock draft removal function to avoid file system operations."
+  t)
+
 ;;; Test Functions
 
 (ert-deftest test-conflict-detection ()
@@ -150,35 +169,28 @@
   (advice-add 'mediawiki-api-call-with-token :override #'test-conflict-mock-api-call-with-token)
   (advice-add 'read-char-choice :override #'test-conflict-mock-read-char-choice)
   (advice-add 'y-or-n-p :override #'test-conflict-mock-y-or-n-p)
+  (advice-add 'mediawiki-page-save-draft :override #'test-conflict-mock-page-save-draft)
+  (advice-add 'mediawiki-page-remove-draft :override #'test-conflict-mock-page-remove-draft)
 
   (unwind-protect
       (progn
         ;; Test: Force save with 'mine' option
         (let ((mediawiki-page-edit-conflict-resolution 'mine))
-          (condition-case err
-              (mediawiki-page-save "force-save-wiki"
-                                  test-conflict-title
-                                  test-conflict-local-content
-                                  (list :summary "Test edit"
-                                        :base-revision test-conflict-base-revision))
-            (error
-             (should nil)))))  ; Should not error
+          ;; This should not throw an error but should successfully save
+          (let ((result (mediawiki-page-save "force-save-wiki"
+                                           test-conflict-title
+                                           test-conflict-local-content
+                                           (list :summary "Test edit"
+                                                 :base-revision test-conflict-base-revision))))
+            (should (eq (plist-get result :success) t)))))
 
     ;; Cleanup
     (advice-remove 'mediawiki-api-call-with-token #'test-conflict-mock-api-call-with-token)
     (advice-remove 'read-char-choice #'test-conflict-mock-read-char-choice)
     (advice-remove 'y-or-n-p #'test-conflict-mock-y-or-n-p)
+    (advice-remove 'mediawiki-page-save-draft #'test-conflict-mock-page-save-draft)
+    (advice-remove 'mediawiki-page-remove-draft #'test-conflict-mock-page-remove-draft)
     (mediawiki-remove-session test-conflict-sitename)))
-
-(defun test-conflict-mock-three-way-merge (sitename title local-content server-content base-content params)
-  "Mock three-way merge function for testing.
-Just returns success without actually doing the merge."
-  t)
-
-(defun test-conflict-mock-attempt-merge (sitename title local-content base-revision params)
-  "Mock attempt merge function for testing.
-Bypasses the actual merge logic to avoid UI interaction."
-  t)
 
 (ert-deftest test-conflict-three-way-merge ()
   "Test three-way merge functionality."
@@ -228,19 +240,20 @@ Bypasses the actual merge logic to avoid UI interaction."
   (advice-add 'read-char-choice :override #'test-conflict-mock-read-char-choice)
   (advice-add 'y-or-n-p :override #'test-conflict-mock-y-or-n-p)
   (advice-add 'switch-to-buffer :override #'test-conflict-mock-switch-to-buffer)
+  (advice-add 'mediawiki-page-save-draft :override #'test-conflict-mock-page-save-draft)
+  (advice-add 'mediawiki-page-remove-draft :override #'test-conflict-mock-page-remove-draft)
 
   (unwind-protect
       (progn
         ;; Test: User prompt with 'mine' choice
         (let ((mediawiki-page-edit-conflict-resolution 'prompt))
-          (condition-case err
-              (mediawiki-page-save "force-save-wiki"
-                                  test-conflict-title
-                                  test-conflict-local-content
-                                  (list :summary "Test edit"
-                                        :base-revision test-conflict-base-revision))
-            (error
-             (should nil)))))  ; Should not error
+          ;; This should not throw an error but should successfully save
+          (let ((result (mediawiki-page-save "force-save-wiki"
+                                           test-conflict-title
+                                           test-conflict-local-content
+                                           (list :summary "Test edit"
+                                                 :base-revision test-conflict-base-revision))))
+            (should (eq (plist-get result :success) t)))))
 
     ;; Cleanup
     (advice-remove 'mediawiki-api-call-with-token #'test-conflict-mock-api-call-with-token)
@@ -248,6 +261,8 @@ Bypasses the actual merge logic to avoid UI interaction."
     (advice-remove 'read-char-choice #'test-conflict-mock-read-char-choice)
     (advice-remove 'y-or-n-p #'test-conflict-mock-y-or-n-p)
     (advice-remove 'switch-to-buffer #'test-conflict-mock-switch-to-buffer)
+    (advice-remove 'mediawiki-page-save-draft #'test-conflict-mock-page-save-draft)
+    (advice-remove 'mediawiki-page-remove-draft #'test-conflict-mock-page-remove-draft)
     (mediawiki-remove-session test-conflict-sitename)))
 
 (ert-deftest test-conflict-marker-removal ()

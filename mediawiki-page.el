@@ -235,12 +235,13 @@ Uses proper edit tokens and conflict detection.  RETRY-COUNT is the
 number of retries remaining.  Returns a plist with edit result
 information or signals an error."
   (let* ((retry-count (or retry-count mediawiki-page-save-retry-count))
-         (response (mediawiki-api-call-with-token sitename "edit" params "csrf")))
+         (response (mediawiki-api-call-with-token sitename "edit" params "csrf"))
+         (title (cdr (assoc "title" params))))  ; Extract title from params
     (if (mediawiki-api-response-success response)
         (progn
           ;; remove draft if save is successful
           (when mediawiki-page-save-draft-on-failure
-            (mediawiki-page-remove-draft sitename (plist-get params :title)))
+            (mediawiki-page-remove-draft sitename title))
           (mediawiki-page-parse-edit-response response))
       ;; handle error with potential retry
       (let* ((errors (mediawiki-api-response-errors response))
@@ -273,8 +274,7 @@ Uses proper edit tokens and conflict detection.  Callback is called with
 edit result on success.  ERROR-CALLBACK is called with error information
 on failure.  RETRY-COUNT is the number of retries remaining."
   (let ((retry-count (or retry-count mediawiki-page-save-retry-count))
-        (title (plist-get params :title)))
-
+        (title (cdr (assoc "title" params))))
     ;; save draft before attempting to save to server
     (when mediawiki-page-save-draft-on-failure
       (mediawiki-page-save-draft sitename params))
@@ -287,6 +287,7 @@ on failure.  RETRY-COUNT is the number of retries remaining."
                 (mediawiki-api-call-async
                  sitename "edit" params-with-token
                  (lambda (response)
+                   (message (format "response: %s" response))
                    (if (mediawiki-api-response-success response)
                        (progn
                          ;; remove draft if save is successful
@@ -316,7 +317,7 @@ on failure.  RETRY-COUNT is the number of retries remaining."
 
                          ;; not retryable or out of retries
                          ;; handle the error normally
-                         (mediawiki-page-handle-edit-error response sitename params)))))))
+                         (mediawiki-page-handle-edit-error response sitename params)))))
 
                  ;; http error callback
                  (lambda (response)
@@ -324,18 +325,11 @@ on failure.  RETRY-COUNT is the number of retries remaining."
                      (funcall error-callback
                               (mediawiki-page-handle-edit-error response sitename params))))))
 
-            ;; no token available
-            (when error-callback
-              (funcall error-callback
-                       (list :error "token-error"
-                             :message "failed to obtain csrf token")))))
-
-      ;; handle any errors in the token retrieval process
       (error
        (when error-callback
          (funcall error-callback
                   (list :error "token-error"
-                        :message (format "token error: %s" (error-message-string err)))))))
+                        :message (format "token error: %s" (error-message-string err)))))))))))
 
 (defun mediawiki-page-parse-edit-response (response)
   "Parse edit RESPONSE into a structured result.

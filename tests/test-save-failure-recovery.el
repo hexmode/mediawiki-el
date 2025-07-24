@@ -1,4 +1,4 @@
-;;; test-save-failure-recovery.el --- Test save failure recovery functionality -*- lexical-binding: t; -*-
+;; test-save-failure-recovery.el --- Test save failure recovery functionality -*- lexical-binding: t; -*-
 
 ;; Test implementation of task 6.4: Implement save failure recovery
 ;; Tests automatic retry logic, draft saving, and recovery options
@@ -52,6 +52,7 @@
    ((and (string= action "edit")
          (string= sitename "retry-test-wiki")
          (< test-recovery-retry-count 2))
+    (message "retry")
     (setq test-recovery-retry-count (1+ test-recovery-retry-count))
     (make-mediawiki-api-response
      :success nil
@@ -61,6 +62,7 @@
    ((and (string= action "edit")
          (string= sitename "retry-test-wiki")
          (>= test-recovery-retry-count 2))
+    (message "suc retrry")
     (make-mediawiki-api-response
      :success t
      :data '((edit . ((result . "Success")
@@ -74,6 +76,7 @@
    ;; Permanent failure for draft saving test
    ((and (string= action "edit")
          (string= sitename "draft-test-wiki"))
+    (message "fail")
     (make-mediawiki-api-response
      :success nil
      :errors (list (list :code "permissiondenied" :info "Permission denied"))))
@@ -81,12 +84,14 @@
    ;; Page deleted error
    ((and (string= action "edit")
          (string= sitename "page-deleted-wiki"))
+    (message "err")
     (make-mediawiki-api-response
      :success nil
      :errors (list (list :code "pagedeleted" :info "Page was deleted since you started editing"))))
 
    ;; Default success response
    (t
+    (message "suc def")
     (make-mediawiki-api-response
      :success t
      :data '((edit . ((result . "Success")
@@ -145,6 +150,22 @@
   "Test automatic retry logic for asynchronous failed saves."
   ;; Set up test environment
   (test-recovery-setup-mock-session)
+  ;; Also set up session for retry-test-wiki
+  (let ((session (make-mediawiki-session
+                  :site-name "retry-test-wiki"
+                  :tokens (make-hash-table :test 'equal)
+                  :user-info '(:username "testuser" :userid 123)
+                  :login-time (current-time)
+                  :last-activity (current-time)))
+        (site (make-mediawiki-site-config
+               :name "retry-test-wiki"
+               :url "http://test.example.com"
+               :api-url "http://test.example.com/api.php")))
+    (mediawiki-set-session "retry-test-wiki" session)
+    (mediawiki-add-site site)
+    ;; Add mock token
+    (puthash "csrf" test-recovery-mock-token (mediawiki-session-tokens session))
+    (puthash "csrf-expiry" (time-add (current-time) 3600) (mediawiki-session-tokens session)))
   (setq test-recovery-retry-count 0)
 
   ;; Mock the necessary functions
@@ -163,8 +184,18 @@
                               test-recovery-title
                               test-recovery-content
                               (list :summary "Test edit"
-                                    :callback (lambda (_) (setq success-called t))
-                                    :error-callback (lambda (_) (setq error-called t))))
+                                    :callback (lambda (_) 
+                                                (message "Success callback called")
+                                                (setq success-called t))
+                                    :error-callback (lambda (_) 
+                                                      (message "Error callback called")
+                                                      (setq error-called t))))
+
+          ;; Wait a bit for the async operation to complete
+          (message "Waiting for async operation to complete...")
+          (sit-for 0.1)
+          (message "Done waiting. success-called: %s, error-called: %s, retry-count: %s" 
+                   success-called error-called test-recovery-retry-count)
 
           ;; Should have succeeded after retries
           (should success-called)
@@ -175,7 +206,9 @@
     ;; Cleanup
     (advice-remove 'mediawiki-api-call-with-token #'test-recovery-mock-api-call-with-token)
     (advice-remove 'run-with-timer #'test-recovery-mock-run-with-timer)
-    (mediawiki-remove-session test-recovery-sitename)))
+    (mediawiki-remove-session test-recovery-sitename)
+    (mediawiki-remove-session "retry-test-wiki")
+    (mediawiki-remove-site "retry-test-wiki")))
 
 (ert-deftest test-draft-saving ()
   "Test draft saving functionality for failed edits."

@@ -51,9 +51,9 @@
          (string= (cdr (assoc "title" params)) test-page-save-title))
     (make-mediawiki-api-response
      :success t
-     :data '((edit . ((result . "Success")
+     :data `((edit . ((result . "Success")
                       (pageid . 12345)
-                      (title . "Test Page")
+                      (title . ,test-page-save-title)
                       (contentmodel . "wikitext")
                       (oldrevid . 100)
                       (newrevid . 101)
@@ -189,6 +189,10 @@
   ;; Mock the draft saving function to avoid file system operations
   (advice-add 'mediawiki-page-save-draft :override
               (lambda (_sitename _params) "/tmp/mock-draft-file.wiki"))
+              
+  ;; Mock the draft removal function to avoid file system operations
+  (advice-add 'mediawiki-page-remove-draft :override
+              (lambda (_sitename _title) t))
 
   (unwind-protect
       (progn
@@ -227,6 +231,14 @@
   ;; Mock the page get function
   (advice-add 'mediawiki-page-get-content :override
               (lambda (_sitename _title &optional _options) "Existing content."))
+              
+  ;; Mock the draft saving function to avoid file system operations
+  (advice-add 'mediawiki-page-save-draft :override
+              (lambda (_sitename _params) "/tmp/mock-draft-file.wiki"))
+              
+  ;; Mock the draft removal function to avoid file system operations
+  (advice-add 'mediawiki-page-remove-draft :override
+              (lambda (_sitename _title) t))
 
   (unwind-protect
       (progn
