@@ -16,7 +16,7 @@ A clear and concise description of what you want to happen.
 A clear and concise description of any alternative solutions or features you've considered.
 
 **MediaWiki Version**
-Please specify the version of MediaWiki you are using. You can find this information in the MediaWiki API or by checking the version on your MediaWiki site.
+Please specify the version of MediaWiki you are using. You can find this information by checking Special:Version on your MediaWiki site.
 
 **Emacs Version**
 Please specify the version of Emacs you are using. You can find this information by running `M-x emacs-version` in Emacs.
