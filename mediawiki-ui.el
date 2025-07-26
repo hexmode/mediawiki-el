@@ -632,7 +632,7 @@
 
       ;; Bind the dispatcher to a key if keymap exists
       (when (boundp 'mediawiki-mode-map)
-        (define-key mediawiki-mode-map (kbd "C-c C-d") #'mediawiki-dispatch)
+        (define-key mediawiki-mode-map (kbd "C-c C-d") (lambda () (interactive) (mediawiki-dispatch)))
         (define-key mediawiki-mode-map (kbd "C-c C-p") #'mediawiki-page-operations)))
 
   ;; Fallback functions when transient is not available
