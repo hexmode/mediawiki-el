@@ -150,8 +150,10 @@
               '(("OldSite" . ("https://old.example.com" "olduser" "oldpass"))))
         
         ;; Should detect legacy format
-        (let ((legacy-vars (mediawiki-compat-detect-legacy-config)))
-          (should (memq 'old-site-format legacy-vars))))
+        (let ((legacy-configs (mediawiki-compat-detect-legacy-config)))
+          (should legacy-configs)
+          (let ((legacy-types (mapcar #'car legacy-configs)))
+            (should (memq 'old-site-format legacy-types)))))
     
     (test-compat-teardown)))
 
