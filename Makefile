@@ -25,7 +25,7 @@ $(1): $(2)
 	@echo "Running $(1)"
 	@$(BATCH) -l mediawiki-core.el -l mediawiki-errors.el -l mediawiki-session.el -l mediawiki-http.el \
 		-l mediawiki-api.el -l mediawiki-auth.el -l mediawiki-oauth.el -l mediawiki-page.el \
-		-l mediawiki-ui.el -l tests/$(1).el \
+		-l mediawiki-ui.el -l mediawiki-compat.el -l tests/$(1).el \
 		-f ert-run-tests-batch-and-exit;
 endef
 

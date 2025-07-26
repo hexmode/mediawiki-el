@@ -159,6 +159,7 @@
 (require 'mediawiki-session)
 (require 'mediawiki-page)
 (require 'mediawiki-ui)
+(require 'mediawiki-compat)
 
 ;; Legacy dependencies for backward compatibility
 (require 'mml)
@@ -703,7 +704,7 @@ Right now, this only means replacing \"_\" with \" \"."
               (cdr (assq type (cddr result)))
             (cddr (assq type (cddr result)))))))
 
-; Legacy mediawiki-api-call function removed - use mediawiki-api-call-sync or mediawiki-api-call-async from mediawiki-api.el instead
+; Legacy mediawiki-api-call function provided by compatibility layer
 
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
