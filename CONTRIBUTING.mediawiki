@@ -1,0 +1,79 @@
+= CONTRIBUTING =
+
+This file provides guidance to for contributing to mediawiki-el. It is also helpful for tools like [[claude.ai/code|Claude Code]], [https://github.com/google-gemini/gemini-cli Gemini CLI], or [https://github.com/QwenLM/qwen-code Qwen Code] when working with code in this repository.
+
+== Development Commands ==
+
+=== Testing ===
+
+* <code>make test</code> - Run all tests using ERT (Emacs Regression Testing)
+* <code>make test-minimal</code> - Run minimal auth tests
+* <code>make test-mock</code> - Run mock auth-source tests
+* <code>make test-integration</code> - Run integration demo tests
+* <code>make test-gpg</code> - Run all GPG-related tests (session persistence, agent support, integration)
+* <code>make test-gpg-verbose</code> - Run GPG tests with verbose output for debugging
+* <code>make list-tests</code> - List all available test files
+* <code>make clean</code> - Clean up compiled .elc files
+
+=== Running Individual Tests ===
+
+Tests follow the pattern <code><nowiki>test-<feature>.el</nowiki></code> and can be run individually:
+
+<source lang="bash">
+emacs --batch -l mediawiki-core.el -l mediawiki-errors.el -l mediawiki-session.el \
+  -l mediawiki-http.el -l mediawiki-api.el -l mediawiki-auth.el -l mediawiki-oauth.el \
+  -l mediawiki-page.el -l tests/test-<name>.el -f ert-run-tests-batch-and-exit
+</source>
+=== Package Installation ===
+
+* Use MELPA for installation: <code>M-x package-list-packages</code> and search for “mediawiki”
+* Manual installation: Place files in load-path and <code>(require 'mediawiki)</code>
+
+== Architecture Overview ==
+
+This is a modular Emacs package for editing MediaWiki sites. The codebase has been modernized with a clear separation of concerns:
+
+=== Core Modules ===
+
+* '''mediawiki.el''' - Main entry point and user interface, provides the interactive commands
+* '''mediawiki-core.el''' - Core data structures (mediawiki-site-config, mediawiki-session, mediawiki-api-response) and configuration variables
+* '''mediawiki-auth.el''' - Authentication handling with auth-source integration, supports basic auth and OAuth
+* '''mediawiki-api.el''' - MediaWiki API client with async/sync support and robust error handling
+* '''mediawiki-http.el''' - HTTP layer with retry logic and response processing
+* '''mediawiki-session.el''' - Session and token management with automatic refresh
+* '''mediawiki-page.el''' - Page editing operations and conflict resolution
+* '''mediawiki-oauth.el''' - OAuth 1.0a authentication implementation
+* '''mediawiki-errors.el''' - Error classification and handling
+
+=== Key Design Patterns ===
+
+* Uses <code>cl-defstruct</code> for data modeling (site configs, sessions, API responses)
+* Integrates with Emacs auth-source for secure credential storage
+* Async-first API design with synchronous wrappers for compatibility
+* Comprehensive error handling with classification and recovery
+* Token-based authentication with automatic refresh
+* Session persistence across Emacs restarts
+
+=== Authentication ===
+
+* Supports both basic auth (username/password) and OAuth 1.0a
+* Integrates with auth-source for secure credential storage
+* Credentials cached with configurable expiration
+* GPG agent integration for encrypted credential storage
+
+=== Testing Strategy ===
+
+The test suite is extensive with different categories:
+* '''Unit tests''' - Individual function testing
+* '''Integration tests''' - Full authentication flows
+* '''Mock tests''' - Testing with simulated auth-source
+* '''GPG tests''' - Encrypted credential storage
+* '''Error handling tests''' - Failure scenarios and recovery
+
+=== Configuration ===
+
+Users configure sites through <code>M-x customize-group RET mediawiki RET</code>. The package automatically handles:
+* Site detection and API endpoint discovery
+* Token management and refresh
+* Session persistence
+* Error recovery and retry logic

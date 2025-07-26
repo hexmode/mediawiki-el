@@ -52,7 +52,7 @@
    ((and (string= action "edit")
          (string= sitename "retry-test-wiki")
          (< test-recovery-retry-count 2))
-    (message "retry")
+    (message "retry test-recovery-mock-api-call-with-token")
     (setq test-recovery-retry-count (1+ test-recovery-retry-count))
     (make-mediawiki-api-response
      :success nil
@@ -62,7 +62,7 @@
    ((and (string= action "edit")
          (string= sitename "retry-test-wiki")
          (>= test-recovery-retry-count 2))
-    (message "suc retrry")
+    (message "suc retrry test-recovery-mock-api-call-with-token")
     (make-mediawiki-api-response
      :success t
      :data '((edit . ((result . "Success")
@@ -76,7 +76,7 @@
    ;; Permanent failure for draft saving test
    ((and (string= action "edit")
          (string= sitename "draft-test-wiki"))
-    (message "fail")
+    (message "fail test-recovery-mock-api-call-with-token")
     (make-mediawiki-api-response
      :success nil
      :errors (list (list :code "permissiondenied" :info "Permission denied"))))
@@ -84,7 +84,7 @@
    ;; Page deleted error
    ((and (string= action "edit")
          (string= sitename "page-deleted-wiki"))
-    (message "err")
+    (message "err test-recovery-mock-api-call-with-token")
     (make-mediawiki-api-response
      :success nil
      :errors (list (list :code "pagedeleted" :info "Page was deleted since you started editing"))))
