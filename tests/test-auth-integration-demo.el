@@ -8,16 +8,23 @@
 (require 'ert)
 
 ;; Load modules
-(load-file "mediawiki-core.el")
+(require 'mediawiki-core)
+(require 'mediawiki-auth)
 
 ;; Mock API functions for complete flow
 (defvar mock-login-call-count 0)
 
+(defun mediawiki-api-get-error-info (response)
+  "Mock error info function."
+  "Mock error")
+
 (defun mediawiki-api-call-sync (sitename action params)
   "Mock API call function that simulates login flow."
   (cond
-   ;; Token request
-   ((string= action "query")
+   ;; Token request - check for query action with tokens meta
+   ((and (string= action "query")
+         (assoc "meta" params)
+         (string= (cdr (assoc "meta" params)) "tokens"))
     (make-mediawiki-api-response
      :success t
      :data '((query . ((tokens . ((logintoken . "mock-login-token"))))))
@@ -37,8 +44,8 @@
           (make-mediawiki-api-response
            :success t
            :data '((login . ((result . "Success")
-                           (lguserid . 123)
-                           (lgusername . "demo-user"))))
+                             (lguserid . 123)
+                             (lgusername . "demo-user"))))
            :warnings nil
            :errors nil)
         (make-mediawiki-api-response
@@ -49,13 +56,6 @@
 
    ;; Default
    (t (make-mediawiki-api-response :success t :data nil))))
-
-(defun mediawiki-api-get-error-info (response)
-  "Mock error info function."
-  "Mock error")
-
-;; Load auth module
-(load-file "mediawiki-auth.el")
 
 ;;; Demo Test
 
@@ -80,8 +80,8 @@
         (cl-letf (((symbol-function 'auth-source-search)
                    (lambda (&rest spec)
                      (list (list :host "demo.example.com"
-                               :user "demo-user"
-                               :secret (lambda () "demo-pass"))))))
+                                 :user "demo-user"
+                                 :secret (lambda () "demo-pass"))))))
 
           ;; Test first login - should hit auth-source and cache credentials
           (let ((result1 (mediawiki-auth-basic-login "demo-wiki")))

@@ -125,6 +125,9 @@
   ;; Set up test environment
   (test-csrf-setup-mock-session)
 
+  ;; Mock the API call function to prevent real network calls
+  (advice-add 'mediawiki-api-call-sync :override #'test-csrf-mock-api-call-sync)
+
   (unwind-protect
       (progn
         ;; Test 1: Handle token errors
@@ -145,6 +148,7 @@
         (should (string= (mediawiki-session-get-token-type-for-operation 'edit) "csrf")))
 
     ;; Cleanup
+    (advice-remove 'mediawiki-api-call-sync #'test-csrf-mock-api-call-sync)
     (mediawiki-remove-session test-csrf-sitename)))
 
 (ert-deftest test-csrf-token-caching-and-expiry ()

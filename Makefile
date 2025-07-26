@@ -3,11 +3,11 @@
 EMACS ?= emacs
 BATCH = $(EMACS) --batch
 
-# Core files that tests depend on
-CORE_FILES = mediawiki-core.el mediawiki-auth.el
-
 # Test files
 TEST_FILES = $(wildcard test-*.el)
+
+# Autoloader file
+AUTOLOADS = mediawiki-autoloads.el
 
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
@@ -21,11 +21,9 @@ test: $(patsubst tests/%.el,%,$(ERT_TESTS))
 
 # Pattern rule to run each test file
 define TEST_RULES
-$(1): $(2)
+$(1): $(AUTOLOADS) $(2)
 	@echo "Running $(1)"
-	@$(BATCH) -l mediawiki-core.el -l mediawiki-errors.el -l mediawiki-session.el -l mediawiki-http.el \
-		-l mediawiki-api.el -l mediawiki-auth.el -l mediawiki-oauth.el -l mediawiki-page.el \
-		-l mediawiki-ui.el -l mediawiki-compat.el -l tests/$(1).el \
+	@$(BATCH) -L $(PWD) -l $(AUTOLOADS) -l tests/$(1).el \
 		-f ert-run-tests-batch-and-exit;
 endef
 
@@ -65,6 +63,16 @@ list-tests:
 clean:
 	@echo "Cleaning up test artifacts..."
 	@rm -f *.elc
+
+# Generate autoloader file
+$(AUTOLOADS):
+	@echo "Generating autoloader file..."
+	@$(BATCH) --eval "(progn \
+		(require 'autoload) \
+		(setq generated-autoload-file (expand-file-name \"$(AUTOLOADS)\" default-directory)) \
+		(setq backup-inhibited t) \
+		(update-directory-autoloads default-directory) \
+		(message \"Autoloader file created: %s\" generated-autoload-file))"
 
 editorconfig:
 	git ls-files -z | xargs -0 grep -PzZlv "\x0a$$" | xargs -0 -I{} -n 1 sh -c 'echo >> {}'

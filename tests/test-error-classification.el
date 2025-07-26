@@ -126,15 +126,23 @@
   "Test error handling with retries."
   (setq test-error-handling-retry-count 0)
 
-  ;; Test retryable error
-  (let* ((error (mediawiki-error-create-from-api "ratelimited" "Rate limited"))
-         (options (list :retry-function #'test-error-handling-retry-function
-                        :max-retries 2
-                        :quiet t))
-         (handled (mediawiki-error-handle error options)))
+  ;; Mock sit-for to avoid delays during testing
+  (advice-add 'sit-for :override (lambda (_delay) nil))
 
-    (should handled)
-    (should (= test-error-handling-retry-count 1))))
+  (unwind-protect
+      (progn
+        ;; Test retryable error
+        (let* ((error (mediawiki-error-create-from-api "ratelimited" "Rate limited"))
+               (options (list :retry-function #'test-error-handling-retry-function
+                              :max-retries 2
+                              :quiet t))
+               (handled (mediawiki-error-handle error options)))
+
+          (should handled)
+          (should (= test-error-handling-retry-count 1))))
+
+    ;; Cleanup
+    (advice-remove 'sit-for (lambda (_delay) nil))))
 
 (ert-deftest test-error-handling-user-intervention ()
   "Test error handling requiring user intervention."

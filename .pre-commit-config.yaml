@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: editorconfig-fixes
+        name: Fix editorconfig violations (final newlines and trailing whitespace)
+        entry: make editorconfig
+        language: system
+        pass_filenames: false
+        always_run: true

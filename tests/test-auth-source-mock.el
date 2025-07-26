@@ -7,8 +7,7 @@
 
 (require 'ert)
 
-;; Load core module
-(load-file "mediawiki-core.el")
+(require 'mediawiki-core)
 
 ;; Mock API functions
 (defun mediawiki-api-call-sync (sitename action params)

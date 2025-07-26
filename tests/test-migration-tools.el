@@ -5,8 +5,10 @@
 
 (require 'ert)
 (require 'mediawiki-core)
+
+;; Disable automatic compatibility checking during tests
+(setq mediawiki-check-compat nil)
 (require 'mediawiki-compat)
-(require 'mediawiki-api)
 
 ;;; Test Setup
 

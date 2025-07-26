@@ -12,8 +12,10 @@
 ;;; Code:
 
 (require 'ert)
-(require 'mediawiki-auth)
+
+;; Load modules
 (require 'mediawiki-core)
+(require 'mediawiki-auth)
 
 ;;; Test Setup
 

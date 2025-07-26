@@ -3,9 +3,11 @@
 
 # Packaging
 .cask
+mediawiki-autoloads.el
 
 # Backups
 *~
 
 .claude
 .aider*
+

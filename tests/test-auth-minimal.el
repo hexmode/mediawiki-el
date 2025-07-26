@@ -7,8 +7,8 @@
 
 (require 'ert)
 
-;; Load only the core module first
-(load-file "mediawiki-core.el")
+;; Load modules
+(require 'mediawiki-core)
 
 ;; Mock the API functions that auth module needs
 (defun mediawiki-api-call-sync (sitename action params)

@@ -38,6 +38,14 @@ When non-nil, using deprecated functions will display warnings."
   :tag "Warn About Deprecated Functions"
   :group 'mediawiki)
 
+(defcustom mediawiki-check-compat t
+  "Whether to automatically check for and offer to migrate legacy configuration.
+When non-nil, the compatibility layer will check for legacy configuration
+on startup and offer to migrate it. Set to nil to disable automatic checking."
+  :type 'boolean
+  :tag "Check for Legacy Configuration"
+  :group 'mediawiki)
+
 ;;; Legacy Function Shims
 
 (defun mediawiki-compat-warn (function-name replacement)
@@ -505,6 +513,7 @@ Returns a modern mediawiki-site-config struct."
           (message "Interactive migration completed. Migrated %d items." migrated-count))
       (message "No items were migrated."))))
 
+;;;###autoload
 (defun mediawiki-compat-wizard-show-preview (legacy-configs)
   "Show preview of what migration would do without applying changes."
   (let ((buffer (get-buffer-create "*MediaWiki Migration Preview*")))
@@ -627,8 +636,9 @@ Returns a modern mediawiki-site-config struct."
   (when (mediawiki-compat-detect-legacy-config)
     (run-with-idle-timer 1 nil #'mediawiki-compat-check-and-migrate)))
 
-;; Initialize compatibility layer when loaded
-(mediawiki-compat-initialize)
+;; Initialize compatibility layer when loaded (if enabled)
+(when mediawiki-check-compat
+  (mediawiki-compat-initialize))
 
 (provide 'mediawiki-compat)
 
