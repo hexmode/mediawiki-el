@@ -10,11 +10,11 @@
 ;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Version: 2.5.0
+;; Version: 3.0.0
 ;; Package-Type: multi
-;; Last Modified: <2025-07-21 01:43:27 mah>
+;; Last Modified: <2025-07-26 15:11:27 mah>
 
-(defconst mediawiki-version "2.4.1"
+(defconst mediawiki-version "3.0.0"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -1029,7 +1029,7 @@ Store cookies for future authentication."
   (mediawiki-auth-logout sitename)
   (setq mediawiki-site nil))
 
-(defun mediawiki-save-page (sitename title summary content &optional trynum)
+(defun mediawiki-save-page (sitename title summary content)
   "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT.
 TRYNUM is used if this command is being retried (legacy parameter, now ignored)."
   ;; Use the new page saving infrastructure

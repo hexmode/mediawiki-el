@@ -166,8 +166,9 @@
         '(("query-csrf" . (:success nil
                           :errors ((:code "badtoken" :info "Invalid token"))))))
 
-  ;; Mock the API call function
+  ;; Mock the API call function and sleep-for to avoid delays
   (cl-letf (((symbol-function 'mediawiki-api-call-sync) #'test-token-refresh-mock-api-call)
+            ((symbol-function 'sleep-for) (lambda (_seconds) nil))
             ((symbol-function 'auth-source-netrc-parse) (lambda (&key file max host user port require
                                                                       allow-null &allow-other-keys)
                                                           '()))

@@ -18,6 +18,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'eldoc)
 (require 'mediawiki-core)
 (require 'mediawiki-api)
 (require 'mediawiki-page)
@@ -510,16 +511,35 @@
   "Provide ElDoc information for MediaWiki markup."
   (when (and mediawiki-ui-enable-eldoc (eq major-mode 'mediawiki-mode))
     (save-excursion
-      (let ((thing-at-point (thing-at-point 'symbol)))
+      (let ((original-point (point))
+            (thing-at-point (thing-at-point 'symbol)))
         (cond
-         ((looking-at "\\[\\[\\([^]]+\\)\\]\\]")
+         ;; Check for wikilink - look backward and forward for [[ ]]
+         ((save-excursion
+            (let ((start (search-backward "[[" (line-beginning-position) t))
+                  (end (search-forward "]]" (line-end-position) t)))
+              (when (and start end (>= original-point start) (<= original-point end))
+                (goto-char start)
+                (looking-at "\\[\\[\\([^]]+\\)\\]\\]"))))
           (format "Link to: %s" (match-string 1)))
-         ((looking-at "{{\\([^}]+\\)}}")
+
+         ;; Check for template - look backward and forward for {{ }}
+         ((save-excursion
+            (let ((start (search-backward "{{" (line-beginning-position) t))
+                  (end (search-forward "}}" (line-end-position) t)))
+              (when (and start end (>= original-point start) (<= original-point end))
+                (goto-char start)
+                (looking-at "{{\\([^}]+\\)}}"))))
           (format "Template: %s" (match-string 1)))
-         ((looking-at "=\\(=+\\)\\s-*\\(.+\\)\\s-*\\1=")
+
+         ;; Check for header at beginning of line
+         ((progn
+            (beginning-of-line)
+            (looking-at "=\\(=+\\)\\s-*\\(.+\\)\\s-*\\1="))
           (format "Header (level %d): %s"
                   (+ (length (match-string 1)) 1)
                   (match-string 2)))
+
          (thing-at-point
           (format "MediaWiki element: %s" thing-at-point)))))))
 
@@ -536,89 +556,95 @@
 
 ;;; Transient Interface
 
-(defvar mediawiki-ui-transient-available-p nil
+(defvar mediawiki-ui-transient-available-p
+  (and mediawiki-ui-use-transient
+       (ignore-errors (require 'transient) t))
   "Whether transient.el is available.")
 
-(eval-after-load 'transient
-  (setq mediawiki-ui-transient-available-p t))
+(if mediawiki-ui-transient-available-p
+    ;; Full transient interface when available
+    (progn
+      (transient-define-prefix mediawiki-dispatch ()
+        "MediaWiki operations dispatcher."
+        :man-page "mediawiki"
+        ["Page Operations"
+         [("o" "Open page" mediawiki-ui-open-with-preview)
+          ("s" "Save page" mediawiki-ui-save-with-options)
+          ("r" "Reload page" mediawiki-reload)
+          ("h" "Page history" mediawiki-ui-show-page-history)]
+         [("n" "New page" mediawiki-ui-create-new-page)
+          ("d" "Delete page" mediawiki-ui-delete-page)
+          ("m" "Move page" mediawiki-ui-move-page)
+          ("w" "Watch/Unwatch" mediawiki-ui-toggle-watchlist)]]
 
-;; Try to load transient if available
-(when mediawiki-ui-use-transient
-  (ignore-errors
-    (require 'transient)
-    (setq mediawiki-ui-transient-available-p t)))
+        ["Navigation & Search"
+         [("f" "Find/Search pages" mediawiki-ui-search-pages)
+          ("R" "Recent pages" mediawiki-ui-show-recent-pages)
+          ("l" "Links to page" mediawiki-ui-show-links-to-page)
+          ("c" "Categories" mediawiki-ui-show-categories)]
+         [("t" "Random page" mediawiki-ui-random-page)
+          ("b" "Browse categories" mediawiki-ui-browse-categories)
+          ("u" "User contributions" mediawiki-ui-user-contributions)
+          ("L" "Recent changes" mediawiki-ui-recent-changes)]]
 
-(when mediawiki-ui-transient-available-p
-  (transient-define-prefix mediawiki-dispatch ()
-    "MediaWiki operations dispatcher."
-    :man-page "mediawiki"
-    ["Page Operations"
-     [("o" "Open page" mediawiki-ui-open-with-preview)
-      ("s" "Save page" mediawiki-ui-save-with-options)
-      ("r" "Reload page" mediawiki-reload)
-      ("h" "Page history" mediawiki-ui-show-page-history)]
-     [("n" "New page" mediawiki-ui-create-new-page)
-      ("d" "Delete page" mediawiki-ui-delete-page)
-      ("m" "Move page" mediawiki-ui-move-page)
-      ("w" "Watch/Unwatch" mediawiki-ui-toggle-watchlist)]]
+        ["Site Management"
+         [("S" "Select site" mediawiki-ui-select-site)
+          ("A" "Authentication" mediawiki-ui-manage-authentication)
+          ("C" "Configuration" (lambda () (interactive) (customize-group 'mediawiki)))
+          ("I" "Site info" mediawiki-ui-show-site-info)]
+         [("Q" "Queue status" mediawiki-async-list-operations)
+          ("D" "Debug info" mediawiki-debug-view)
+          ("T" "Statistics" mediawiki-ui-show-site-statistics)
+          ("P" "Progress operations" mediawiki-progress-list-active)]]
 
-    ["Navigation & Search"
-     [("f" "Find/Search pages" mediawiki-ui-search-pages)
-      ("R" "Recent pages" mediawiki-ui-show-recent-pages)
-      ("l" "Links to page" mediawiki-ui-show-links-to-page)
-      ("c" "Categories" mediawiki-ui-show-categories)]
-     [("t" "Random page" mediawiki-ui-random-page)
-      ("b" "Browse categories" mediawiki-ui-browse-categories)
-      ("u" "User contributions" mediawiki-ui-user-contributions)
-      ("L" "Recent changes" mediawiki-ui-recent-changes)]]
+        ["Help & Information"
+         [("?" "Help" mediawiki-ui-show-help)
+          ("v" "Version info" mediawiki-ui-show-version)
+          ("q" "Quit" transient-quit-one)]])
 
-    ["Site Management"
-     [("S" "Select site" mediawiki-ui-select-site)
-      ("A" "Authentication" mediawiki-ui-manage-authentication)
-      ("C" "Configuration" (lambda () (interactive) (customize-group 'mediawiki)))
-      ("I" "Site info" mediawiki-ui-show-site-info)]
-     [("Q" "Queue status" mediawiki-async-list-operations)
-      ("D" "Debug info" mediawiki-debug-view)
-      ("T" "Statistics" mediawiki-ui-show-site-statistics)
-      ("P" "Progress operations" mediawiki-progress-list-active)]]
+      ;; Enhanced page operations with options
+      (transient-define-prefix mediawiki-page-operations ()
+        "Page-specific operations."
+        :man-page "mediawiki-page"
+        ["Current Page"
+         [("s" "Save" mediawiki-ui-save-with-options)
+          ("S" "Save as..." mediawiki-ui-save-as)
+          ("r" "Reload" mediawiki-reload)
+          ("p" "Preview" mediawiki-ui-preview-page)]
+         [("h" "History" mediawiki-ui-show-page-history)
+          ("i" "Page info" mediawiki-ui-show-page-info)
+          ("l" "Links" mediawiki-ui-show-page-links)
+          ("w" "Watch/Unwatch" mediawiki-ui-toggle-watchlist)]]
 
-    ["Help & Information"
-     [("?" "Help" mediawiki-ui-show-help)
-      ("v" "Version info" mediawiki-ui-show-version)
-      ("q" "Quit" transient-quit-one)]])
+        ["Advanced"
+         [("d" "Delete" mediawiki-ui-delete-page)
+          ("m" "Move/Rename" mediawiki-ui-move-page)
+          ("P" "Protect" mediawiki-ui-protect-page)
+          ("U" "Unprotect" mediawiki-ui-unprotect-page)]
+         [("D" "Diff" mediawiki-ui-show-diff)
+          ("R" "Rollback" mediawiki-ui-rollback-edits)
+          ("B" "Backup" mediawiki-ui-backup-page)
+          ("E" "Export" mediawiki-ui-export-page)]]
 
-  ;; Enhanced page operations with options
-  (transient-define-prefix mediawiki-page-operations ()
-    "Page-specific operations."
-    :man-page "mediawiki-page"
-    ["Current Page"
-     [("s" "Save" mediawiki-ui-save-with-options)
-      ("S" "Save as..." mediawiki-ui-save-as)
-      ("r" "Reload" mediawiki-reload)
-      ("p" "Preview" mediawiki-ui-preview-page)]
-     [("h" "History" mediawiki-ui-show-page-history)
-      ("i" "Page info" mediawiki-ui-show-page-info)
-      ("l" "Links" mediawiki-ui-show-page-links)
-      ("w" "Watch/Unwatch" mediawiki-ui-toggle-watchlist)]]
+        ["Navigation"
+         [("q" "Quit" transient-quit-one)
+          ("b" "Back to main" (lambda () (interactive) (mediawiki-dispatch)))]])
 
-    ["Advanced"
-     [("d" "Delete" mediawiki-ui-delete-page)
-      ("m" "Move/Rename" mediawiki-ui-move-page)
-      ("P" "Protect" mediawiki-ui-protect-page)
-      ("U" "Unprotect" mediawiki-ui-unprotect-page)]
-     [("D" "Diff" mediawiki-ui-show-diff)
-      ("R" "Rollback" mediawiki-ui-rollback-edits)
-      ("B" "Backup" mediawiki-ui-backup-page)
-      ("E" "Export" mediawiki-ui-export-page)]]
+      ;; Bind the dispatcher to a key if keymap exists
+      (when (boundp 'mediawiki-mode-map)
+        (define-key mediawiki-mode-map (kbd "C-c C-d") #'mediawiki-dispatch)
+        (define-key mediawiki-mode-map (kbd "C-c C-p") #'mediawiki-page-operations)))
 
-    ["Navigation"
-     [("q" "Quit" transient-quit-one)
-      ("b" "Back to main" mediawiki-dispatch)]])
+  ;; Fallback functions when transient is not available
+  (defun mediawiki-dispatch ()
+    "MediaWiki operations dispatcher (fallback when transient unavailable)."
+    (interactive)
+    (message "MediaWiki transient interface not available. Use M-x mediawiki-* commands directly."))
 
-  ;; Bind the dispatcher to a key if keymap exists
-  (when (boundp 'mediawiki-mode-map)
-    (define-key mediawiki-mode-map (kbd "C-c C-d") #'mediawiki-dispatch)
-    (define-key mediawiki-mode-map (kbd "C-c C-p") #'mediawiki-page-operations)))
+  (defun mediawiki-page-operations ()
+    "Page-specific operations (fallback when transient unavailable)."
+    (interactive)
+    (message "MediaWiki transient interface not available. Use M-x mediawiki-* commands directly.")))
 
 ;;; Additional UI Functions for Transient
 

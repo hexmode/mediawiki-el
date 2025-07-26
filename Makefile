@@ -62,9 +62,9 @@ list-tests:
 
 clean:
 	@echo "Cleaning up test artifacts..."
-	@rm -f *.elc
+	@rm -f *.elc $(AUTOLOADS)
 
-# Generate autoloader file
+# Generate autoloader file and byte-compile
 $(AUTOLOADS):
 	@echo "Generating autoloader file..."
 	@$(BATCH) --eval "(progn \
@@ -73,6 +73,10 @@ $(AUTOLOADS):
 		(setq backup-inhibited t) \
 		(update-directory-autoloads default-directory) \
 		(message \"Autoloader file created: %s\" generated-autoload-file))"
+	@echo "Byte-compiling all *.el files..."
+	@$(BATCH) -L $(PWD) -l $(AUTOLOADS) --eval "(progn \
+		(setq byte-compile-warnings '(not obsolete)) \
+		(byte-recompile-directory default-directory 0 t))"
 
 editorconfig:
 	git ls-files -z | xargs -0 grep -PzZlv "\x0a$$" | xargs -0 -I{} -n 1 sh -c 'echo >> {}'
