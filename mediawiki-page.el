@@ -902,14 +902,14 @@ page).  FOLLOW-REDIRECT controls whether to follow redirects."
 
     ;; metadata retrieval
     (when get-metadata
-      (setcar (cdr (assoc "prop" params))
+      (setcar (assoc "prop" params)
               (concat (cdr (assoc "prop" params)) "|info"))
       (push (cons "inprop" "url|displaytitle|protection|talkid|watched|watchers|notificationtimestamp|subjectid|associatedpage|url|readable|preload|displaytitle") params))
 
     ;; revision retrieval
     (when (> get-revisions 0)
       (push (cons "rvlimit" (number-to-string get-revisions)) params)
-      (setcar (cdr (assoc "rvprop" params))
+      (setcar (assoc "rvprop" params)
               (concat (cdr (assoc "rvprop" params)) "|ids|timestamp|flags|comment|user")))
 
     ;; return the parameters

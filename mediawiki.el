@@ -12,7 +12,7 @@
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Version: 3.0.0
 ;; Package-Type: multi
-;; Last Modified: <2025-07-26 16:21:25 mah>
+;; Last Modified: <2025-07-26 16:31:31 mah>
 
 (defconst mediawiki-version "3.0.0"
   "Current version of mediawiki.el.")
@@ -785,7 +785,7 @@ variables it sets there will be local to that buffer."
 
 (defun mediawiki-logged-in-p (&optional sitename)
   "Return t if we have cookies for the SITENAME."
-  (let* ((site-name or sitename mediawiki-site)
+  (let* ((site-name (or sitename mediawiki-site))
          (site (mediawiki-get-site site-name))
          (urlobj (url-generic-parse-url
                  (mediawiki-site-config-url site))))
