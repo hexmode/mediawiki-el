@@ -156,6 +156,7 @@
 (require 'mediawiki-auth)
 (require 'mediawiki-session)
 (require 'mediawiki-page)
+(require 'mediawiki-ui)
 
 ;; Legacy dependencies for backward compatibility
 (require 'mml)
@@ -771,12 +772,18 @@ ACTION is the API action.  ARGS is a list of arguments."
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
-   (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
-     (list (read-string "Wiki Page: " nil 'hist))))
+   (let* ((sitename (or mediawiki-site (mediawiki-ui-select-site)))
+          (title (if (featurep 'mediawiki-ui)
+                     (mediawiki-ui-completing-read-page "Open page: " sitename)
+                   (let ((hist (cdr (assoc-string sitename mediawiki-page-history))))
+                     (read-string "Wiki Page: " nil 'hist)))))
+     (list title)))
   (when (or (not (stringp name))
             (string-equal "" name))
     (error "Need to specify a name"))
-  (mediawiki-edit mediawiki-site name))
+  (when (featurep 'mediawiki-ui)
+    (mediawiki-ui-add-recent-page (or mediawiki-site mediawiki-site-default) name))
+  (mediawiki-edit (or mediawiki-site mediawiki-site-default) name))
 
 (defun mediawiki-reload ()
   "Reload the page from the server."
@@ -1018,15 +1025,31 @@ return the whole revision structure."
 (defun mediawiki-save (&optional summary)
   "Save the current buffer as a page on the current site.
 Prompt for a SUMMARY if one isn't given."
-  (interactive "sSummary: ")
+  (interactive 
+   (list (if (featurep 'mediawiki-ui)
+             (read-string "Edit summary: " nil 'mediawiki-summary-history)
+           (read-string "Summary: "))))
   (when (not (eq major-mode 'mediawiki-mode))
     (error "Not a mediawiki-mode buffer"))
   (if mediawiki-page-title
-      (mediawiki-save-page
-       mediawiki-site
-       mediawiki-page-title
-       summary
-       (buffer-substring-no-properties (point-min) (point-max)))
+      (if (featurep 'mediawiki-ui)
+          ;; Use enhanced save with progress tracking
+          (mediawiki-page-save-async
+           mediawiki-site
+           `(:title ,mediawiki-page-title
+             :text ,(buffer-substring-no-properties (point-min) (point-max))
+             :summary ,summary)
+           (lambda (response)
+             (message "Page saved successfully: %s" mediawiki-page-title)
+             (set-buffer-modified-p nil))
+           (lambda (error)
+             (message "Failed to save page: %s" error)))
+        ;; Fallback to original implementation
+        (mediawiki-save-page
+         mediawiki-site
+         mediawiki-page-title
+         summary
+         (buffer-substring-no-properties (point-min) (point-max))))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-prompt-for-page ()
@@ -2083,6 +2106,15 @@ Some simple editing commands.
     (set (make-local-variable 'imenu-generic-expression)
          mediawiki-imenu-generic-expression)
     (imenu-add-to-menubar "Contents"))
+  
+  ;; Set up enhanced UI features if available
+  (when (featurep 'mediawiki-ui)
+    ;; Add quick menu key binding
+    (local-set-key (kbd "C-c C-q") #'mediawiki-ui-quick-menu)
+    ;; Enhanced open with completion
+    (local-set-key (kbd "C-c C-o") #'mediawiki-ui-open-with-preview)
+    ;; Enhanced save with options
+    (local-set-key (kbd "C-c C-s") #'mediawiki-ui-save-with-options))
 
   (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
   (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table))
