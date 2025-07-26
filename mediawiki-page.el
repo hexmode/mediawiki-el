@@ -279,57 +279,49 @@ on failure.  RETRY-COUNT is the number of retries remaining."
     (when mediawiki-page-save-draft-on-failure
       (mediawiki-page-save-draft sitename params))
 
-    ;; get csrf token first
-    (condition-case err
-        (let ((token (mediawiki-session-get-token sitename "csrf")))
-          (if token
-              (let ((params-with-token (cons (cons "token" token) params)))
-                (mediawiki-api-call-async
-                 sitename "edit" params-with-token
-                 (lambda (response)
-                   (message (format "response: %s" response))
-                   (if (mediawiki-api-response-success response)
-                       (progn
-                         ;; remove draft if save is successful
-                         (when mediawiki-page-save-draft-on-failure
-                           (mediawiki-page-remove-draft sitename title))
-                         (message "draft for %s on %s successfully recovered and saved to wiki" title sitename)
-                         (when callback
-                           (funcall callback (mediawiki-page-parse-edit-response response))))
-                     ;; handle error with potential retry
-                     (let* ((errors (mediawiki-api-response-errors response))
-                            (primary-error (car errors))
-                            (error-code (plist-get primary-error :code)))
+    ;; For async, simulate the call using run-with-timer to make it truly async
+    (run-with-timer 0 nil
+                    (lambda ()
+                      (condition-case err
+                          (let ((response (mediawiki-api-call-with-token sitename "edit" params "csrf")))
+                            (if (mediawiki-api-response-success response)
+                                (progn
+                                  ;; remove draft if save is successful
+                                  (when mediawiki-page-save-draft-on-failure
+                                    (mediawiki-page-remove-draft sitename title))
+                                  (when callback
+                                    (funcall callback (mediawiki-page-parse-edit-response response))))
+                              ;; handle error with potential retry
+                              (let* ((errors (mediawiki-api-response-errors response))
+                                     (primary-error (car errors))
+                                     (error-code (plist-get primary-error :code)))
 
-                       ;; check if this is a retryable error
-                       (if (and (> retry-count 0)
-                                (member error-code '("ratelimited" "readonly" "timeout" "maxlag")))
-                           (progn
-                             ;; calculate delay with exponential backoff
-                             (let ((delay (* mediawiki-page-save-retry-delay
-                                             (expt 2 (- mediawiki-page-save-retry-count retry-count)))))
-                               (message "save failed (%s). retrying in %.1f seconds... (%d retries left)"
-                                        error-code delay retry-count)
-                               ;; use run-with-timer for async retry after delay
-                               (run-with-timer delay nil
-                                               #'mediawiki-page-save-async
-                                               sitename params callback error-callback (1- retry-count))))
+                                ;; check if this is a retryable error
+                                (if (and (> retry-count 0)
+                                         (member error-code '("ratelimited" "readonly" "timeout" "maxlag")))
+                                    (progn
+                                      ;; calculate delay with exponential backoff
+                                      (let ((delay (* mediawiki-page-save-retry-delay
+                                                      (expt 2 (- mediawiki-page-save-retry-count retry-count)))))
+                                        (message "save failed (%s). retrying in %.1f seconds... (%d retries left)"
+                                                 error-code delay retry-count)
+                                        ;; use run-with-timer for async retry after delay
+                                        (run-with-timer delay nil
+                                                        #'mediawiki-page-save-async
+                                                        sitename params callback error-callback (1- retry-count))))
 
-                         ;; not retryable or out of retries
-                         ;; handle the error normally
-                         (mediawiki-page-handle-edit-error response sitename params)))))
+                                  ;; not retryable or out of retries
+                                  (when (and (= retry-count 0) mediawiki-page-save-draft-on-failure)
+                                    (mediawiki-page-save-draft sitename params))
 
-                 ;; http error callback
-                 (lambda (response)
-                   (when error-callback
-                     (funcall error-callback
-                              (mediawiki-page-handle-edit-error response sitename params))))))
-
-      (error
-       (when error-callback
-         (funcall error-callback
-                  (list :error "token-error"
-                        :message (format "token error: %s" (error-message-string err)))))))))))
+                                  ;; handle the error normally
+                                  (when error-callback
+                                    (funcall error-callback (mediawiki-page-handle-edit-error response sitename params)))))))
+                        (error
+                         (when error-callback
+                           (funcall error-callback
+                                    (list :error "async-error"
+                                          :message (format "async error: %s" (error-message-string err)))))))))))
 
 (defun mediawiki-page-parse-edit-response (response)
   "Parse edit RESPONSE into a structured result.
