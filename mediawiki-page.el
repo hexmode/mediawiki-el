@@ -700,6 +700,7 @@ OPTIONS is a plist with the following keys:
 - :section - section number to retrieve (nil for whole page)
 - :redirect - whether to follow redirects (defaults to t)
 - :callback - function to call with page data (for async)
+- :progress - if non-nil, show progress feedback
 
 Returns a mediawiki-page-data structure or nil if page doesn't exist."
   (let ((force-refresh (plist-get options :force-refresh))
@@ -713,7 +714,8 @@ Returns a mediawiki-page-data structure or nil if page doesn't exist."
         (follow-redirect (if (plist-member options :redirect)
                             (plist-get options :redirect)
                           t))
-        (callback (plist-get options :callback)))
+        (callback (plist-get options :callback))
+        (show-progress (plist-get options :progress)))
 
     ;; Check cache first unless force refresh
     (let ((cached-data (unless force-refresh
@@ -731,54 +733,91 @@ Returns a mediawiki-page-data structure or nil if page doesn't exist."
         (if callback
             ;; Async retrieval
             (mediawiki-page-get-async sitename title get-metadata get-revisions
-                                     section follow-redirect callback)
+                                     section follow-redirect callback show-progress)
           ;; Sync retrieval
           (mediawiki-page-get-sync sitename title get-metadata get-revisions
-                                  section follow-redirect))))))
+                                  section follow-redirect show-progress))))))
 
-(defun mediawiki-page-get-sync (sitename title get-metadata get-revisions section follow-redirect)
+(defun mediawiki-page-get-sync (sitename title get-metadata get-revisions section follow-redirect &optional show-progress)
   "Synchronously get page from SITENAME with TITLE.
-GET-METADATA, GET-REVISIONS, SECTION, and FOLLOW-REDIRECT control retrieval options."
-  (let* ((params (mediawiki-page-build-query-params
-                 title get-metadata get-revisions section follow-redirect))
-         (response (mediawiki-api-call-sync sitename "query" params)))
+GET-METADATA, GET-REVISIONS, SECTION, and FOLLOW-REDIRECT control retrieval options.
+SHOW-PROGRESS enables progress feedback."
+  (let* ((progress-id (when show-progress
+                       (mediawiki-progress-start (format "Retrieving page: %s" title) 3)))
+         (params (mediawiki-page-build-query-params
+                 title get-metadata get-revisions section follow-redirect)))
+    
+    (when progress-id
+      (mediawiki-progress-update progress-id 1 "Request built, making API call"))
+    
+    (let ((response (mediawiki-api-call-sync sitename "query" params)))
+      
+      (when progress-id
+        (mediawiki-progress-update progress-id 2 "API response received, parsing"))
 
-    (if (mediawiki-api-response-success response)
-        (let ((page-data (mediawiki-page-parse-response response title)))
-          ;; Cache the result if we got valid data
-          (when (and page-data
-                     (mediawiki-page-data-content page-data))
-            (mediawiki-page-cache-put sitename title page-data))
-          page-data)
+      (unwind-protect
+          (if (mediawiki-api-response-success response)
+              (let ((page-data (mediawiki-page-parse-response response title)))
+                (when progress-id
+                  (mediawiki-progress-update progress-id 3 "Response parsed, caching"))
+                ;; Cache the result if we got valid data
+                (when (and page-data
+                           (mediawiki-page-data-content page-data))
+                  (mediawiki-page-cache-put sitename title page-data))
+                page-data)
 
-      ;; Handle error
-      (mediawiki-debug-log "Failed to retrieve page %s: %s"
-                          title
-                          (mediawiki-api-format-error-summary response))
-      nil)))
+            ;; Handle error
+            (mediawiki-debug-log "Failed to retrieve page %s: %s"
+                                title
+                                (mediawiki-api-format-error-summary response))
+            nil)
+        
+        ;; Always finish progress tracking
+        (when progress-id
+          (mediawiki-progress-finish progress-id 
+                                    (format "Page retrieval complete: %s" title)))))))
 
 (defun mediawiki-page-get-async (sitename title get-metadata get-revisions
-                                        section follow-redirect callback)
+                                        section follow-redirect callback &optional show-progress)
   "Asynchronously get page from SITENAME with TITLE.
 GET-METADATA, GET-REVISIONS, SECTION, and FOLLOW-REDIRECT control
-retrieval options.  CALLBACK is called with the page data."
-  (let ((params (mediawiki-page-build-query-params
-                title get-metadata get-revisions section follow-redirect)))
+retrieval options.  CALLBACK is called with the page data.
+SHOW-PROGRESS enables progress feedback."
+  (let* ((progress-id (when show-progress
+                       (mediawiki-progress-start (format "Retrieving page: %s" title) 3)))
+         (params (mediawiki-page-build-query-params
+                 title get-metadata get-revisions section follow-redirect)))
+    
+    (when progress-id
+      (mediawiki-progress-update progress-id 1 "Request built, making async API call"))
 
     (mediawiki-api-call-async
      sitename "query" params
      (lambda (response)
+       (when progress-id
+         (mediawiki-progress-update progress-id 2 "Async response received, parsing"))
+       
        (let ((page-data (mediawiki-page-parse-response response title)))
+         (when progress-id
+           (mediawiki-progress-update progress-id 3 "Response parsed, caching"))
          ;; Cache the result if we got valid data
          (when (and page-data
                     (mediawiki-page-data-content page-data))
            (mediawiki-page-cache-put sitename title page-data))
 
+         ;; Finish progress tracking
+         (when progress-id
+           (mediawiki-progress-finish progress-id 
+                                     (format "Page retrieval complete: %s" title)))
+         
          ;; Call the callback with the result
          (funcall callback page-data)))
 
      ;; Error callback
      (lambda (response)
+       (when progress-id
+         (mediawiki-progress-finish progress-id 
+                                   (format "Page retrieval failed: %s" title)))
        (mediawiki-debug-log "Failed to retrieve page %s: %s"
                            title
                            (mediawiki-api-format-error-summary response))

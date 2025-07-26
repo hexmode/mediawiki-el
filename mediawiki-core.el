@@ -367,6 +367,220 @@ MODULE should be a short string like 'auth', 'api', 'http', etc."
             (message "Found pattern: %s" pattern))
         (message "Pattern not found: %s" pattern)))))
 
+;;; Progress Feedback System
+
+(defcustom mediawiki-progress-feedback-enabled t
+  "Enable progress feedback for long-running operations."
+  :type 'boolean
+  :tag "Progress Feedback Enabled"
+  :group 'mediawiki)
+
+(defcustom mediawiki-progress-update-interval 1.0
+  "Interval in seconds between progress updates."
+  :type 'float
+  :tag "Progress Update Interval"
+  :group 'mediawiki)
+
+(defcustom mediawiki-progress-use-modeline t
+  "Show progress in the mode line instead of messages."
+  :type 'boolean
+  :tag "Use Mode Line for Progress"
+  :group 'mediawiki)
+
+(defvar mediawiki-progress-operations (make-hash-table :test 'equal)
+  "Hash table tracking active progress operations.")
+
+(defvar mediawiki-progress-next-id 1
+  "Next available progress operation ID.")
+
+(cl-defstruct mediawiki-progress-operation
+  "Structure representing a progress tracking operation."
+  id                          ; Unique operation ID
+  description                 ; Human-readable description
+  total                       ; Total units of work (nil if indeterminate)
+  completed                   ; Completed units of work
+  start-time                  ; When operation started
+  last-update                 ; Last update time
+  status                      ; Current status message
+  cancellable                 ; Whether operation can be cancelled
+  cancel-function             ; Function to call for cancellation
+  update-callback             ; Callback for progress updates
+  completion-callback)        ; Callback for completion
+
+(defun mediawiki-progress-start (description &optional total cancellable cancel-function)
+  "Start tracking progress for an operation.
+DESCRIPTION is a human-readable description of the operation.
+TOTAL is the total number of units (nil for indeterminate progress).
+CANCELLABLE indicates if the operation can be cancelled.
+CANCEL-FUNCTION is called to cancel the operation.
+Returns a progress operation ID."
+  (when mediawiki-progress-feedback-enabled
+    (let* ((id (format "progress-%d" mediawiki-progress-next-id))
+           (operation (make-mediawiki-progress-operation
+                      :id id
+                      :description description
+                      :total total
+                      :completed 0
+                      :start-time (current-time)
+                      :last-update (current-time)
+                      :cancellable cancellable
+                      :cancel-function cancel-function)))
+      (setq mediawiki-progress-next-id (1+ mediawiki-progress-next-id))
+      (puthash id operation mediawiki-progress-operations)
+      (mediawiki-progress-update-display id)
+      id)))
+
+(defun mediawiki-progress-update (id completed &optional status)
+  "Update progress for operation ID.
+COMPLETED is the number of completed units.
+STATUS is an optional status message."
+  (when mediawiki-progress-feedback-enabled
+    (let ((operation (gethash id mediawiki-progress-operations)))
+      (when operation
+        (setf (mediawiki-progress-operation-completed operation) completed)
+        (setf (mediawiki-progress-operation-last-update operation) (current-time))
+        (when status
+          (setf (mediawiki-progress-operation-status operation) status))
+        (mediawiki-progress-update-display id)))))
+
+(defun mediawiki-progress-increment (id &optional amount status)
+  "Increment progress for operation ID by AMOUNT (default 1).
+STATUS is an optional status message."
+  (when mediawiki-progress-feedback-enabled
+    (let ((operation (gethash id mediawiki-progress-operations)))
+      (when operation
+        (let ((new-completed (+ (mediawiki-progress-operation-completed operation)
+                               (or amount 1))))
+          (mediawiki-progress-update id new-completed status))))))
+
+(defun mediawiki-progress-finish (id &optional final-message)
+  "Finish tracking progress for operation ID.
+FINAL-MESSAGE is an optional completion message."
+  (when mediawiki-progress-feedback-enabled
+    (let ((operation (gethash id mediawiki-progress-operations)))
+      (when operation
+        (when (mediawiki-progress-operation-completion-callback operation)
+          (funcall (mediawiki-progress-operation-completion-callback operation) operation))
+        (remhash id mediawiki-progress-operations)
+        (mediawiki-progress-clear-display)
+        (when final-message
+          (message "%s" final-message))))))
+
+(defun mediawiki-progress-cancel (id)
+  "Cancel operation ID if it's cancellable."
+  (when mediawiki-progress-feedback-enabled
+    (let ((operation (gethash id mediawiki-progress-operations)))
+      (when (and operation (mediawiki-progress-operation-cancellable operation))
+        (let ((cancel-fn (mediawiki-progress-operation-cancel-function operation)))
+          (when cancel-fn
+            (funcall cancel-fn))
+          (mediawiki-progress-finish id "Operation cancelled")
+          t)))))
+
+(defun mediawiki-progress-cancel-all ()
+  "Cancel all active cancellable operations."
+  (interactive)
+  (let ((cancelled-count 0))
+    (maphash (lambda (id operation)
+               (when (mediawiki-progress-cancel id)
+                 (setq cancelled-count (1+ cancelled-count))))
+             mediawiki-progress-operations)
+    (when (> cancelled-count 0)
+      (message "Cancelled %d MediaWiki operation%s"
+               cancelled-count
+               (if (= cancelled-count 1) "" "s")))))
+
+(defun mediawiki-progress-list-active ()
+  "List all active progress operations."
+  (interactive)
+  (let ((operations '()))
+    (maphash (lambda (id operation)
+               (push (list id
+                          (mediawiki-progress-operation-description operation)
+                          (mediawiki-progress-operation-completed operation)
+                          (mediawiki-progress-operation-total operation)
+                          (mediawiki-progress-operation-cancellable operation))
+                     operations))
+             mediawiki-progress-operations)
+    (if operations
+        (let ((buffer (get-buffer-create "*MediaWiki Progress*")))
+          (with-current-buffer buffer
+            (erase-buffer)
+            (insert "Active MediaWiki Operations:\n")
+            (insert "==============================\n\n")
+            (dolist (op operations)
+              (let ((id (nth 0 op))
+                    (desc (nth 1 op))
+                    (completed (nth 2 op))
+                    (total (nth 3 op))
+                    (cancellable (nth 4 op)))
+                (insert (format "%s: %s\n" id desc))
+                (if total
+                    (insert (format "  Progress: %d/%d (%.1f%%)\n"
+                                   completed total
+                                   (* 100.0 (/ (float completed) total))))
+                  (insert (format "  Progress: %d units completed\n" completed)))
+                (when cancellable
+                  (insert "  [Can be cancelled]\n"))
+                (insert "\n")))
+            (goto-char (point-min)))
+          (switch-to-buffer-other-window buffer))
+      (message "No active MediaWiki operations"))))
+
+(defun mediawiki-progress-update-display (id)
+  "Update progress display for operation ID."
+  (let ((operation (gethash id mediawiki-progress-operations)))
+    (when operation
+      (let* ((desc (mediawiki-progress-operation-description operation))
+             (completed (mediawiki-progress-operation-completed operation))
+             (total (mediawiki-progress-operation-total operation))
+             (status (mediawiki-progress-operation-status operation))
+             (progress-text (if total
+                               (format "%s: %d/%d (%.1f%%)"
+                                      desc completed total
+                                      (* 100.0 (/ (float completed) total)))
+                             (format "%s: %d units" desc completed))))
+        (when status
+          (setq progress-text (format "%s - %s" progress-text status)))
+        
+        (if mediawiki-progress-use-modeline
+            (mediawiki-progress-update-modeline progress-text)
+          (message "%s" progress-text))))))
+
+(defvar mediawiki-progress-modeline-string ""
+  "Current progress string for mode line display.")
+
+(defun mediawiki-progress-update-modeline (text)
+  "Update mode line with progress TEXT."
+  (setq mediawiki-progress-modeline-string text)
+  (force-mode-line-update t))
+
+(defun mediawiki-progress-clear-display ()
+  "Clear progress display."
+  (when mediawiki-progress-use-modeline
+    (setq mediawiki-progress-modeline-string "")
+    (force-mode-line-update t)))
+
+(defun mediawiki-progress-format-time-elapsed (start-time)
+  "Format elapsed time since START-TIME."
+  (let ((elapsed (float-time (time-subtract (current-time) start-time))))
+    (cond
+     ((< elapsed 60) (format "%.1fs" elapsed))
+     ((< elapsed 3600) (format "%dm %.0fs" (/ elapsed 60) (mod elapsed 60)))
+     (t (format "%dh %dm" (/ elapsed 3600) (/ (mod elapsed 3600) 60))))))
+
+(defun mediawiki-progress-with-feedback (description total-work work-function)
+  "Execute WORK-FUNCTION with progress feedback.
+DESCRIPTION describes the operation.
+TOTAL-WORK is the expected number of work units.
+WORK-FUNCTION should be a lambda that accepts a progress-update function."
+  (let* ((progress-id (mediawiki-progress-start description total-work))
+         (update-fn (lambda (completed &optional status)
+                     (mediawiki-progress-update progress-id completed status))))
+    (unwind-protect
+        (funcall work-function update-fn)
+      (mediawiki-progress-finish progress-id))))
+
 (provide 'mediawiki-core)
 
 ;;; mediawiki-core.el ends here
