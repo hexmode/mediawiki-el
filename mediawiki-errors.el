@@ -60,7 +60,7 @@
     ("wrongtoken"         . (:category auth       :severity error    :recovery retry     :message "Wrong token type"))
     ("mustbeloggedin"     . (:category auth       :severity error    :recovery user      :message "You must be logged in"))
     ("sessionfailure"     . (:category auth       :severity error    :recovery retry     :message "Session failure, please log in again"))
-    
+
     ;; Permission errors
     ("permissiondenied"   . (:category permission :severity error    :recovery user      :message "Permission denied"))
     ("protectedpage"      . (:category permission :severity error    :recovery user      :message "Page is protected"))
@@ -68,43 +68,43 @@
     ("titleblacklisted"   . (:category permission :severity error    :recovery user      :message "Title is blacklisted"))
     ("autoblocked"        . (:category permission :severity error    :recovery user      :message "Your IP address is blocked"))
     ("blocked"            . (:category permission :severity error    :recovery user      :message "User is blocked"))
-    
+
     ;; Rate limiting errors
     ("ratelimited"        . (:category rate-limit :severity warning  :recovery retry     :message "Rate limited, please wait"))
     ("maxlag"             . (:category rate-limit :severity warning  :recovery retry     :message "Server is lagged, please wait"))
-    
+
     ;; Edit conflicts
     ("editconflict"       . (:category conflict   :severity warning  :recovery user      :message "Edit conflict detected"))
     ("pagedeleted"        . (:category conflict   :severity warning  :recovery user      :message "Page was deleted since you started editing"))
     ("articleexists"      . (:category conflict   :severity warning  :recovery user      :message "Article already exists"))
     ("missingtitle"       . (:category conflict   :severity warning  :recovery user      :message "Page does not exist"))
-    
+
     ;; Validation errors
     ("invalidtitle"       . (:category validation :severity error    :recovery user      :message "Invalid title"))
     ("emptypage"          . (:category validation :severity error    :recovery user      :message "Empty page content not allowed"))
     ("contenttoobig"      . (:category validation :severity error    :recovery user      :message "Content too large"))
     ("spamdetected"       . (:category validation :severity error    :recovery user      :message "Spam detected in content"))
     ("filtered"           . (:category validation :severity error    :recovery user      :message "Content was filtered"))
-    
+
     ;; Server errors
     ("readonly"           . (:category server     :severity warning  :recovery retry     :message "Wiki is in read-only mode"))
     ("internal_api_error" . (:category server     :severity error    :recovery retry     :message "Internal API error"))
     ("unsupportednamespace" . (:category server   :severity error    :recovery fatal     :message "Unsupported namespace"))
-    
+
     ;; Network errors
     ("timeout"            . (:category network    :severity warning  :recovery retry     :message "Request timed out"))
     ("connectfailed"      . (:category network    :severity error    :recovery retry     :message "Connection failed"))
     ("dnsfailure"         . (:category network    :severity error    :recovery retry     :message "DNS resolution failed"))
-    
+
     ;; Client errors
     ("invalidparameter"   . (:category client     :severity error    :recovery user      :message "Invalid parameter"))
     ("missingparam"       . (:category client     :severity error    :recovery user      :message "Missing required parameter"))
     ("badformat"          . (:category client     :severity error    :recovery user      :message "Bad format"))
-    
+
     ;; Parsing errors
     ("parseerror"         . (:category parsing    :severity error    :recovery user      :message "Parse error"))
     ("invalidjson"        . (:category parsing    :severity error    :recovery retry     :message "Invalid JSON response"))
-    
+
     ;; Generic/unknown errors
     ("unknownerror"       . (:category unknown    :severity error    :recovery user      :message "Unknown error"))
     ("unclassified"       . (:category unknown    :severity error    :recovery user      :message "Unclassified error")))
@@ -162,7 +162,7 @@ CONTEXT is optional additional context about the operation."
          (severity (plist-get error-mapping :severity))
          (recovery (plist-get error-mapping :recovery))
          (default-message (plist-get error-mapping :message)))
-    
+
     (make-mediawiki-error
      :category category
      :severity severity
@@ -194,7 +194,7 @@ CONTEXT is optional additional context about the operation."
          (severity (plist-get error-mapping :severity))
          (recovery (plist-get error-mapping :recovery))
          (default-message (plist-get error-mapping :message)))
-    
+
     (make-mediawiki-error
      :category category
      :severity severity
@@ -221,7 +221,7 @@ CONTEXT is optional additional context about the operation."
                    ((memq error-symbol '(json-parse-error json-readtable-error))
                     'parsing)
                    (t 'client))))
-    
+
     (make-mediawiki-error
      :category category
      :severity 'error
@@ -261,13 +261,13 @@ CONTEXT is optional additional context about the operation."
 CONTEXT is optional additional context about the operation."
   (let* ((errors (mediawiki-api-response-errors response))
          (primary-error (car errors)))
-    
+
     (if primary-error
         ;; API error
         (let ((error-code (plist-get primary-error :code))
               (error-info (plist-get primary-error :info)))
           (mediawiki-error-create-from-api error-code error-info context))
-      
+
       ;; HTTP error
       (let ((status-code (plist-get response :status-code))
             (error-message (plist-get response :error)))
@@ -303,7 +303,7 @@ When VERBOSE is non-nil, include additional details."
         (category-name (mediawiki-error-get-category-name error))
         (context (mediawiki-error-context error))
         (details (mediawiki-error-details error)))
-    
+
     (if verbose
         (format "%s\n\nCategory: %s\nCode: %s\nSource: %s%s%s"
                 base-message
@@ -327,7 +327,7 @@ When VERBOSE is non-nil, include additional details."
   (let ((category (mediawiki-error-category error))
         (code (mediawiki-error-code error))
         (recovery (mediawiki-error-recovery error)))
-    
+
     (cond
      ;; Authentication errors
      ((eq category 'auth)
@@ -338,7 +338,7 @@ When VERBOSE is non-nil, include additional details."
         "Check your username and password and try again.")
        (t
         "You may need to log in again to continue.")))
-     
+
      ;; Permission errors
      ((eq category 'permission)
       (cond
@@ -348,7 +348,7 @@ When VERBOSE is non-nil, include additional details."
         "Your account is blocked from editing. Contact a wiki administrator.")
        (t
         "You don't have permission to perform this action.")))
-     
+
      ;; Rate limiting errors
      ((eq category 'rate-limit)
       (cond
@@ -358,7 +358,7 @@ When VERBOSE is non-nil, include additional details."
         "The wiki server is experiencing lag. Wait a few minutes and try again.")
        (t
         "Try again later when the server is less busy.")))
-     
+
      ;; Edit conflicts
      ((eq category 'conflict)
       (cond
@@ -370,7 +370,7 @@ When VERBOSE is non-nil, include additional details."
         "An article with this title already exists. Choose a different title.")
        (t
         "There was a conflict with your edit. Review the current page state.")))
-     
+
      ;; Network errors
      ((eq category 'network)
       (cond
@@ -378,7 +378,7 @@ When VERBOSE is non-nil, include additional details."
         "The request timed out. Check your internet connection and try again.")
        (t
         "Check your internet connection and try again.")))
-     
+
      ;; Server errors
      ((eq category 'server)
       (cond
@@ -386,20 +386,20 @@ When VERBOSE is non-nil, include additional details."
         "The wiki is currently in read-only mode. Try again later.")
        (t
         "This is a server error. Try again later or contact the wiki administrators.")))
-     
+
      ;; Default suggestion based on recovery type
      ((eq recovery 'retry)
       "Try the operation again.")
-     
+
      ((eq recovery 'automatic)
       "The system will attempt to recover automatically.")
-     
+
      ((eq recovery 'user)
       "You need to take action to resolve this issue.")
-     
+
      ((eq recovery 'fatal)
       "This operation cannot be completed. Try a different approach.")
-     
+
      (t
       "No specific solution available for this error."))))
 
@@ -424,7 +424,7 @@ Returns t if handled, nil otherwise."
         (on-user-intervention (plist-get options :on-user-intervention))
         (on-fatal (plist-get options :on-fatal))
         (quiet (plist-get options :quiet)))
-    
+
     (cond
      ;; Automatic retry for retryable errors
      ((and (mediawiki-error-retryable-p error)
@@ -435,7 +435,7 @@ Returns t if handled, nil otherwise."
                  (mediawiki-error-message error)
                  (1+ current-retry)
                  max-retries))
-      
+
       ;; Calculate exponential backoff delay
       (let ((delay (* 1.0 (expt 2 current-retry))))
         (sit-for delay)
@@ -443,27 +443,27 @@ Returns t if handled, nil otherwise."
                (append retry-args
                        (list :current-retry (1+ current-retry)))))
       t)
-     
+
      ;; User intervention required
      ((mediawiki-error-requires-user-intervention-p error)
       (unless quiet
         (message "Error: %s\nSuggestion: %s"
                  (mediawiki-error-message error)
                  (mediawiki-error-suggest-solution error)))
-      
+
       (when on-user-intervention
         (funcall on-user-intervention error))
       t)
-     
+
      ;; Fatal errors
      ((mediawiki-error-fatal-p error)
       (unless quiet
         (message "Fatal error: %s" (mediawiki-error-message error)))
-      
+
       (when on-fatal
         (funcall on-fatal error))
       t)
-     
+
      ;; Default handling
      (t
       (unless quiet
@@ -475,18 +475,18 @@ Returns t if handled, nil otherwise."
 When VERBOSE is non-nil, include additional details."
   (let ((message (mediawiki-error-format-message error verbose))
         (suggestion (mediawiki-error-suggest-solution error)))
-    
+
     (if verbose
         ;; Show in a dedicated buffer for verbose output
         (with-current-buffer (get-buffer-create "*MediaWiki Error*")
           (let ((inhibit-read-only t))
             (erase-buffer)
-            (insert (format "MediaWiki Error\n\n%s\n\nSuggested solution:\n%s\n" 
+            (insert (format "MediaWiki Error\n\n%s\n\nSuggested solution:\n%s\n"
                             message suggestion))
             (goto-char (point-min))
             (special-mode)
             (display-buffer (current-buffer))))
-      
+
       ;; Simple message for non-verbose
       (message "MediaWiki error: %s\nSuggestion: %s" message suggestion))))
 

@@ -184,17 +184,17 @@
                               test-recovery-title
                               test-recovery-content
                               (list :summary "Test edit"
-                                    :callback (lambda (_) 
+                                    :callback (lambda (_)
                                                 (message "Success callback called")
                                                 (setq success-called t))
-                                    :error-callback (lambda (_) 
+                                    :error-callback (lambda (_)
                                                       (message "Error callback called")
                                                       (setq error-called t))))
 
           ;; Wait a bit for the async operation to complete
           (message "Waiting for async operation to complete...")
           (sit-for 0.1)
-          (message "Done waiting. success-called: %s, error-called: %s, retry-count: %s" 
+          (message "Done waiting. success-called: %s, error-called: %s, retry-count: %s"
                    success-called error-called test-recovery-retry-count)
 
           ;; Should have succeeded after retries

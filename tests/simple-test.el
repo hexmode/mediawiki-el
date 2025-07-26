@@ -21,7 +21,7 @@
 ;; Try the login
 (mediawiki-auth-login "Wikipedia")
 
-(mediawiki-oauth-setup-with-tokens "Wikipedia" 
+(mediawiki-oauth-setup-with-tokens "Wikipedia"
                                   "c96f906de66e54b5a19bccb265d4b85a"
                                   "12b3f2ebb8a7dc6fad68fbe320cf5aa6cabe116d"
                                   "8f63a33b729e5d02c105bb88a95da59d"
@@ -30,6 +30,6 @@
 ;; 3. Check if session was created
 (let ((session (mediawiki-get-session "Wikipedia")))
   (if session
-      (message "✓ Authenticated as: %s" 
+      (message "✓ Authenticated as: %s"
                (plist-get (mediawiki-session-user-info session) :username))
     (message "✗ No active session")))

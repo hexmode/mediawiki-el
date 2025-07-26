@@ -21,20 +21,20 @@
                     :auth-config nil
                     :capabilities nil
                     :session-info nil)))
-    
+
     (mediawiki-add-site test-site)
-    
+
     (unwind-protect
         (progn
           ;; Test OAuth setup
           (mediawiki-oauth-setup "TestWiki" "test-consumer-key" "test-consumer-secret")
-          
+
           ;; Verify configuration was set
           (let ((site (mediawiki-get-site "TestWiki")))
             (should (eq (mediawiki-site-config-auth-method site) 'oauth))
             (should (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-key) "test-consumer-key"))
             (should (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-secret) "test-consumer-secret"))))
-      
+
       ;; Cleanup
       (mediawiki-remove-site "TestWiki"))))
 
@@ -50,14 +50,14 @@
                     :auth-config nil
                     :capabilities nil
                     :session-info nil)))
-    
+
     (mediawiki-add-site test-site)
-    
+
     (unwind-protect
         (progn
           ;; Setup OAuth first
           (mediawiki-oauth-setup "TestWiki" "test-consumer-key" "test-consumer-secret")
-          
+
           ;; Test OAuth reset
           (mediawiki-oauth-reset "TestWiki")
           (let ((site (mediawiki-get-site "TestWiki")))
@@ -66,7 +66,7 @@
             (should (equal (plist-get (mediawiki-site-config-auth-config site) :consumer-secret) "test-consumer-secret"))
             (should (not (plist-get (mediawiki-site-config-auth-config site) :access-token)))
             (should (not (plist-get (mediawiki-site-config-auth-config site) :access-secret)))))
-      
+
       ;; Cleanup
       (mediawiki-remove-site "TestWiki"))))
 
@@ -105,13 +105,13 @@
                     :auth-config '(:consumer-key "test-key" :consumer-secret "test-secret")
                     :capabilities nil
                     :session-info nil)))
-    
+
     (mediawiki-add-site test-site)
-    
+
     (unwind-protect
         (should-error (mediawiki-oauth-login "TestWiki")
                       :type 'error)
-      
+
       ;; Cleanup
       (mediawiki-remove-site "TestWiki"))))
 
@@ -127,9 +127,9 @@
                     :auth-config '(:consumer-key "test-key" :consumer-secret "test-secret")
                     :capabilities nil
                     :session-info nil)))
-    
+
     (mediawiki-add-site test-site)
-    
+
     (unwind-protect
         (condition-case err
             (progn
@@ -138,7 +138,7 @@
           (error
            (let ((err-msg (error-message-string err)))
              (should (string-match-p "No OAuth access tokens" err-msg)))))
-      
+
       ;; Cleanup
       (mediawiki-remove-site "TestWiki"))))
 

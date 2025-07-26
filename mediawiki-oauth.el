@@ -74,7 +74,7 @@
                      (userid (plist-get userinfo :id)))
 
                 (mediawiki-debug-log "OAuth verification successful for %s (user: %s)" sitename username)
-                
+
                 ;; Create session with OAuth authentication
                 (let ((session (make-mediawiki-session
                                :site-name sitename
@@ -135,15 +135,15 @@
 
         ;; Combine all parameters for signature
         (let ((all-params (append oauth-params api-params)))
-          
+
           ;; Generate signature
           (let ((signature (mediawiki-oauth-generate-signature
                            "POST" api-url all-params consumer-secret access-secret)))
-            
+
             (push (cons "oauth_signature" signature) oauth-params)
 
             ;; Make authenticated API call with OAuth Authorization header
-            (let ((auth-header (list (cons "Authorization" 
+            (let ((auth-header (list (cons "Authorization"
                                           (mediawiki-oauth-build-auth-header oauth-params))))
                   (post-data (mediawiki-oauth-build-post-data api-params)))
 
@@ -198,7 +198,7 @@
 (defun mediawiki-oauth-setup (sitename consumer-key consumer-secret)
   "Set up OAuth configuration for SITENAME with CONSUMER-KEY and CONSUMER-SECRET."
   (interactive "sSite name: \nsConsumer key: \nsConsumer secret: ")
-  
+
   (let ((site (mediawiki-get-site sitename)))
     (unless site
       (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
@@ -215,7 +215,7 @@
   "Set up OAuth configuration for SITENAME with both consumer and access tokens.
 This is for when you already have all OAuth credentials from the OAuth provider."
   (interactive "sSite name: \nsConsumer key: \nsConsumer secret: \nsAccess token: \nsAccess secret: ")
-  
+
   (let ((site (mediawiki-get-site sitename)))
     (unless site
       (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
@@ -233,7 +233,7 @@ This is for when you already have all OAuth credentials from the OAuth provider.
 (defun mediawiki-oauth-reset (sitename)
   "Reset OAuth configuration for SITENAME, removing stored tokens."
   (interactive "sSite name: ")
-  
+
   (let ((site (mediawiki-get-site sitename)))
     (unless site
       (error "Site %s not found" sitename))
@@ -245,10 +245,10 @@ This is for when you already have all OAuth credentials from the OAuth provider.
           (setf (mediawiki-site-config-auth-config site)
                 (list :consumer-key (plist-get oauth-config :consumer-key)
                       :consumer-secret (plist-get oauth-config :consumer-secret)))
-          
+
           ;; Clear any existing session
           (mediawiki-remove-session sitename)
-          
+
           (message "OAuth tokens reset for %s" sitename))))))
 
 ;;; Token Management and Refresh
@@ -269,12 +269,12 @@ This is for when you already have all OAuth credentials from the OAuth provider.
           (condition-case err
               (mediawiki-oauth-verify-access sitename oauth-config)
             (error
-             (mediawiki-debug-log "OAuth token verification failed for %s: %s" 
+             (mediawiki-debug-log "OAuth token verification failed for %s: %s"
                                  sitename (error-message-string err))
              ;; If verification fails, clear tokens and re-authorize
              (mediawiki-oauth-reset sitename)
              (error "OAuth tokens expired for %s. Please re-authenticate" sitename)))
-        
+
         ;; No access tokens, need to authorize
         (error "No OAuth access tokens for %s. Use mediawiki-oauth-login to authenticate" sitename)))))
 

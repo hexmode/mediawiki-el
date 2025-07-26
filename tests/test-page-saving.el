@@ -189,7 +189,7 @@
   ;; Mock the draft saving function to avoid file system operations
   (advice-add 'mediawiki-page-save-draft :override
               (lambda (_sitename _params) "/tmp/mock-draft-file.wiki"))
-              
+
   ;; Mock the draft removal function to avoid file system operations
   (advice-add 'mediawiki-page-remove-draft :override
               (lambda (_sitename _title) t))
@@ -231,11 +231,11 @@
   ;; Mock the page get function
   (advice-add 'mediawiki-page-get-content :override
               (lambda (_sitename _title &optional _options) "Existing content."))
-              
+
   ;; Mock the draft saving function to avoid file system operations
   (advice-add 'mediawiki-page-save-draft :override
               (lambda (_sitename _params) "/tmp/mock-draft-file.wiki"))
-              
+
   ;; Mock the draft removal function to avoid file system operations
   (advice-add 'mediawiki-page-remove-draft :override
               (lambda (_sitename _title) t))

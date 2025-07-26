@@ -53,7 +53,7 @@
   (let* ((type-param (alist-get "type" params nil nil 'string=))
          (response-key (format "%s-%s" action (or type-param "")))
          (mock-data (alist-get response-key test-auth-modern-mock-responses nil nil 'string=)))
-    (message "DEBUG: Mock API call - action=%s, type=%s, response-key=%s, found=%s" 
+    (message "DEBUG: Mock API call - action=%s, type=%s, response-key=%s, found=%s"
              action type-param response-key (not (null mock-data)))
     (if mock-data
         (make-mediawiki-api-response

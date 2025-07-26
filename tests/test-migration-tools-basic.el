@@ -36,13 +36,13 @@
   (test-migration-setup)
   (unwind-protect
       (progn
-        (setq mediawiki-site-alist 
+        (setq mediawiki-site-alist
               '(("TestSite" . ("https://test.example.com" "testuser" "testpass" "testdomain"))))
-        
+
         (let ((detected (mediawiki-compat-detect-legacy-config)))
           (should detected)
           (should (>= (length detected) 1))
-          
+
           (let ((config (cl-find 'old-site-format detected :key #'car)))
             (should config)
             (let ((props (cdr config)))
@@ -51,7 +51,7 @@
               (should (string= (plist-get props :username) "testuser"))
               (should (plist-get props :has-password))
               (should (string= (plist-get props :domain) "testdomain"))))))
-    
+
     (test-migration-teardown)))
 
 (ert-deftest test-enhanced-detection-individual-variables ()
@@ -61,21 +61,21 @@
       (progn
         (setq mediawiki-site-url "https://legacy.example.com")
         (setq mediawiki-username "legacyuser")
-        
+
         (let ((detected (mediawiki-compat-detect-legacy-config)))
           (should detected)
           (should (>= (length detected) 2))
-          
+
           (let ((types (mapcar #'car detected)))
             (should (memq 'legacy-site-url types))
             (should (memq 'legacy-username types)))
-          
+
           (let ((site-url-config (cl-find 'legacy-site-url detected :key #'car)))
             (should site-url-config)
             (let ((props (cdr site-url-config)))
               (should (string= (plist-get props :value) "https://legacy.example.com"))
               (should (eq (plist-get props :type) 'individual-variable))))))
-    
+
     (test-migration-teardown)))
 
 ;;; Test Validation System
@@ -91,10 +91,10 @@
                            :username "validuser"
                            :auth-method 'basic
                            :auth-config '(:password "validpass"))))
-          
+
           (let ((issues (mediawiki-compat-validate-site-config site-config)))
             (should (null issues)))))
-    
+
     (test-migration-teardown)))
 
 (ert-deftest test-validate-site-config-invalid ()
@@ -106,13 +106,13 @@
                            :name nil
                            :url "not-a-url"
                            :auth-method 'basic)))
-          
+
           (let ((issues (mediawiki-compat-validate-site-config site-config)))
             (should issues)
             (should (> (length issues) 0))
             (should (cl-find-if (lambda (issue) (string-match-p "name is missing" issue)) issues))
             (should (cl-find-if (lambda (issue) (string-match-p "should start with http" issue)) issues)))))
-    
+
     (test-migration-teardown)))
 
 (ert-deftest test-validate-migrated-config ()
@@ -128,12 +128,12 @@
                 ("InvalidSite" . ,(make-mediawiki-site-config
                                   :name nil
                                   :url "bad-url"))))
-        
+
         (let ((is-valid (mediawiki-compat-validate-migrated-config)))
           (should (not is-valid))
           (should mediawiki-compat-validation-errors)
           (should (= (length mediawiki-compat-validation-errors) 1))))
-    
+
     (test-migration-teardown)))
 
 ;;; Test Integration
@@ -143,21 +143,21 @@
   (test-migration-setup)
   (unwind-protect
       (progn
-        (setq mediawiki-site-alist 
+        (setq mediawiki-site-alist
               '(("TestSite" . ("https://test.example.com" "testuser" "testpass"))))
-        
+
         ;; Use existing migration function
         (let ((migrated-count (mediawiki-compat-migrate-legacy-config)))
           (should (> migrated-count 0))
-          
+
           ;; Use enhanced validation
           (let ((is-valid (mediawiki-compat-validate-migrated-config)))
             (should is-valid))
-          
+
           ;; Check that site was properly migrated and validated
           (let ((migrated-site (cdr (assoc "TestSite" mediawiki-site-alist))))
             (should (mediawiki-site-config-p migrated-site)))))
-    
+
     (test-migration-teardown)))
 
 (ert-deftest test-enhanced-detection-comprehensive ()
@@ -166,24 +166,24 @@
   (unwind-protect
       (progn
         ;; Set up multiple legacy configurations
-        (setq mediawiki-site-alist 
+        (setq mediawiki-site-alist
               '(("OldSite" . ("https://old.example.com" "olduser" "oldpass"))))
         (setq mediawiki-site-url "https://legacy.example.com")
         (setq mediawiki-username "legacyuser")
         (setq mediawiki-api-url "https://api.example.com")
-        
+
         ;; Test enhanced detection
         (let ((detected (mediawiki-compat-detect-legacy-config)))
           (should detected)
           (should (>= (length detected) 4))
-          
+
           ;; Check that all types are detected
           (let ((types (mapcar #'car detected)))
             (should (memq 'old-site-format types))
             (should (memq 'legacy-site-url types))
             (should (memq 'legacy-username types))
             (should (memq 'legacy-api-url types)))))
-    
+
     (test-migration-teardown)))
 
 (provide 'test-migration-tools-basic)

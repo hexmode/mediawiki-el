@@ -38,7 +38,7 @@
   (let ((host (plist-get spec :host))
         (user (plist-get spec :user))
         (max (or (plist-get spec :max) 1)))
-    
+
     (let ((matches '()))
       (dolist (entry test-auth-source-data)
         (when (and (or (not host) (string= (plist-get entry :host) host))
@@ -47,7 +47,7 @@
                      :user (plist-get entry :user)
                      :secret (lambda () (plist-get entry :secret)))
                 matches)))
-      
+
       (if (> max 1)
           matches
         (when matches (list (car matches)))))))
@@ -64,21 +64,21 @@
                     :username "testuser"
                     :auth-method 'basic)))
     (mediawiki-add-site test-site))
-  
+
   (unwind-protect
       (progn
         ;; Clear cache
         (mediawiki-auth-clear-all-cached-credentials)
-        
+
         ;; Mock auth-source-search
         (cl-letf (((symbol-function 'auth-source-search) #'mock-auth-source-search))
-          
+
           ;; Test getting credentials
           (let ((credentials (mediawiki-auth-get-from-auth-source "test-wiki")))
             (should credentials)
             (should (string= (plist-get credentials :username) "testuser"))
             (should (string= (plist-get credentials :password) "testpass")))))
-    
+
     ;; Cleanup
     (mediawiki-remove-site "test-wiki")
     (mediawiki-auth-clear-all-cached-credentials)))

@@ -144,7 +144,7 @@ cd mediawiki-el
 ```elisp
 ;; Test site configuration
 (setq mediawiki-site-alist
-      '(("TestWiki" . 
+      '(("TestWiki" .
          (make-mediawiki-site-config
           :name "TestWiki"
           :url "http://localhost:8080/mediawiki/"
@@ -215,11 +215,11 @@ Tests are organized by functionality:
     (mediawiki-api-call-async "test-site" "query" '()
                               (lambda (response) (setq result response))
                               (lambda (err) (setq error err)))
-    
+
     ;; Wait for async operation
     (while (and (not result) (not error))
       (sit-for 0.1))
-    
+
     (should result)
     (should-not error)))
 ```
@@ -249,13 +249,13 @@ Test complete workflows:
    (lambda ()
      ;; Login
      (should (mediawiki-do-login "test-site"))
-     
+
      ;; Open page
      (should (mediawiki-open "Test Page"))
-     
+
      ;; Edit content
      (insert "New content")
-     
+
      ;; Save
      (should (mediawiki-save "Test edit")))))
 ```
@@ -359,7 +359,7 @@ Implement custom authentication by extending the auth system:
 (defun my-custom-auth-method (site-config)
   "Custom authentication implementation."
   (let ((credentials (my-get-credentials site-config)))
-    (mediawiki-api-call-sync 
+    (mediawiki-api-call-sync
      (mediawiki-site-config-name site-config)
      "login"
      `(("lgname" . ,(plist-get credentials :username))

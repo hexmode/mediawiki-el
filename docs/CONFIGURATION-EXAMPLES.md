@@ -22,7 +22,7 @@ The simplest configuration for editing Wikipedia:
 (require 'mediawiki)
 
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
@@ -41,7 +41,7 @@ Configuration for a private MediaWiki installation:
 (require 'mediawiki)
 
 (setq mediawiki-site-alist
-      '(("CompanyWiki" . 
+      '(("CompanyWiki" .
          (make-mediawiki-site-config
           :name "CompanyWiki"
           :url "https://wiki.company.com/"
@@ -66,7 +66,7 @@ Using Emacs' built-in auth-source for secure password storage:
 
 ;; Site configuration (password retrieved automatically)
 (setq mediawiki-site-alist
-      '(("MyWiki" . 
+      '(("MyWiki" .
          (make-mediawiki-site-config
           :name "MyWiki"
           :url "https://wiki.example.com/"
@@ -85,7 +85,7 @@ Secure OAuth setup for public wikis:
 
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia-OAuth" . 
+      '(("Wikipedia-OAuth" .
          (make-mediawiki-site-config
           :name "Wikipedia-OAuth"
           :url "https://en.wikipedia.org/"
@@ -102,7 +102,7 @@ Configuration for enterprise wikis with domain authentication:
 
 ```elisp
 (setq mediawiki-site-alist
-      '(("Enterprise" . 
+      '(("Enterprise" .
          (make-mediawiki-site-config
           :name "Enterprise"
           :url "https://enterprise.wiki.com/"
@@ -120,7 +120,7 @@ Configuration for editing multiple Wikipedia languages:
 
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia-EN" . 
+      '(("Wikipedia-EN" .
          (make-mediawiki-site-config
           :name "Wikipedia-EN"
           :url "https://en.wikipedia.org/"
@@ -128,8 +128,8 @@ Configuration for editing multiple Wikipedia languages:
           :auth-method 'oauth
           :auth-config '(:consumer-key "en-key"
                         :consumer-secret "en-secret")))
-        
-        ("Wikipedia-DE" . 
+
+        ("Wikipedia-DE" .
          (make-mediawiki-site-config
           :name "Wikipedia-DE"
           :url "https://de.wikipedia.org/"
@@ -137,8 +137,8 @@ Configuration for editing multiple Wikipedia languages:
           :auth-method 'oauth
           :auth-config '(:consumer-key "de-key"
                         :consumer-secret "de-secret")))
-        
-        ("Wikipedia-FR" . 
+
+        ("Wikipedia-FR" .
          (make-mediawiki-site-config
           :name "Wikipedia-FR"
           :url "https://fr.wikipedia.org/"
@@ -151,7 +151,7 @@ Configuration for editing multiple Wikipedia languages:
 (defun my-mediawiki-switch-language ()
   "Quick switch between Wikipedia languages."
   (interactive)
-  (let ((lang (completing-read "Language: " 
+  (let ((lang (completing-read "Language: "
                               '("EN" "DE" "FR"))))
     (mediawiki-site (concat "Wikipedia-" lang))))
 
@@ -165,24 +165,24 @@ Personal, work, and public wiki configuration:
 ```elisp
 (setq mediawiki-site-alist
       '(;; Personal documentation wiki
-        ("PersonalWiki" . 
+        ("PersonalWiki" .
          (make-mediawiki-site-config
           :name "PersonalWiki"
           :url "https://personal.wiki.mydomain.com/"
           :username "me"
           :auth-method 'basic))
-        
+
         ;; Work wiki with enterprise auth
-        ("WorkWiki" . 
+        ("WorkWiki" .
          (make-mediawiki-site-config
           :name "WorkWiki"
           :url "https://wiki.company.internal/"
           :username "employee.id"
           :auth-method 'basic
           :auth-config '(:domain "COMPANY")))
-        
+
         ;; Public contributions
-        ("Wikipedia" . 
+        ("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
@@ -190,9 +190,9 @@ Personal, work, and public wiki configuration:
           :auth-method 'oauth
           :auth-config '(:consumer-key "wiki-key"
                         :consumer-secret "wiki-secret")))
-        
+
         ;; Project wiki
-        ("ProjectWiki" . 
+        ("ProjectWiki" .
          (make-mediawiki-site-config
           :name "ProjectWiki"
           :url "https://project.wiki.org/"
@@ -240,7 +240,7 @@ Full configuration with all modern features enabled:
 
 ;; Advanced site configuration
 (setq mediawiki-site-alist
-      '(("MainWiki" . 
+      '(("MainWiki" .
          (make-mediawiki-site-config
           :name "MainWiki"
           :url "https://wiki.example.com/"
@@ -256,7 +256,7 @@ Full configuration with all modern features enabled:
           :retry-count 3))))
 
 ;; Custom hooks
-(add-hook 'mediawiki-mode-hook 
+(add-hook 'mediawiki-mode-hook
           (lambda ()
             ;; Enable flyspell for wiki editing
             (flyspell-mode 1)
@@ -292,7 +292,7 @@ Advanced workflow automation:
 ;; Batch operations
 (defun my-mediawiki-batch-edit (pages summary)
   "Edit multiple PAGES with the same SUMMARY."
-  (interactive 
+  (interactive
    (list (split-string (read-string "Pages (space-separated): "))
          (read-string "Edit summary: ")))
   (dolist (page pages)
@@ -304,8 +304,8 @@ Advanced workflow automation:
 ;; Site-specific templates
 (defun my-mediawiki-insert-template (template)
   "Insert a wiki TEMPLATE at point."
-  (interactive 
-   (list (completing-read "Template: " 
+  (interactive
+   (list (completing-read "Template: "
                          '("Infobox" "Citation needed" "Stub" "Reflist"))))
   (insert (format "{{%s}}" template)))
 
@@ -380,7 +380,7 @@ Setup for MediaWiki.el development and testing:
 
 ;; Test site configuration
 (setq mediawiki-site-alist
-      '(("TestWiki" . 
+      '(("TestWiki" .
          (make-mediawiki-site-config
           :name "TestWiki"
           :url "http://localhost:8080/mediawiki/"
@@ -476,7 +476,7 @@ Incremental upgrade approach:
 ;; Phase 2: Mixed old and new configuration
 (setq mediawiki-site-alist
       '(;; New format site
-        ("NewSite" . 
+        ("NewSite" .
          (make-mediawiki-site-config
           :name "NewSite"
           :url "https://new.wiki.com/"
@@ -484,7 +484,7 @@ Incremental upgrade approach:
           :auth-method 'oauth
           :auth-config '(:consumer-key "key"
                         :consumer-secret "secret")))
-        
+
         ;; Legacy format site (will be migrated)
         ("OldSite" . ("https://old.wiki.com/" "user" "pass"))))
 

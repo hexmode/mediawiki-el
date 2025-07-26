@@ -70,14 +70,14 @@ Configure MediaWiki.el for both Wikipedia and a private wiki.
 Add to your Emacs configuration:
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
           :username "wiki-username"
           :auth-method 'basic))
-        
-        ("CompanyWiki" . 
+
+        ("CompanyWiki" .
          (make-mediawiki-site-config
           :name "CompanyWiki"
           :url "https://wiki.company.com/"
@@ -171,7 +171,7 @@ Set up secure OAuth authentication for Wikipedia.
 #### 2. Configure OAuth in MediaWiki.el
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia-OAuth" . 
+      '(("Wikipedia-OAuth" .
          (make-mediawiki-site-config
           :name "Wikipedia-OAuth"
           :url "https://en.wikipedia.org/"

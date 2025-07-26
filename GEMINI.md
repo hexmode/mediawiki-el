@@ -1,1 +1,1 @@
-/home/mah/work/code/mediawiki-el/CONTRIBUTING.mediawiki
+CONTRIBUTING.mediawiki

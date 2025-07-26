@@ -368,7 +368,7 @@ for modern authentication when implemented."
 Handles both alist format (from real API) and nested list format (from tests)."
   (let ((data (mediawiki-api-response-data response))
         (token-key (intern (concat token-type "token"))))
-    
+
     ;; Try alist format first (real API responses)
     (let ((alist-token (cdr (assq token-key
                                   (cdr (assq 'tokens (cdr (assq 'query data))))))))
@@ -394,11 +394,11 @@ Handles both alist format (from real API) and nested list format (from tests)."
                         sitename "query"
                         (list (cons "meta" "tokens")
                               (cons "type" "login")))))
-    
+
     (unless (mediawiki-api-response-success token-response)
       (let ((error-info (mediawiki-api-get-error-info token-response)))
         (error "Failed to get login token for %s: %s" sitename error-info)))
-    
+
     (let ((login-token (mediawiki-auth-extract-token token-response "login")))
       (unless login-token
         (error "No login token in response from %s" sitename))

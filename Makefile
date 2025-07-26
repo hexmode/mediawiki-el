@@ -66,6 +66,10 @@ clean:
 	@echo "Cleaning up test artifacts..."
 	@rm -f *.elc
 
+editorconfig:
+	git ls-files -z | xargs -0 grep -PzZlv "\x0a$$" | xargs -0 -I{} -n 1 sh -c 'echo >> {}'
+	git ls-files -z | xargs -0 grep -PZl '[[:space:]]$$' | xargs -0 -I{} sed -i 's,[[:space:]]*$$,,' {}
+
 help:
 	@echo "Available targets:"
 	@echo "  test           - Run all tests"

@@ -8,13 +8,13 @@ A comprehensive Emacs package for editing MediaWiki sites directly from Emacs.
 
 ## Features
 
-✨ **Modern Architecture**: Modular design with async operations and robust error handling  
-🔐 **Secure Authentication**: OAuth support, auth-source integration, encrypted sessions  
-🚀 **Enhanced Performance**: Non-blocking operations, session persistence, retry logic  
-🎨 **Modern UI**: Quick menu, enhanced save dialog, site statistics, authentication management  
-📝 **Rich Editing**: Syntax highlighting, conflict resolution, draft mode, auto-completion  
-🔄 **Easy Migration**: Automatic migration from older versions with comprehensive compatibility layer  
-🧪 **Extensively Tested**: Comprehensive test suite ensuring reliability and stability  
+✨ **Modern Architecture**: Modular design with async operations and robust error handling
+🔐 **Secure Authentication**: OAuth support, auth-source integration, encrypted sessions
+🚀 **Enhanced Performance**: Non-blocking operations, session persistence, retry logic
+🎨 **Modern UI**: Quick menu, enhanced save dialog, site statistics, authentication management
+📝 **Rich Editing**: Syntax highlighting, conflict resolution, draft mode, auto-completion
+🔄 **Easy Migration**: Automatic migration from older versions with comprehensive compatibility layer
+🧪 **Extensively Tested**: Comprehensive test suite ensuring reliability and stability
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ M-x customize-group RET mediawiki RET
 2. **Or configure programmatically**:
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
@@ -78,7 +78,7 @@ M-x mediawiki-open RET PageName RET
 - **Auth-Source Integration**: Encrypted password storage via GPG
 - **Session Encryption**: Secure session persistence
 
-### 🚀 Better Performance  
+### 🚀 Better Performance
 - **Asynchronous Operations**: Non-blocking network requests
 - **Session Persistence**: State survives Emacs restarts
 - **Smart Retry Logic**: Automatic recovery from transient failures
@@ -107,7 +107,7 @@ M-x mediawiki-open RET PageName RET
 ### Basic Wikipedia Setup
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
@@ -118,7 +118,7 @@ M-x mediawiki-open RET PageName RET
 ### OAuth Authentication
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia-OAuth" . 
+      '(("Wikipedia-OAuth" .
          (make-mediawiki-site-config
           :name "Wikipedia-OAuth"
           :url "https://en.wikipedia.org/"
@@ -131,7 +131,7 @@ M-x mediawiki-open RET PageName RET
 ### Multi-Site Setup
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
@@ -139,8 +139,8 @@ M-x mediawiki-open RET PageName RET
           :auth-method 'oauth
           :auth-config '(:consumer-key "wiki-key"
                         :consumer-secret "wiki-secret")))
-        
-        ("CompanyWiki" . 
+
+        ("CompanyWiki" .
          (make-mediawiki-site-config
           :name "CompanyWiki"
           :url "https://wiki.company.com/"
@@ -257,7 +257,7 @@ make test-gpg           # GPG/encryption tests
 
 ;; Test site configuration
 (setq mediawiki-site-alist
-      '(("TestWiki" . 
+      '(("TestWiki" .
          (make-mediawiki-site-config
           :name "TestWiki"
           :url "http://localhost:8080/mediawiki/"

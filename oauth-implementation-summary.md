@@ -73,7 +73,7 @@ The current implementation provides the OAuth framework but requires HTTP module
 
 #### Test Coverage
 - ✅ OAuth setup and configuration
-- ✅ OAuth reset functionality  
+- ✅ OAuth reset functionality
 - ✅ OAuth utility functions (nonce generation, signature generation)
 - ✅ Error handling for missing tokens
 - ✅ Integration with site management system

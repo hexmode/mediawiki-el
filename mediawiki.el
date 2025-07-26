@@ -974,7 +974,7 @@ return the whole revision structure."
 (defun mediawiki-save (&optional summary)
   "Save the current buffer as a page on the current site.
 Prompt for a SUMMARY if one isn't given."
-  (interactive 
+  (interactive
    (list (if (featurep 'mediawiki-ui)
              (read-string "Edit summary: " nil 'mediawiki-summary-history)
            (read-string "Summary: "))))
@@ -2061,7 +2061,7 @@ Some simple editing commands.
     (set (make-local-variable 'imenu-generic-expression)
          mediawiki-imenu-generic-expression)
     (imenu-add-to-menubar "Contents"))
-  
+
   ;; Set up enhanced UI features if available
   (when (featurep 'mediawiki-ui)
     ;; Add quick menu key binding

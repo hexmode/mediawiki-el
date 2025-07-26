@@ -44,7 +44,7 @@ The migration process preserves your existing configuration while upgrading to m
 
 ;; NEW FORMAT (2.5+)
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
@@ -179,7 +179,7 @@ Found 3 legacy configuration items:
 Migration Options:
 ==================
 [1] Automatic migration (recommended)
-[2] Interactive migration  
+[2] Interactive migration
 [3] Show migration preview
 [4] Cancel migration
 
@@ -207,14 +207,14 @@ If you prefer manual control or have complex configurations:
 **After (Modern Format)**:
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
           :username "myuser"
           :auth-method 'basic))
-        
-        ("LocalWiki" . 
+
+        ("LocalWiki" .
          (make-mediawiki-site-config
           :name "LocalWiki"
           :url "http://localhost/wiki/"
@@ -245,7 +245,7 @@ machine localhost login admin password secret
 **Modern Equivalent**:
 ```elisp
 (setq mediawiki-site-alist
-      '(("default" . 
+      '(("default" .
          (make-mediawiki-site-config
           :name "default"
           :url "https://en.wikipedia.org/"
@@ -287,7 +287,7 @@ machine localhost login admin password secret
 **Modern**:
 ```elisp
 (setq mediawiki-site-alist
-      '(("Site1" . 
+      '(("Site1" .
          (make-mediawiki-site-config
           :name "Site1"
           :url "https://example.com/"
@@ -306,7 +306,7 @@ machine localhost login admin password secret
 **Modern**:
 ```elisp
 (setq mediawiki-site-alist
-      '(("Enterprise" . 
+      '(("Enterprise" .
          (make-mediawiki-site-config
           :name "Enterprise"
           :url "https://wiki.company.com/"
@@ -320,7 +320,7 @@ machine localhost login admin password secret
 **New in 2.5+**:
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia-OAuth" . 
+      '(("Wikipedia-OAuth" .
          (make-mediawiki-site-config
           :name "Wikipedia-OAuth"
           :url "https://en.wikipedia.org/"
@@ -395,7 +395,7 @@ New async support for better performance:
 
 ```elisp
 ;; Async page loading with callback
-(mediawiki-api-call-async "Wikipedia" "query" 
+(mediawiki-api-call-async "Wikipedia" "query"
                           '(("titles" . "Main Page"))
                           (lambda (response)
                             (message "Page loaded: %s" response))

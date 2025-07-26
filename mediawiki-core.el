@@ -266,8 +266,8 @@ Returns filtered content as a string."
         (save-excursion
           (goto-char (point-min))
           (while (not (eobp))
-            (let ((line (buffer-substring-no-properties 
-                        (line-beginning-position) 
+            (let ((line (buffer-substring-no-properties
+                        (line-beginning-position)
                         (line-end-position))))
               (when (string-match "^\\[\\([0-9:]+\\)\\]" line)
                 (let ((time-str (match-string 1 line)))
@@ -287,8 +287,8 @@ Returns filtered content as a string."
         (save-excursion
           (goto-char (point-min))
           (while (not (eobp))
-            (let ((line (buffer-substring-no-properties 
-                        (line-beginning-position) 
+            (let ((line (buffer-substring-no-properties
+                        (line-beginning-position)
                         (line-end-position))))
               (when (string-match-p pattern line)
                 (push line filtered-lines))
@@ -317,7 +317,7 @@ FILTER-ARG is passed to the filter function."
         (content ""))
     (if (not buffer)
         (message "No debug buffer exists")
-      (setq content 
+      (setq content
             (if filter-func
                 (funcall filter-func filter-arg)
               (with-current-buffer buffer
@@ -330,14 +330,14 @@ FILTER-ARG is passed to the filter function."
           (insert (format "Emacs Version: %s\n" emacs-version))
           (insert "=====================================\n\n")
           (insert content))
-        (message "Debug log exported to %s (%d bytes)" 
+        (message "Debug log exported to %s (%d bytes)"
                 filename (length content))))))
 
 (defun mediawiki-debug-export-filtered (filename module)
   "Export filtered debug log for MODULE to FILENAME."
-  (interactive 
+  (interactive
    (list (read-file-name "Export debug log to file: ")
-         (completing-read "Filter by module: " 
+         (completing-read "Filter by module: "
                          '("auth" "session" "api" "http" "page" "error" "all")
                          nil t)))
   (if (string= module "all")
@@ -351,7 +351,7 @@ Time format should be HH:MM:SS."
    (list (read-file-name "Export debug log to file: ")
          (read-string "Start time (HH:MM:SS): ")
          (read-string "End time (HH:MM:SS): ")))
-  (mediawiki-debug-export-to-file filename 'mediawiki-debug-filter-by-time 
+  (mediawiki-debug-export-to-file filename 'mediawiki-debug-filter-by-time
                                  (list start-time end-time)))
 
 (defun mediawiki-debug-manage-buffer-size ()
@@ -366,7 +366,7 @@ Time format should be HH:MM:SS."
             (forward-line 1)  ; Move to start of next line
             (delete-region (point-min) (point))
             (goto-char (point-min))
-            (insert (format "[%s] Debug buffer trimmed (removed %d chars)\n" 
+            (insert (format "[%s] Debug buffer trimmed (removed %d chars)\n"
                            (format-time-string "%H:%M:%S") excess))))))))
 
 (defun mediawiki-debug-log-with-module (module format-string &rest args)
@@ -485,18 +485,18 @@ OPTIONS is a plist of additional options."
     (when operation
       (setq mediawiki-async-operation-queue
             (append mediawiki-async-operation-queue (list operation-id)))
-      (mediawiki-debug-log-with-module "async" "Queued operation %s: %s" 
-                                      operation-id 
+      (mediawiki-debug-log-with-module "async" "Queued operation %s: %s"
+                                      operation-id
                                       (mediawiki-async-operation-description operation))
       (mediawiki-async-process-queue))))
 
 (defun mediawiki-async-process-queue ()
   "Process the operation queue, starting operations up to the concurrent limit."
   (when (and mediawiki-async-queue-enabled
-             (< (length mediawiki-async-active-operations) 
+             (< (length mediawiki-async-active-operations)
                 mediawiki-async-max-concurrent-operations)
              mediawiki-async-operation-queue)
-    
+
     ;; Sort queue by priority (higher priority first)
     (setq mediawiki-async-operation-queue
           (sort mediawiki-async-operation-queue
@@ -505,9 +505,9 @@ OPTIONS is a plist of additional options."
                         (op-b (gethash b mediawiki-async-operations)))
                     (> (mediawiki-async-operation-priority op-a)
                        (mediawiki-async-operation-priority op-b))))))
-    
+
     ;; Start operations up to concurrent limit
-    (while (and (< (length mediawiki-async-active-operations) 
+    (while (and (< (length mediawiki-async-active-operations)
                    mediawiki-async-max-concurrent-operations)
                 mediawiki-async-operation-queue)
       (let ((operation-id (pop mediawiki-async-operation-queue)))
@@ -519,24 +519,24 @@ OPTIONS is a plist of additional options."
     (when operation
       (setf (mediawiki-async-operation-started operation) (current-time))
       (push operation-id mediawiki-async-active-operations)
-      
+
       ;; Start progress tracking if enabled (without cancellation to avoid recursion)
       (when mediawiki-progress-feedback-enabled
-        (let ((progress-id (mediawiki-progress-start 
+        (let ((progress-id (mediawiki-progress-start
                            (mediawiki-async-operation-description operation)
                            nil nil))) ; Don't make it cancellable to avoid recursion
           (setf (mediawiki-async-operation-progress-id operation) progress-id)))
-      
-      (mediawiki-debug-log-with-module "async" "Starting operation %s: %s" 
-                                      operation-id 
+
+      (mediawiki-debug-log-with-module "async" "Starting operation %s: %s"
+                                      operation-id
                                       (mediawiki-async-operation-description operation))
-      
+
       ;; Set up timeout
       (when (mediawiki-async-operation-timeout operation)
-        (run-with-timer (mediawiki-async-operation-timeout operation) 
+        (run-with-timer (mediawiki-async-operation-timeout operation)
                         nil
                         #'mediawiki-async-timeout-operation operation-id))
-      
+
       ;; Execute the operation with wrapped callbacks
       (let ((wrapped-callback (mediawiki-async-wrap-callback operation-id 'success))
             (wrapped-error-callback (mediawiki-async-wrap-callback operation-id 'error)))
@@ -544,8 +544,8 @@ OPTIONS is a plist of additional options."
             (apply (mediawiki-async-operation-function operation)
                    (append (mediawiki-async-operation-args operation)
                            (list wrapped-callback wrapped-error-callback)))
-          (error 
-           (mediawiki-debug-log-with-module "async" "Operation %s failed to start: %s" 
+          (error
+           (mediawiki-debug-log-with-module "async" "Operation %s failed to start: %s"
                                            operation-id (error-message-string err))
            (funcall wrapped-error-callback err)))))))
 
@@ -557,11 +557,11 @@ OPTIONS is a plist of additional options."
         ;; Remove from active operations
         (setq mediawiki-async-active-operations
               (remove operation-id mediawiki-async-active-operations))
-        
+
         ;; Clear progress tracking
         (when (mediawiki-async-operation-progress-id operation)
           (mediawiki-progress-finish (mediawiki-async-operation-progress-id operation)))
-        
+
         (cond
          ((eq callback-type 'success)
           (mediawiki-debug-log-with-module "async" "Operation %s completed successfully" operation-id)
@@ -574,10 +574,10 @@ OPTIONS is a plist of additional options."
             (condition-case err
                 (apply (mediawiki-async-operation-callback operation) args)
               (error
-               (mediawiki-debug-log-with-module "async" "Callback error for %s: %s" 
+               (mediawiki-debug-log-with-module "async" "Callback error for %s: %s"
                                                operation-id (error-message-string err)))))
           (remhash operation-id mediawiki-async-operations))
-         
+
          ((eq callback-type 'error)
           (mediawiki-debug-log-with-module "async" "Operation %s failed: %s" operation-id args)
           ;; Try retry if operation is retryable
@@ -587,7 +587,7 @@ OPTIONS is a plist of additional options."
               (progn
                 (setf (mediawiki-async-operation-retry-count operation)
                       (1+ (mediawiki-async-operation-retry-count operation)))
-                (mediawiki-debug-log-with-module "async" "Retrying operation %s (attempt %d/%d)" 
+                (mediawiki-debug-log-with-module "async" "Retrying operation %s (attempt %d/%d)"
                                                 operation-id
                                                 (mediawiki-async-operation-retry-count operation)
                                                 (mediawiki-async-operation-max-retries operation))
@@ -598,10 +598,10 @@ OPTIONS is a plist of additional options."
               (condition-case err
                   (apply (mediawiki-async-operation-error-callback operation) args)
                 (error
-                 (mediawiki-debug-log-with-module "async" "Error callback error for %s: %s" 
+                 (mediawiki-debug-log-with-module "async" "Error callback error for %s: %s"
                                                  operation-id (error-message-string err)))))
             (remhash operation-id mediawiki-async-operations))))
-        
+
         ;; Process next operations in queue
         (mediawiki-async-process-queue)))))
 
@@ -617,32 +617,32 @@ OPTIONS is a plist of additional options."
 
 (defun mediawiki-async-cancel-operation (operation-id)
   "Cancel an async operation."
-  (interactive (list (completing-read "Cancel operation: " 
+  (interactive (list (completing-read "Cancel operation: "
                                      (mediawiki-async-list-operation-ids))))
   (let ((operation (gethash operation-id mediawiki-async-operations)))
     (when operation
       ;; Remove from queue if queued
       (setq mediawiki-async-operation-queue
             (remove operation-id mediawiki-async-operation-queue))
-      
+
       ;; Remove from active operations if active
       (setq mediawiki-async-active-operations
             (remove operation-id mediawiki-async-active-operations))
-      
+
       ;; Clear progress tracking
       (when (mediawiki-async-operation-progress-id operation)
         (mediawiki-progress-cancel (mediawiki-async-operation-progress-id operation)))
-      
+
       (mediawiki-debug-log-with-module "async" "Operation %s cancelled" operation-id)
       (mediawiki-async-update-statistics operation 'cancelled nil)
       (remhash operation-id mediawiki-async-operations)
-      
+
       ;; Process next operations in queue
       (mediawiki-async-process-queue)
-      
+
       (when (called-interactively-p 'interactive)
         (message "Cancelled operation: %s" operation-id))
-      
+
       t)))
 
 (defun mediawiki-async-cancel-all-operations ()
@@ -655,8 +655,8 @@ OPTIONS is a plist of additional options."
              mediawiki-async-operations)
     (setq mediawiki-async-operation-queue '())
     (setq mediawiki-async-active-operations '())
-    (message "Cancelled %d async operation%s" 
-             cancelled-count 
+    (message "Cancelled %d async operation%s"
+             cancelled-count
              (if (= cancelled-count 1) "" "s"))))
 
 (defun mediawiki-async-list-operation-ids ()
@@ -671,7 +671,7 @@ OPTIONS is a plist of additional options."
   (interactive)
   (let ((operations '())
         (buffer-name "*MediaWiki Async Operations*"))
-    
+
     ;; Collect operation info
     (maphash (lambda (id operation)
                (let* ((status (cond
@@ -679,7 +679,7 @@ OPTIONS is a plist of additional options."
                               ((member id mediawiki-async-operation-queue) "QUEUED")
                               (t "UNKNOWN")))
                       (elapsed (if (mediawiki-async-operation-started operation)
-                                  (mediawiki-progress-format-time-elapsed 
+                                  (mediawiki-progress-format-time-elapsed
                                    (mediawiki-async-operation-started operation))
                                 "Not started"))
                       (retry-info (if (> (mediawiki-async-operation-retry-count operation) 0)
@@ -697,7 +697,7 @@ OPTIONS is a plist of additional options."
                             retry-info)
                        operations)))
              mediawiki-async-operations)
-    
+
     ;; Display operations
     (if operations
         (let ((buffer (get-buffer-create buffer-name)))
@@ -708,10 +708,10 @@ OPTIONS is a plist of additional options."
             (insert (format "Active operations: %d\n" (length mediawiki-async-active-operations)))
             (insert (format "Queued operations: %d\n" (length mediawiki-async-operation-queue)))
             (insert (format "Max concurrent: %d\n\n" mediawiki-async-max-concurrent-operations))
-            
+
             ;; Sort by status (active first, then queued)
-            (setq operations 
-                  (sort operations 
+            (setq operations
+                  (sort operations
                         (lambda (a b)
                           (let ((status-a (nth 4 a))
                                 (status-b (nth 4 b)))
@@ -721,7 +721,7 @@ OPTIONS is a plist of additional options."
                              ((and (string= status-a "QUEUED") (string= status-b "QUEUED"))
                               (> (nth 5 a) (nth 5 b))) ; Sort queued by priority
                              (t nil))))))
-            
+
             (dolist (op operations)
               (let ((id (nth 0 op))
                     (type (nth 1 op))
@@ -735,7 +735,7 @@ OPTIONS is a plist of additional options."
                 (insert (format "  Type: %s | Site: %s | Priority: %d\n" type sitename priority))
                 (insert (format "  Description: %s\n" description))
                 (insert (format "  Elapsed: %s\n\n" elapsed))))
-            
+
             (goto-char (point-min)))
           (switch-to-buffer-other-window buffer))
       (message "No async operations active"))))
@@ -786,7 +786,7 @@ OPTIONS is a plist of additional options."
 
 (defun mediawiki-async-prioritize-operation (operation-id new-priority)
   "Change the priority of OPERATION-ID to NEW-PRIORITY."
-  (interactive 
+  (interactive
    (list (completing-read "Prioritize operation: " (mediawiki-async-list-operation-ids))
          (read-number "New priority (1-10, higher = more priority): " 5)))
   (let ((operation (gethash operation-id mediawiki-async-operations)))
@@ -811,7 +811,7 @@ When enabled, operations are queued and processed asynchronously."
   "Toggle non-blocking mode for MediaWiki operations."
   (interactive)
   (setq mediawiki-non-blocking-mode (not mediawiki-non-blocking-mode))
-  (message "MediaWiki non-blocking mode %s" 
+  (message "MediaWiki non-blocking mode %s"
            (if mediawiki-non-blocking-mode "enabled" "disabled")))
 
 (defun mediawiki-async-api-call (sitename action params callback &optional error-callback options)
@@ -869,10 +869,10 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
   (let ((batch-id (format "batch-%d" (length operations)))
         (operation-ids '())
         (progress-id (when mediawiki-progress-feedback-enabled
-                      (mediawiki-progress-start 
+                      (mediawiki-progress-start
                        (format "Batch operation (%d items)" (length operations))
                        (length operations)))))
-    
+
     (dolist (op-spec operations)
       (let* ((type (nth 0 op-spec))
              (description (nth 1 op-spec))
@@ -888,10 +888,10 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
                            callback error-callback batch-options)))
         (push operation-id operation-ids)
         (mediawiki-async-queue-operation operation-id)))
-    
+
     (when progress-id
       (mediawiki-progress-finish progress-id (format "Queued %d operations" (length operations))))
-    
+
     (nreverse operation-ids)))
 
 ;;; Enhanced Async Operation Status Tracking
@@ -913,7 +913,7 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
   "Update statistics for OPERATION with RESULT-TYPE and COMPLETION-TIME."
   (let* ((op-type (mediawiki-async-operation-type operation))
          (stats (gethash op-type mediawiki-async-operation-statistics)))
-    
+
     ;; Initialize stats if not exists
     (unless stats
       (setq stats (make-mediawiki-async-stats
@@ -925,11 +925,11 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
                    :total-execution-time 0.0
                    :last-updated (current-time)))
       (puthash op-type stats mediawiki-async-operation-statistics))
-    
+
     ;; Update counters
     (setf (mediawiki-async-stats-total-operations stats)
           (1+ (mediawiki-async-stats-total-operations stats)))
-    
+
     (cond
      ((eq result-type 'completed)
       (setf (mediawiki-async-stats-completed-operations stats)
@@ -940,7 +940,7 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
      ((eq result-type 'cancelled)
       (setf (mediawiki-async-stats-cancelled-operations stats)
             (1+ (mediawiki-async-stats-cancelled-operations stats)))))
-    
+
     ;; Update timing stats if completion time provided
     (when completion-time
       (let ((total-time (+ (mediawiki-async-stats-total-execution-time stats) completion-time))
@@ -949,7 +949,7 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
         (when (> completed-count 0)
           (setf (mediawiki-async-stats-average-completion-time stats)
                 (/ total-time completed-count)))))
-    
+
     (setf (mediawiki-async-stats-last-updated stats) (current-time))))
 
 (defun mediawiki-async-get-operation-status (operation-id)
@@ -966,7 +966,7 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
              (age (float-time (time-subtract current-time created)))
              (execution-time (when started
                               (float-time (time-subtract current-time started)))))
-        
+
         (list :id operation-id
               :type (mediawiki-async-operation-type operation)
               :description (mediawiki-async-operation-description operation)
@@ -989,15 +989,15 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
       (erase-buffer)
       (insert "MediaWiki Async Operation Statistics\n")
       (insert "=====================================\n\n")
-      
+
       (if (= (hash-table-count mediawiki-async-operation-statistics) 0)
           (insert "No operation statistics available.\n")
-        
+
         (insert (format "Current queue status:\n"))
         (insert (format "  Active operations: %d\n" (length mediawiki-async-active-operations)))
         (insert (format "  Queued operations: %d\n" (length mediawiki-async-operation-queue)))
         (insert (format "  Total tracked operations: %d\n\n" (hash-table-count mediawiki-async-operations)))
-        
+
         (maphash (lambda (op-type stats)
                    (let ((total (mediawiki-async-stats-total-operations stats))
                          (completed (mediawiki-async-stats-completed-operations stats))
@@ -1005,18 +1005,18 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
                          (cancelled (mediawiki-async-stats-cancelled-operations stats))
                          (avg-time (mediawiki-async-stats-average-completion-time stats))
                          (last-updated (mediawiki-async-stats-last-updated stats)))
-                     
+
                      (insert (format "Operation Type: %s\n" op-type))
                      (insert (format "  Total: %d | Completed: %d | Failed: %d | Cancelled: %d\n"
                                     total completed failed cancelled))
                      (when (> completed 0)
-                       (insert (format "  Success Rate: %.1f%%\n" 
+                       (insert (format "  Success Rate: %.1f%%\n"
                                       (* 100.0 (/ (float completed) total))))
                        (insert (format "  Average Completion Time: %.2fs\n" avg-time)))
-                     (insert (format "  Last Updated: %s\n\n" 
+                     (insert (format "  Last Updated: %s\n\n"
                                     (format-time-string "%Y-%m-%d %H:%M:%S" last-updated)))))
                  mediawiki-async-operation-statistics))
-      
+
       (goto-char (point-min)))
     (switch-to-buffer-other-window buffer-name)))
 
@@ -1039,22 +1039,22 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
                           (mediawiki-async-stats-cancelled-operations stats)
                           (mediawiki-async-stats-average-completion-time stats)
                           (mediawiki-async-stats-total-execution-time stats)
-                          (format-time-string "%Y-%m-%d %H:%M:%S" 
+                          (format-time-string "%Y-%m-%d %H:%M:%S"
                                              (mediawiki-async-stats-last-updated stats)))
                      stats-data))
              mediawiki-async-operation-statistics)
-    
+
     (with-temp-file filename
       (insert "MediaWiki Async Operation Statistics Export\n")
       (insert (format "Generated: %s\n" (current-time-string)))
       (insert "==========================================\n\n")
       (insert "Format: Type | Total | Completed | Failed | Cancelled | Avg Time | Total Time | Last Updated\n\n")
-      
+
       (dolist (stat stats-data)
         (insert (format "%s | %d | %d | %d | %d | %.2f | %.2f | %s\n"
                        (nth 0 stat) (nth 1 stat) (nth 2 stat) (nth 3 stat)
                        (nth 4 stat) (nth 5 stat) (nth 6 stat) (nth 7 stat)))))
-    
+
     (message "Statistics exported to %s" filename)))
 
 ;;; Progress Feedback System
@@ -1232,7 +1232,7 @@ FINAL-MESSAGE is an optional completion message."
                              (format "%s: %d units" desc completed))))
         (when status
           (setq progress-text (format "%s - %s" progress-text status)))
-        
+
         (if mediawiki-progress-use-modeline
             (mediawiki-progress-update-modeline progress-text)
           (message "%s" progress-text))))))

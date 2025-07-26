@@ -14,7 +14,7 @@
   :tags '(:network)
   (skip-unless (and (fboundp 'mediawiki-http-request-sync)
                     (getenv "MEDIAWIKI_NETWORK_TESTS")))
-  
+
   (let ((response (mediawiki-http-request-sync "https://httpbin.org/get" "GET" nil)))
     (should (plist-get response :success))
     (should (= (plist-get response :status-code) 200))))
@@ -24,7 +24,7 @@
   :tags '(:network)
   (skip-unless (and (fboundp 'mediawiki-http-request-sync)
                     (getenv "MEDIAWIKI_NETWORK_TESTS")))
-  
+
   (condition-case err
       (let ((response (mediawiki-http-request-sync "https://httpbin.org/status/404" "GET" nil)))
         (should (not (plist-get response :success)))
@@ -60,7 +60,7 @@
   :tags '(:network :async)
   (skip-unless (and (fboundp 'mediawiki-http-request-async)
                     (getenv "MEDIAWIKI_NETWORK_TESTS")))
-  
+
   (let ((callback-called nil)
         (error-callback-called nil)
         (timeout-counter 0))
@@ -76,7 +76,7 @@
        (setq error-callback-called t)))
 
     ;; Wait for callback with timeout
-    (while (and (not callback-called) 
+    (while (and (not callback-called)
                 (not error-callback-called)
                 (< timeout-counter 50))
       (sleep-for 0.1)
@@ -90,7 +90,7 @@
   (let ((params '(("action" . "query")
                   ("format" . "json")
                   ("meta" . "siteinfo"))))
-    
+
     ;; Test parameter list structure
     (should (listp params))
     (should (string= (cdr (assoc "action" params)) "query"))
@@ -103,7 +103,7 @@
                             :status-code 200
                             :data '((query . ((pages . ((123 . ((title . "Test Page"))))))))
                             :headers '(("Content-Type" . "application/json")))))
-    
+
     (should (plist-get mock-response :success))
     (should (= (plist-get mock-response :status-code) 200))
     (should (plist-get mock-response :data))
@@ -114,7 +114,7 @@
   :tags '(:network)
   (skip-unless (and (fboundp 'mediawiki-http-request-sync)
                     (getenv "MEDIAWIKI_NETWORK_TESTS")))
-  
+
   (let ((start-time (current-time)))
     (condition-case err
         (mediawiki-http-request-sync "https://httpbin.org/delay/5" "GET" nil 2)
@@ -128,11 +128,11 @@
   :tags '(:network)
   (skip-unless (and (fboundp 'mediawiki-http-request-sync)
                     (getenv "MEDIAWIKI_NETWORK_TESTS")))
-  
+
   (let ((data (make-hash-table :test 'equal)))
     (puthash "key1" "value1" data)
     (puthash "key2" "value2" data)
-    
+
     (let ((response (mediawiki-http-request-sync "https://httpbin.org/post" "POST" data)))
       (should (plist-get response :success))
       (should (= (plist-get response :status-code) 200)))))

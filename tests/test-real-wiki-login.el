@@ -31,16 +31,16 @@
                :url "https://wiki.example.com/"
                :api-url "https://wiki.example.com/w/api.php"
                :username "test-user")))
-    
+
     (mediawiki-add-site site)
-    
+
     (unwind-protect
         (let ((retrieved-site (mediawiki-get-site test-real-wiki-name)))
           (should retrieved-site)
           (should (string= (mediawiki-site-config-url retrieved-site) "https://wiki.example.com/"))
           (should (string= (mediawiki-site-config-api-url retrieved-site) "https://wiki.example.com/w/api.php"))
           (should (string= (mediawiki-site-config-username retrieved-site) "test-user")))
-      
+
       ;; Cleanup
       (mediawiki-remove-site test-real-wiki-name))))
 
@@ -48,12 +48,12 @@
   "Test credential handling for wiki login."
   (let ((username "test-user")
         (password "test-password"))
-    
+
     ;; Override the credential function
     (cl-letf (((symbol-function 'mediawiki-auth-get-credentials)
-               (lambda (_sitename) 
+               (lambda (_sitename)
                  (list :username username :password password))))
-      
+
       (let ((credentials (mediawiki-auth-get-credentials "any-site")))
         (should (equal (plist-get credentials :username) username))
         (should (equal (plist-get credentials :password) password))))))
@@ -67,7 +67,7 @@
                                                        (groups . ("user" "autoconfirmed")))))))
                           :warnings nil
                           :errors nil)))
-    
+
     (should (mediawiki-api-response-success success-response))
     (let* ((data (mediawiki-api-response-data success-response))
            (query (cdr (assq 'query data)))

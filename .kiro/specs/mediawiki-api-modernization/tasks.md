@@ -108,7 +108,7 @@
     - _Requirements: 3.2, 3.3_
 
   - [x] 6.3 Add edit conflict resolution
-    - Create conflict detection and user notification 
+    - Create conflict detection and user notification
     - Implement three-way merge capabilities
     - Add conflict resolution UI and user choices
     - _Requirements: 3.3_

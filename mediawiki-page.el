@@ -746,12 +746,12 @@ SHOW-PROGRESS enables progress feedback."
                        (mediawiki-progress-start (format "Retrieving page: %s" title) 3)))
          (params (mediawiki-page-build-query-params
                  title get-metadata get-revisions section follow-redirect)))
-    
+
     (when progress-id
       (mediawiki-progress-update progress-id 1 "Request built, making API call"))
-    
+
     (let ((response (mediawiki-api-call-sync sitename "query" params)))
-      
+
       (when progress-id
         (mediawiki-progress-update progress-id 2 "API response received, parsing"))
 
@@ -771,10 +771,10 @@ SHOW-PROGRESS enables progress feedback."
                                 title
                                 (mediawiki-api-format-error-summary response))
             nil)
-        
+
         ;; Always finish progress tracking
         (when progress-id
-          (mediawiki-progress-finish progress-id 
+          (mediawiki-progress-finish progress-id
                                     (format "Page retrieval complete: %s" title)))))))
 
 (defun mediawiki-page-get-async (sitename title get-metadata get-revisions
@@ -787,7 +787,7 @@ SHOW-PROGRESS enables progress feedback."
                        (mediawiki-progress-start (format "Retrieving page: %s" title) 3)))
          (params (mediawiki-page-build-query-params
                  title get-metadata get-revisions section follow-redirect)))
-    
+
     (when progress-id
       (mediawiki-progress-update progress-id 1 "Request built, making async API call"))
 
@@ -796,7 +796,7 @@ SHOW-PROGRESS enables progress feedback."
      (lambda (response)
        (when progress-id
          (mediawiki-progress-update progress-id 2 "Async response received, parsing"))
-       
+
        (let ((page-data (mediawiki-page-parse-response response title)))
          (when progress-id
            (mediawiki-progress-update progress-id 3 "Response parsed, caching"))
@@ -807,16 +807,16 @@ SHOW-PROGRESS enables progress feedback."
 
          ;; Finish progress tracking
          (when progress-id
-           (mediawiki-progress-finish progress-id 
+           (mediawiki-progress-finish progress-id
                                      (format "Page retrieval complete: %s" title)))
-         
+
          ;; Call the callback with the result
          (funcall callback page-data)))
 
      ;; Error callback
      (lambda (response)
        (when progress-id
-         (mediawiki-progress-finish progress-id 
+         (mediawiki-progress-finish progress-id
                                    (format "Page retrieval failed: %s" title)))
        (mediawiki-debug-log "Failed to retrieve page %s: %s"
                            title

@@ -12,7 +12,7 @@
   "Set up OAuth configuration for SITENAME with both consumer and access tokens.
 This is for when you already have all OAuth credentials from the OAuth provider."
   (interactive "sSite name: \nsConsumer key: \nsConsumer secret: \nsAccess token: \nsAccess secret: ")
-  
+
   (let ((site (mediawiki-get-site sitename)))
     (unless site
       (error "Site %s not found. Add it first with mediawiki-add-site" sitename))
@@ -30,7 +30,7 @@ This is for when you already have all OAuth credentials from the OAuth provider.
 (defun setup-wikipedia-oauth-example ()
   "Example function showing how to set up Wikipedia OAuth.
 Replace the placeholder values with your actual OAuth credentials."
-  
+
   ;; First, make sure Wikipedia is added as a site
   (unless (mediawiki-get-site "Wikipedia")
     (let ((wikipedia-site (make-mediawiki-site-config
@@ -44,20 +44,20 @@ Replace the placeholder values with your actual OAuth credentials."
                           :session-info nil)))
       (mediawiki-add-site wikipedia-site)
       (message "Added Wikipedia site")))
-  
+
   ;; Now set up OAuth with your credentials
   ;; REPLACE THESE WITH YOUR ACTUAL OAUTH CREDENTIALS:
   (let ((consumer-key "your-consumer-key-here")
-        (consumer-secret "your-consumer-secret-here") 
+        (consumer-secret "your-consumer-secret-here")
         (access-token "your-access-token-here")
         (access-secret "your-access-secret-here"))
-    
-    (mediawiki-oauth-setup-with-tokens "Wikipedia" 
-                                      consumer-key 
+
+    (mediawiki-oauth-setup-with-tokens "Wikipedia"
+                                      consumer-key
                                       consumer-secret
-                                      access-token 
+                                      access-token
                                       access-secret)
-    
+
     (message "Wikipedia OAuth setup complete!")))
 
 ;; Instructions for the user
@@ -69,7 +69,7 @@ Replace the placeholder values with your actual OAuth credentials."
 You have 4 pieces of information from your Wikipedia OAuth consumer:
 
 1. Consumer Key (also called Client ID)
-2. Consumer Secret (also called Client Secret)  
+2. Consumer Secret (also called Client Secret)
 3. Access Token
 4. Access Secret
 
@@ -90,7 +90,7 @@ METHOD 2 - Edit setup-wikipedia-oauth-example():
 3. Run: M-x setup-wikipedia-oauth-example
 
 METHOD 3 - Direct Elisp:
-(mediawiki-oauth-setup-with-tokens \"Wikipedia\" 
+(mediawiki-oauth-setup-with-tokens \"Wikipedia\"
                                   \"your-consumer-key\"
                                   \"your-consumer-secret\"
                                   \"your-access-token\"
@@ -99,7 +99,7 @@ METHOD 3 - Direct Elisp:
 After setup, you can try to authenticate with:
 M-x mediawiki-oauth-login
 
-Note: Full OAuth functionality requires HTTP module enhancement for 
+Note: Full OAuth functionality requires HTTP module enhancement for
 Authorization headers, but the setup and configuration will work.
 "))
 

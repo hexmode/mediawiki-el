@@ -73,13 +73,13 @@ MediaWiki.el supports multiple site configurations using the modern `mediawiki-s
 
 ```elisp
 (setq mediawiki-site-alist
-      '(("Wikipedia" . 
+      '(("Wikipedia" .
          (make-mediawiki-site-config
           :name "Wikipedia"
           :url "https://en.wikipedia.org/"
           :username "YourUsername"
           :auth-method 'basic))
-        
+
         ("MyWiki" .
          (make-mediawiki-site-config
           :name "MyWiki"

@@ -15,6 +15,15 @@ This file provides guidance to for contributing to mediawiki-el. It is also help
 * <code>make list-tests</code> - List all available test files
 * <code>make clean</code> - Clean up compiled .elc files
 
+=== Code Quality ===
+
+* All files must follow `.editorconfig` conventions:
+** End with final newline (`insert_final_newline = true`)
+** No trailing whitespace (`trim_trailing_whitespace = true`)
+** 2-space indentation for most files, tabs for Makefile
+** Use `git ls-files -z | xargs -0 grep -Pzlv '\x0a$'` to find files missing final newlines
+** Use `git ls-files -z | xargs -0 grep -l '[[:space:]]$'` to find files with trailing whitespace
+
 === Running Individual Tests ===
 
 Tests follow the pattern <code><nowiki>test-<feature>.el</nowiki></code> and can be run individually:
@@ -24,6 +33,7 @@ emacs --batch -l mediawiki-core.el -l mediawiki-errors.el -l mediawiki-session.e
   -l mediawiki-http.el -l mediawiki-api.el -l mediawiki-auth.el -l mediawiki-oauth.el \
   -l mediawiki-page.el -l tests/test-<name>.el -f ert-run-tests-batch-and-exit
 </source>
+
 === Package Installation ===
 
 * Use MELPA for installation: <code>M-x package-list-packages</code> and search for “mediawiki”
