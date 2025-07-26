@@ -112,7 +112,8 @@ per-session later."
   auth-method             ; Authentication method (basic, oauth, etc.)
   auth-config             ; Method-specific configuration
   capabilities            ; Cached site capabilities
-  session-info)           ; Current session information
+  session-info            ; Current session information
+  first-page)             ; First page to open (defaults to "Main Page")
 
 (cl-defstruct mediawiki-session
   "Structure representing a MediaWiki session."

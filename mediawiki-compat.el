@@ -163,7 +163,8 @@ Returns a modern mediawiki-site-config struct."
                 old-config))
          (username (when (listp old-config) (nth 1 old-config)))
          (password (when (listp old-config) (nth 2 old-config)))
-         (domain (when (listp old-config) (nth 3 old-config))))
+         (domain (when (listp old-config) (nth 3 old-config)))
+         (first-page (when (listp old-config) (nth 4 old-config))))
 
     ;; Create auth-config with legacy credentials
     (let ((auth-config (when (or username password domain)
@@ -176,7 +177,8 @@ Returns a modern mediawiki-site-config struct."
        :url url
        :username username
        :auth-method (if username 'basic 'none)
-       :auth-config auth-config))))
+       :auth-config auth-config
+       :first-page (or first-page "Main Page")))))
 
 (defun mediawiki-compat-migrate-legacy-config ()
   "Migrate legacy configuration to modern format."

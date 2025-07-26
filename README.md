@@ -9,11 +9,17 @@ A comprehensive Emacs package for editing MediaWiki sites directly from Emacs.
 ## Features
 
 ✨ **Modern Architecture**: Modular design with async operations and robust error handling
+
 🔐 **Secure Authentication**: OAuth support, auth-source integration, encrypted sessions
+
 🚀 **Enhanced Performance**: Non-blocking operations, session persistence, retry logic
+
 🎨 **Modern UI**: Quick menu, enhanced save dialog, site statistics, authentication management
+
 📝 **Rich Editing**: Syntax highlighting, conflict resolution, draft mode, auto-completion
+
 🔄 **Easy Migration**: Automatic migration from older versions with comprehensive compatibility layer
+
 🧪 **Extensively Tested**: Comprehensive test suite ensuring reliability and stability
 
 ## Quick Start
@@ -23,6 +29,14 @@ A comprehensive Emacs package for editing MediaWiki sites directly from Emacs.
 #### From MELPA (Recommended)
 ```elisp
 M-x package-install RET mediawiki RET
+```
+
+#### From git
+Add the following to your Emacs configuration:
+```elisp
+(use-package mediawiki
+  :vc (:url "https://github.com/hexmode/mediawiki-el" :rev :newest)
+  :bind (([(control c) ?m] . mediawiki-site)))
 ```
 
 #### Manual Installation

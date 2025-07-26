@@ -190,62 +190,6 @@ per-session later."
   :tag "MediaWiki Debugging"
   :group 'mediawiki)
 
-;; Legacy site configuration - will be migrated to new format
-(defcustom mediawiki-legacy-site-alist '(("Wikipedia"
-                                          "https://en.wikipedia.org/w/"
-                                          "username"
-                                          "password"
-                                          nil
-                                          "Main Page"))
-  "Legacy list of MediaWiki websites (deprecated).
-This will be automatically migrated to the new site configuration format."
-  :tag "MediaWiki sites (Legacy)"
-  :group 'mediawiki
-  :type '(alist :tag "Site Name"
-                :key-type (string :tag "Site Name")
-                :value-type (list :tag "Parameters"
-                                  (string :tag "URL")
-                                  (string :tag "Username")
-                                  (string :tag "Password")
-                                  (choice :tag "Provide LDAP Domain?"
-                                          (string)
-                                          (other :tag "No" nil))
-                                  (string :tag "First Page"
-                                          :description "First page to open when `mediawiki-site' is called for this site"))))
-
-;;; Site Configuration Migration
-
-(defun mediawiki-migrate-legacy-sites ()
-  "Migrate legacy site configuration to new format."
-  (when mediawiki-legacy-site-alist
-    (dolist (entry mediawiki-legacy-site-alist)
-      (let* ((name (car entry))
-             (params (cdr entry))
-             (url (nth 0 params))
-             (username (nth 1 params))
-             (password (nth 2 params))
-             (domain (nth 3 params))
-             (first-page (nth 4 params)))
-
-        ;; Create new site structure
-        (let ((site (make-mediawiki-site-config
-                     :name name
-                     :url url
-                     :username (unless (string= username "username") username)
-                     :auth-method 'basic
-                     :auth-config (when domain (list :domain domain))
-                     :capabilities nil
-                     :session-info nil)))
-
-          (mediawiki-add-site site))))
-
-    ;; Clear legacy configuration after migration
-    (setq mediawiki-legacy-site-alist nil)
-    (message "Migrated %d sites to new configuration format"
-             (length mediawiki-site-alist))))
-
-;; Migrate on load
-(mediawiki-migrate-legacy-sites)
 
 (defcustom mediawiki-pop-buffer-hook '()
   "List of functions to execute after popping to a buffer.
@@ -871,17 +815,17 @@ title or a list of titles.  PROPS are the revision properites to
 fetch.  LIMIT is the upper bound on the number of results to give."
   (when (or (eq nil title) (string= "" title))
       (error "No title passed!"))
-  (let ((qresult (mediawiki-api-call
-         sitename "query"
-         (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
-               (cons "titles" (mediawiki-api-param title))
-               (when limit
-                 (cons "rvlimit" (mediawiki-api-param limit)))
-               (cons "rvprop" (mediawiki-api-param props))
-               (cons "rvslots" "main")))))
-    (if (eq t qresult)
-        (error "No results for revision query")
-      (cddr qresult))))
+  (let* ((params (mediawiki-api-build-params
+                  "prop" (mediawiki-api-param (list "info" "revisions"))
+                  "titles" (mediawiki-api-param title)
+                  "rvlimit" (when limit (mediawiki-api-param limit))
+                  "rvprop" (mediawiki-api-param props)
+                  "rvslots" "main"))
+         (response (mediawiki-api-call-sync sitename "query" params)))
+    (if (mediawiki-api-response-success response)
+        (mediawiki-api-response-data response)
+      (error "No results for revision query: %s"
+             (mediawiki-api-get-error-info response)))))
 
 (defun mediawiki-page-get-title (page)
   "Given a PAGE from a pagelist structure, extract the title."
@@ -1049,57 +993,10 @@ Prompt for a SUMMARY if one isn't given."
   (mediawiki-save summary)
   (bury-buffer))
 
-(defun mediawiki-site-extract (sitename index)
-  "Using `mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
-  (let* ((site (assoc sitename mediawiki-site-alist))
-         (bit (nth index site)))
-    (cond
-     ((eq nil sitename)
-      (error "Sitename isn't set"))
-     ((eq nil site)
-      (error "Couldn't find a site named: %s" sitename))
-     ((stringp bit)
-      bit)
-     (nil))))
 
 
 
-(defmacro mediawiki-site-user-pass (sitename index method)
-  "Fetch the user or pass for SITENAME.
-Check if it is in our site-alist using INDEX or use METHOD to get it from authinfo."
-  `(let* ((arg (mediawiki-site-extract ,sitename ,index))
-          (auth (funcall ,method (mediawiki-site-config-url ,sitename))))
-     (if (and arg (> (string-width arg) 0))
-         arg
-       auth)))
 
-(defun mediawiki-site-config-username (sitename)
-  "Get the username for a given SITENAME."
-  (mediawiki-site-user-pass sitename 2 'url-user-for-url))
-
-(defun mediawiki-site-password (sitename)
-  "Get the password for a given SITENAME."
-  (mediawiki-site-user-pass sitename 3 'url-password-for-url))
-
-(defun mediawiki-site-domain (sitename)
-  "Get the LDAP domain for a given SITENAME."
-  (let ((domain (mediawiki-site-extract sitename 4)))
-    (when (and domain (not (string= "" domain)))
-      domain)))
-
-(defun mediawiki-site-first-page (sitename)
-  "Get the first page for a given SITENAME."
-  (let ((page (mediawiki-site-extract sitename 5)))
-    (if (or (not page) (string= page ""))
-        "Main Page")))
-
-(defun mediawiki-site-get-token (sitename type)
-  "Get token(s) for SITENAME of TYPE type."
-  (cdr
-   (caadar
-    (cddr (mediawiki-api-call sitename "query"
-                              (list (cons "meta" "tokens")
-                                    (cons "type" type)))))))
 
 ;;;###autoload
 (defun mediawiki-do-login (&optional sitename username password domain)
@@ -1112,35 +1009,15 @@ Store cookies for future authentication."
   (setq mediawiki-site nil)             ; This wil be set once we are
                                         ; logged in
 
-  ;; Possibly save info once we have it, eh?
-  (lexical-let* ((user (or (mediawiki-site-config-username sitename)
-                           username
-                           (read-string "Username: ")))
-                 (pass (or (mediawiki-site-password sitename)
-                           password
-                           (read-passwd "Password: ")))
-                 (dom-loaded (mediawiki-site-domain sitename))
-                 (dom (when dom-loaded
-                        (if (string= "" dom-loaded)
-                            (read-string "LDAP Domain: ")
-                          dom-loaded)))
-                 (sitename sitename)
-                 (token (mediawiki-site-get-token sitename "login"))
-                 (args (list (cons "lgname" user)
-                             (cons "lgpassword" pass)
-                             (when token
-                               (cons "lgtoken" token))
-                             (when dom
-                               (cons "lgdomain" dom))))
-                 (result (cadr (mediawiki-api-call sitename "login" args))))
-    (when (string= (cdr (assq 'result result)) "NeedToken")
-      (setq result
-            (cadr (mediawiki-api-call sitename "login"
-                   (append
-                    args (list (cons "lgtoken"
-                                     (cdr (assq 'token result)))))))))
-    (when (string= "Success" (cdr (assoc 'result result)))
-      sitename)))
+  ;; Use the new authentication system
+  (condition-case err
+      (progn
+        (mediawiki-auth-basic-login sitename)
+        (setq mediawiki-site sitename)
+        sitename)
+    (error
+     (message "Login failed: %s" (error-message-string err))
+     nil)))
 
 ;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)
@@ -1149,45 +1026,22 @@ Store cookies for future authentication."
   (when (not sitename)
     (setq sitename (mediawiki-prompt-for-site)))
 
-  (mediawiki-api-call sitename "logout" nil)
+  (mediawiki-auth-logout sitename)
   (setq mediawiki-site nil))
 
 (defun mediawiki-save-page (sitename title summary content &optional trynum)
   "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT.
-TRYNUM is used if this command is being retried."
-  ;; FIXME error checking, conflicts!
-  (when (and trynum (< trynum 0))
-    (error "Too many tries"))
-  (let ((trynum (or trynum 3))
-        (token (mediawiki-site-get-token sitename "csrf")))
-    (condition-case err
-        (progn
-          (mediawiki-api-call sitename "edit"
-                              (list (cons "title"
-                                          (mediawiki-translate-pagename title))
-                                    (cons "text" content)
-                                    (cons "summary" summary)
-                                    (cons "token" token)
-                                    (cons "basetimestamp"
-                                          (or mediawiki-basetimestamp "now"))
-                                    (cons "starttimestamp"
-                                          (or mediawiki-starttimestamp "now"))))
-          (message "Saved %s to %s" title sitename))
-      (error (progn (message "try #%d: %s " trynum
-                             (concat "Retry because of error: " (cadr err)))
-                    (mediawiki-retry-save-page
-                     sitename title summary content trynum)))))
-  (set-buffer-modified-p nil))
+TRYNUM is used if this command is being retried (legacy parameter, now ignored)."
+  ;; Use the new page saving infrastructure
+  (condition-case err
+      (progn
+        (mediawiki-page-save sitename title content (list :summary (or summary "")))
+        (message "Saved %s to %s" title sitename)
+        (set-buffer-modified-p nil))
+    (error
+     (message "Failed to save %s: %s" title (error-message-string err))
+     (signal (car err) (cdr err)))))
 
-(defun mediawiki-retry-save-page (sitename title summary content trynum)
-  "Refresh the edit token and then try to save the current page.
-Use TITLE, SUMMARY, and CONTENT on SITENAME."
-  (let ((try (if trynum
-                 (- trynum 1)
-               3)))
-    (mediawiki-do-login sitename)
-    (setq mediawiki-edittoken (mediawiki-site-get-token sitename "csrf"))
-    (mediawiki-save-page sitename title summary content try)))
 
 ;;;###autoload
 (defun mediawiki-browse (&optional buffer)
@@ -1221,7 +1075,11 @@ Interactively, prompt for a SITE."
   (when (or (eq nil mediawiki-site)
             (not (string-equal site mediawiki-site)))
     (setq mediawiki-site (mediawiki-do-login site)))
-  (mediawiki-edit site (mediawiki-site-first-page site)))
+  ;; Get the first page from site config, defaulting to "Main Page"
+  (let* ((site-config (mediawiki-get-site site))
+         (first-page (or (and site-config (mediawiki-site-config-first-page site-config))
+                         "Main Page")))
+    (mediawiki-edit site first-page)))
 
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
