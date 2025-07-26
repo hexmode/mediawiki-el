@@ -12,7 +12,7 @@
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Version: 3.0.0
 ;; Package-Type: multi
-;; Last Modified: <2025-07-26 16:31:31 mah>
+;; Last Modified: <2025-07-26 17:59:30 mah>
 
 (defconst mediawiki-version "3.0.0"
   "Current version of mediawiki.el.")
@@ -817,12 +817,11 @@ title or a list of titles.  PROPS are the revision properites to
 fetch.  LIMIT is the upper bound on the number of results to give."
   (when (or (eq nil title) (string= "" title))
       (error "No title passed!"))
-  (let* ((params (mediawiki-api-build-params
-                  "prop" (mediawiki-api-param (list "info" "revisions"))
-                  "titles" (mediawiki-api-param title)
-                  "rvlimit" (when limit (mediawiki-api-param limit))
-                  "rvprop" (mediawiki-api-param props)
-                  "rvslots" "main"))
+  (let* ((params `(("prop" . ,(mediawiki-api-param (list "info" "revisions")))
+                   ("titles" . ,(mediawiki-api-param title))
+                   ,@(when limit `(("rvlimit" . ,(mediawiki-api-param limit))))
+                   ("rvprop" . ,(mediawiki-api-param props))
+                   ("rvslots" . "main")))
          (response (mediawiki-api-call-sync sitename "query" params)))
     (if (mediawiki-api-response-success response)
         (mediawiki-api-response-data response)
