@@ -28,19 +28,19 @@
 (defcustom mediawiki-session-file "~/.emacs.d/mediawiki-sessions"
   "File to store persistent session data."
   :type 'file
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-session-storage-version 1
   "Version number for session storage format.
 Used for migration and upgrade handling."
   :type 'integer
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-session-encryption-enabled nil
   "Whether to encrypt session storage files.
 Requires GnuPG to be available."
   :type 'boolean
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-session-encryption-method 'auto
   "Method to use for session encryption.
@@ -59,12 +59,12 @@ Requires GnuPG to be available."
 Only used when mediawiki-session-encryption-method is 'recipient."
   :type '(choice (const :tag "None" nil)
                  (string :tag "Email or Key ID"))
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-session-backup-count 3
   "Number of session storage backups to keep."
   :type 'integer
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-token-cache-duration 3600
   "Duration in seconds to cache tokens before refresh."
@@ -558,17 +558,17 @@ last validation time, error counts, etc.")
 (defcustom mediawiki-session-validation-interval 300
   "Interval in seconds between automatic session validations."
   :type 'integer
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-session-max-idle-time (* 24 60 60)
   "Maximum idle time in seconds before session is considered inactive."
   :type 'integer
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defcustom mediawiki-session-validation-timeout 10
   "Timeout in seconds for session validation requests."
   :type 'integer
-  :group 'mediawiki)
+  :group 'mediawiki-session)
 
 (defun mediawiki-session-validate (sitename &optional force)
   "Validate session for SITENAME is still active.
@@ -1879,6 +1879,7 @@ Returns a sanitized version of the token cache (without actual token values)."
 
     states))
 
+;;;###autoload
 (defun mediawiki-session-report-status (&optional sitename)
   "Generate a status report for SITENAME or all sessions if nil."
   (interactive)
@@ -1968,6 +1969,7 @@ Returns a sanitized version of the token cache (without actual token values)."
   (mediawiki-session-update-state sitename 'disconnected)
   (message "Reset session state for %s" sitename))
 
+;;;###autoload
 (defun mediawiki-session-clear-all-states (&optional no-prompt)
   "Clear all session states (for debugging/testing).
 If NO-PROMPT is non-nil, clear without asking for confirmation."
@@ -1998,6 +2000,7 @@ If NO-PROMPT is non-nil, clear without asking for confirmation."
 
 ;;; Interactive Commands
 
+;;;###autoload
 (defun mediawiki-session-status ()
   "Display status of all MediaWiki sessions."
   (interactive)

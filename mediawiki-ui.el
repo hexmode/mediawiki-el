@@ -212,6 +212,7 @@
 
 ;;; Command Interface Enhancements
 
+;;;###autoload
 (defun mediawiki-ui-save-with-options ()
   "Save current page with enhanced options interface."
   (interactive)
@@ -238,6 +239,7 @@
      (lambda (error)
        (message "Failed to save page: %s" error)))))
 
+;;;###autoload
 (defun mediawiki-ui-open-with-preview ()
   "Open a MediaWiki page with preview functionality."
   (interactive)
@@ -284,6 +286,7 @@
 (defvar mediawiki-ui-quick-menu-history '()
   "History for quick menu selections.")
 
+;;;###autoload
 (defun mediawiki-ui-quick-menu ()
   "Show a quick access menu for common MediaWiki operations."
   (interactive)
@@ -394,6 +397,7 @@
 
 ;;; Statistics and Monitoring UI
 
+;;;###autoload
 (defun mediawiki-ui-show-site-statistics ()
   "Show comprehensive site and operation statistics."
   (interactive)
@@ -444,6 +448,7 @@
 
 ;;; Authentication Management UI
 
+;;;###autoload
 (defun mediawiki-ui-manage-authentication ()
   "Manage authentication for MediaWiki sites."
   (interactive)

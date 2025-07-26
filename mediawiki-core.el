@@ -23,7 +23,33 @@
 (defgroup mediawiki nil
   "A mode for editing pages on MediaWiki sites."
   :tag "MediaWiki"
-  :group 'applications)
+  :group 'applications
+  :link '(url-link :tag "GitHub" "https://github.com/hexmode/mediawiki-el")
+  :prefix "mediawiki-")
+
+(defgroup mediawiki-async nil
+  "Asynchronous operation settings for MediaWiki."
+  :tag "MediaWiki Async"
+  :group 'mediawiki
+  :prefix "mediawiki-async-")
+
+(defgroup mediawiki-session nil
+  "Session management settings for MediaWiki."
+  :tag "MediaWiki Session"
+  :group 'mediawiki
+  :prefix "mediawiki-session-")
+
+(defgroup mediawiki-auth nil
+  "Authentication settings for MediaWiki."
+  :tag "MediaWiki Auth"
+  :group 'mediawiki
+  :prefix "mediawiki-auth-")
+
+(defgroup mediawiki-api nil
+  "API communication settings for MediaWiki."
+  :tag "MediaWiki API"
+  :group 'mediawiki
+  :prefix "mediawiki-api-")
 
 (defcustom mediawiki-site-default "Wikipedia"
   "The default mediawiki site to point to.
@@ -219,6 +245,7 @@ When buffer exceeds this size, oldest entries are removed."
       (erase-buffer)
       (message "MediaWiki debug buffer cleared"))))
 
+;;;###autoload
 (defun mediawiki-debug-view ()
   "View the debug buffer in a window."
   (interactive)
@@ -373,19 +400,19 @@ MODULE should be a short string like 'auth', 'api', 'http', etc."
   "Maximum number of concurrent async operations."
   :type 'integer
   :tag "Max Concurrent Operations"
-  :group 'mediawiki)
+  :group 'mediawiki-async)
 
 (defcustom mediawiki-async-queue-enabled t
   "Enable operation queuing for async operations."
   :type 'boolean
   :tag "Async Queue Enabled"
-  :group 'mediawiki)
+  :group 'mediawiki-async)
 
 (defcustom mediawiki-async-operation-timeout 300
   "Timeout in seconds for async operations."
   :type 'integer
   :tag "Async Operation Timeout"
-  :group 'mediawiki)
+  :group 'mediawiki-async)
 
 (defvar mediawiki-async-operations (make-hash-table :test 'equal)
   "Hash table tracking all async operations.")
@@ -638,6 +665,7 @@ OPTIONS is a plist of additional options."
     (maphash (lambda (id operation) (push id ids)) mediawiki-async-operations)
     ids))
 
+;;;###autoload
 (defun mediawiki-async-list-operations ()
   "List all async operations with status."
   (interactive)
@@ -778,6 +806,7 @@ When enabled, operations are queued and processed asynchronously."
   :tag "Non-blocking Mode"
   :group 'mediawiki)
 
+;;;###autoload
 (defun mediawiki-toggle-non-blocking-mode ()
   "Toggle non-blocking mode for MediaWiki operations."
   (interactive)
@@ -951,6 +980,7 @@ OPERATIONS is a list of operation specs: (type description sitename function arg
               :retryable (mediawiki-async-operation-retryable operation)
               :progress-id (mediawiki-async-operation-progress-id operation))))))
 
+;;;###autoload
 (defun mediawiki-async-show-statistics ()
   "Display async operation statistics."
   (interactive)

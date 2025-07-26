@@ -1,6 +1,6 @@
 # Makefile for MediaWiki.el tests
 
-EMACS = emacs
+EMACS ?= emacs
 BATCH = $(EMACS) --batch
 
 # Core files that tests depend on

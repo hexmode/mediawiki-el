@@ -7,9 +7,11 @@
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Created: Sep 17 2004
-;; Package-Requires: ((emacs "26.1") (web "0.5.2"))
+;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
+;; Version: 2.5.0
+;; Package-Type: multi
 ;; Last Modified: <2025-07-21 01:43:27 mah>
 
 (defconst mediawiki-version "2.4.1"
@@ -163,7 +165,7 @@
 (require 'mm-url)
 (require 'ring)
 (require 'subr-x)
-(require 'web)
+; Legacy web dependency removed - using modern HTTP layer
 
 (eval-when-compile
   (require 'cl))
@@ -701,63 +703,7 @@ Right now, this only means replacing \"_\" with \" \"."
               (cdr (assq type (cddr result)))
             (cddr (assq type (cddr result)))))))
 
-(defun mediawiki-api-call (sitename action &optional args)
-  "Wrapper for making an API call to SITENAME.
-ACTION is the API action.  ARGS is a list of arguments."
-  (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
-                                (mm-url-encode-multipart-form-data
-                                 (delq nil args) "==")))
-  (let* ((api-url (mediawiki-make-api-url sitename))
-         (post-data (make-hash-table :test 'equal))
-         (result-data nil))
-
-    ;; Prepare POST data
-    (puthash "format" "xml" post-data)
-    (puthash "action" action post-data)
-    (dolist (arg (delq nil args))
-      (when (consp arg)
-        (puthash (car arg) (cdr arg) post-data)))
-
-    ;; Make synchronous API call using web-http-post
-    (let ((callback-called nil))
-      (web-http-post
-       (lambda (httpc header data)
-         (setq result-data data)
-         (setq callback-called t))
-       :url api-url
-       :data post-data)
-
-      ;; Wait for callback to complete (simple synchronous approach)
-      (while (not callback-called)
-        (sleep-for 0.1)))
-
-    (unless result-data
-      (error "No data received from API call"))
-
-    (let ((result (assoc 'api
-                         (with-temp-buffer
-                           (insert result-data)
-                           (xml-parse-region (point-min) (point-max))))))
-      (unless result
-        (error "There was an error parsing the result of the API call"))
-
-      (mediawiki-raise result 'warnings
-                       (lambda (label info)
-                         (message "Warning (%s) %s" label info)))
-      (mediawiki-raise result 'info
-                       (lambda (label info)
-                         (message  "(%s) %s" label info)))
-      (mediawiki-raise result 'error
-                       (lambda (label info)
-                         (error "(%s) %s" label info)))
-
-      (if (cddr result)
-          (let ((action-res (assq (intern action) (cddr result))))
-            (unless action-res
-              (error "Didn't see action name in the result list"))
-
-            action-res)
-        t))))
+; Legacy mediawiki-api-call function removed - use mediawiki-api-call-sync or mediawiki-api-call-async from mediawiki-api.el instead
 
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
@@ -769,6 +715,7 @@ ACTION is the API action.  ARGS is a list of arguments."
            (mediawiki-translate-pagename title))
 	  action))
 
+;;;###autoload
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
@@ -1022,6 +969,7 @@ return the whole revision structure."
   (setq mediawiki-starttimestamp
         (mediawiki-page-get-metadata page 'starttimestamp)))
 
+;;;###autoload
 (defun mediawiki-save (&optional summary)
   "Save the current buffer as a page on the current site.
 Prompt for a SUMMARY if one isn't given."
@@ -1081,6 +1029,7 @@ Prompt for a SUMMARY if one isn't given."
   (mediawiki-get mediawiki-site name)
   (mediawiki-save-as name summary))
 
+;;;###autoload
 (defun mediawiki-save-as (&optional name summary)
   "Save a page on the current site wite NAME and SUMMARY."
   (interactive "sSave As: \nsSummary: ")
@@ -1092,6 +1041,7 @@ Prompt for a SUMMARY if one isn't given."
        (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
+;;;###autoload
 (defun mediawiki-save-and-bury (&optional summary)
   "Prompt for a SUMMARY, save the page, then bury the buffer."
   (interactive "sSummary: ")
@@ -1150,6 +1100,7 @@ Check if it is in our site-alist using INDEX or use METHOD to get it from authin
                               (list (cons "meta" "tokens")
                                     (cons "type" type)))))))
 
+;;;###autoload
 (defun mediawiki-do-login (&optional sitename username password domain)
   "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."
@@ -1190,6 +1141,7 @@ Store cookies for future authentication."
     (when (string= "Success" (cdr (assoc 'result result)))
       sitename)))
 
+;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)
   "Log out of SITENAME."
   (interactive)
@@ -1236,6 +1188,7 @@ Use TITLE, SUMMARY, and CONTENT on SITENAME."
     (setq mediawiki-edittoken (mediawiki-site-get-token sitename "csrf"))
     (mediawiki-save-page sitename title summary content try)))
 
+;;;###autoload
 (defun mediawiki-browse (&optional buffer)
   "Open the BUFFER in a browser.
 If BUFFER is not given, the current buffer is used."
@@ -2017,6 +1970,7 @@ latter retrieval, and possible indexing.
   (define-key mediawiki-mode-map [(control return)]
     'mediawiki-open-page-at-point))
 
+;;;###autoload
 (define-derived-mode mediawiki-mode text-mode "MW"
   "Major mode for editing articles written in the markup language used by Mediawiki.
 
@@ -2118,6 +2072,14 @@ Some simple editing commands.
 
   (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
   (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table))
+
+;; File associations
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.mediawiki\\'" . mediawiki-mode))
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.mw\\'" . mediawiki-mode))
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.wiki\\'" . mediawiki-mode))
 
 ;; (defvar mw-pagelist-mode-map
 ;;   (let ((map (make-sparse-keymap)))
