@@ -1,18 +1,17 @@
 ;;; mediawiki.el --- mediawiki frontend  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015, 2025 Mark A. Hershberger
+;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
 
 ;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Created: Sep 17 2004
-;; Package-Requires: ((emacs "26.1") (web "0.5.2"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2025-07-18 00:25:12 mah>
+;; Last Modified: <2025-07-27 10:58:57 mah>
 
-(defconst mediawiki-version "2.4.1"
+(defconst mediawiki-version "2.4.2"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -149,14 +148,392 @@
 
 ;;; Code:
 
+(require 'url-http)
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
 (require 'subr-x)
-(require 'web)
-
 (eval-when-compile
-  (require 'cl))
+  (require 'cl)
+  (require 'mml)
+  ;; Below copied from url-http to avoid compilation warnings
+  (defvar url-http-extra-headers)
+  (defvar url-http-target-url)
+  (defvar url-http-proxy)
+  (defvar url-http-connection-opened)
+  ;; This should only be used in xemacs, anyway
+  (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case)))
+
+;; As of 2010-06-22, these functions are in Emacs
+(unless (fboundp 'url-bit-for-url)
+  (defun url-bit-for-url (method lookfor url)
+    (when (fboundp 'auth-source-user-or-password)
+      (let* ((urlobj (url-generic-parse-url url))
+             (bit (funcall method urlobj))
+             (methods (list 'url-recreate-url
+                            'url-host)))
+        (if (and (not bit) (> (length methods) 0))
+            (auth-source-user-or-password
+             lookfor (funcall (pop methods) urlobj) (url-type urlobj))
+          bit)))))
+
+(unless (fboundp 'url-user-for-url)
+  (defun url-user-for-url (url)
+    "Attempt to use .authinfo to find a user for this URL."
+    (url-bit-for-url 'url-user "login" url)))
+
+(unless (fboundp 'url-password-for-url)
+  (defun url-password-for-url (url)
+    "Attempt to use .authinfo to find a password for this URL."
+    (url-bit-for-url 'url-password "password" url)))
+
+(when (fboundp 'url-http-create-request)
+  (if (string= "GET / HTTP/1.0\r\nMIME-Version: 1.0\r\nConnection: close\r\nHost: example.com\r\nAccept: */*\r\nUser-Agent: URL/Emacs\r\nContent-length: 4\r\n\r\ntest"
+	       (let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
+		     (url-http-data "test") (url-http-version "1.0") (url-http-referer "test")
+		     url-http-method url-http-attempt-keepalives url-extensions-header
+		     url-http-extra-headers url-http-proxy url-mime-charset-string)
+		 (url-http-create-request)))
+      (defun url-http-create-request (&optional ref-url)
+	"Create an HTTP request for `url-http-target-url', referred to by REF-URL."
+	(declare (special proxy-info
+			  url-http-method url-http-data
+			  url-http-extra-headers))
+	(let* ((extra-headers)
+	       (request nil)
+	       (no-cache (cdr-safe (assoc "Pragma" url-http-extra-headers)))
+	       (using-proxy url-http-proxy)
+	       (proxy-auth (if (or (cdr-safe (assoc "Proxy-Authorization"
+						    url-http-extra-headers))
+				   (not using-proxy))
+			       nil
+			     (let ((url-basic-auth-storage
+				    'url-http-proxy-basic-auth-storage))
+			       (url-get-authentication url-http-target-url nil 'any nil))))
+	       (real-fname (concat (url-filename url-http-target-url)
+				   (with-no-warnings
+                                     (url-recreate-url-attributes url-http-target-url))))
+	       (host (url-host url-http-target-url))
+	       (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
+			 nil
+		       (url-get-authentication (or
+						(and (boundp 'proxy-info)
+						     proxy-info)
+						url-http-target-url) nil 'any nil))))
+	  (if (equal "" real-fname)
+	      (setq real-fname "/"))
+	  (setq no-cache (and no-cache (string-match "no-cache" no-cache)))
+	  (if auth
+	      (setq auth (concat "Authorization: " auth "\r\n")))
+	  (if proxy-auth
+	      (setq proxy-auth (concat "Proxy-Authorization: " proxy-auth "\r\n")))
+
+	  ;; Protection against stupid values in the referer
+	  (if (and ref-url (stringp ref-url) (or (string= ref-url "file:nil")
+						 (string= ref-url "")))
+	      (setq ref-url nil))
+
+	  ;; We do not want to expose the referer if the user is paranoid.
+	  (if (or (memq url-privacy-level '(low high paranoid))
+		  (and (listp url-privacy-level)
+		       (memq 'lastloc url-privacy-level)))
+	      (setq ref-url nil))
+
+	  ;; url-http-extra-headers contains an assoc-list of
+	  ;; header/value pairs that we need to put into the request.
+	  (setq extra-headers (mapconcat
+			       (lambda (x)
+				 (concat (car x) ": " (cdr x)))
+			       url-http-extra-headers "\r\n"))
+	  (if (not (equal extra-headers ""))
+	      (setq extra-headers (concat extra-headers "\r\n")))
+
+	  ;; This was done with a call to `format'.  Concatting parts has
+	  ;; the advantage of keeping the parts of each header together and
+	  ;; allows us to elide null lines directly, at the cost of making
+	  ;; the layout less clear.
+	  (setq request
+		;; We used to concat directly, but if one of the strings happens
+		;; to being multibyte (even if it only contains pure ASCII) then
+		;; every string gets converted with `string-MAKE-multibyte' which
+		;; turns the 127-255 codes into things like latin-1 accented chars
+		;; (it would work right if it used `string-TO-multibyte' instead).
+		;; So to avoid the problem we force every string to be unibyte.
+		(mapconcat
+		 ;; FIXME: Instead of `string-AS-unibyte' we'd want
+		 ;; `string-to-unibyte', so as to properly signal an error if one
+		 ;; of the strings contains a multibyte char.
+		 'string-as-unibyte
+		 (delq nil
+		       (list
+			;; The request
+			(or url-http-method "GET") " "
+			(if using-proxy (url-recreate-url url-http-target-url) real-fname)
+			" HTTP/" url-http-version "\r\n"
+			;; Version of MIME we speak
+			"MIME-Version: 1.0\r\n"
+			;; (maybe) Try to keep the connection open
+			"Connection: " (if (or using-proxy
+					       (not url-http-attempt-keepalives))
+					   "close" "keep-alive") "\r\n"
+			;; HTTP extensions we support
+			(if url-extensions-header
+			    (format
+			     "Extension: %s\r\n" url-extensions-header))
+			;; Who we want to talk to
+			(if (/= (url-port url-http-target-url)
+				(url-scheme-get-property
+				 (url-type url-http-target-url) 'default-port))
+			    (format
+			     "Host: %s:%d\r\n" host (url-port url-http-target-url))
+			  (format "Host: %s\r\n" host))
+			;; Who its from
+			(if url-personal-mail-address
+			    (concat
+			     "From: " url-personal-mail-address "\r\n"))
+			;; Encodings we understand
+			(if url-mime-encoding-string
+			    (concat
+			     "Accept-encoding: " url-mime-encoding-string "\r\n"))
+			(if url-mime-charset-string
+			    (concat
+			     "Accept-charset: " url-mime-charset-string "\r\n"))
+			;; Languages we understand
+			(if url-mime-language-string
+			    (concat
+			     "Accept-language: " url-mime-language-string "\r\n"))
+			;; Types we understand
+			"Accept: " (or url-mime-accept-string "*/*") "\r\n"
+			;; User agent
+			(url-http-user-agent-string)
+			;; Proxy Authorization
+			proxy-auth
+			;; Authorization
+			auth
+			;; Cookies
+			(url-cookie-generate-header-lines host real-fname
+							  (equal "https" (url-type url-http-target-url)))
+			;; If-modified-since
+			(if (and (not no-cache)
+				 (member url-http-method '("GET" nil)))
+			    (let ((tm (url-is-cached url-http-target-url)))
+			      (if tm
+				  (concat "If-modified-since: "
+					  (url-get-normalized-date tm) "\r\n"))))
+			;; Whence we came
+			(if ref-url (concat
+				     "Referer: " ref-url "\r\n"))
+			extra-headers
+			;; Length of data
+			(if url-http-data
+			    (concat
+			     "Content-length: " (number-to-string
+						 (length url-http-data))
+			     "\r\n"))
+			;; End request
+			"\r\n"
+			;; Any data
+			url-http-data "\r\n"))
+		 ""))
+	  (url-http-debug "Request is: \n%s" request)
+	  request))))
+
+;; There are some versions of emacs that don't have
+;; mm-url-encode-multipart-form-data.
+;; See https://lists.gnu.org/archive/html/emacs-diffs/2014-11/msg00167.html
+(unless (fboundp 'mm-url-encode-multipart-form-data)
+  (defun mm-url-encode-multipart-form-data (pairs &optional boundary)
+    "Return PAIRS encoded in multipart/form-data."
+    ;; RFC1867
+
+    ;; Get a good boundary
+    (unless boundary
+      (setq boundary (mml-compute-boundary '())))
+
+    (concat
+
+     ;; Start with the boundary
+     "--" boundary "\r\n"
+
+     ;; Create name value pairs
+     (mapconcat
+      'identity
+      ;; Delete any returned items that are empty
+      (delq nil
+            (mapcar (lambda (data)
+
+                      (cond
+                       ((consp (car data))
+                        (let ((fieldname (cadar data))
+                              (filename  (caadar data))
+                              (mimetype  (car (caadar data)))
+                              (content   (caar (caadar data))))
+
+                          (concat
+                           ;; Encode the name
+                           "Content-Disposition: form-data; name=\"" fieldname "\"\r\n"
+                           "Content-Type: " mimetype "\r\n"
+                           "Content-Transfer-Encoding: binary\r\n\r\n"
+                           content
+                           "\r\n")))
+
+                       ((stringp (car data))
+                        ;; For each pair
+
+                        (concat
+                         ;; Encode the name
+                         "Content-Disposition: form-data; name=\""
+                         (car data) "\"\r\n"
+                         "Content-Type: text/plain; charset=utf-8\r\n"
+                         "Content-Transfer-Encoding: binary\r\n\r\n"
+
+                         (cond ((stringp (cdr data))
+                                (cdr data))
+                               ((integerp (cdr data))
+                                (int-to-string (cdr data))))
+
+                         "\r\n"))
+                       (t (error "I don't handle this"))))
+                    pairs))
+      ;; use the boundary as a separator
+      (concat "--" boundary "\r\n"))
+
+     ;; put a boundary at the end.
+     "--" boundary "--\r\n")))
+
+;; Not defined in my Xemacs
+(unless (fboundp 'assoc-string)
+  (defun assoc-string (key list &optional case-fold)
+    (if case-fold
+        (assoc-ignore-case key list)
+      (assoc key list))))
+
+(defun url-compat-retrieve (url post-process buffer callback cbargs)
+  "Function to compatibly retrieve a URL.
+Some provision is made for different versions of Emacs version.
+POST-PROCESS is the function to call for post-processing.
+BUFFER is the buffer to store the result in.  CALLBACK will be
+called in BUFFER with CBARGS, if given."
+  (let ((url-user-agent (concat
+                         (if (not (eq url-user-agent 'default))
+                             (string-trim (if (functionp url-user-agent)
+                                              (funcall url-user-agent)
+                                            url-user-agent))
+                           "")
+                         " mediawiki.el " mediawiki-version "\r\n")))
+    (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
+           (if callback
+               (setq url-be-asynchronous t)
+             (setq url-be-asynchronous nil))
+           (url-retrieve url t)
+           (when (not url-be-asynchronous)
+             (let ((result (funcall post-process buffer)))
+               result)))
+          (t (if callback
+                 (url-retrieve url post-process
+                               (list buffer callback cbargs))
+               (with-current-buffer (url-retrieve-synchronously url)
+                 (funcall post-process buffer)))))))
+
+(defvar url-http-get-post-process 'url-http-response-post-process)
+(defun url-http-get (url &optional headers buffer callback cbargs)
+  "Convenience method to use method 'GET' to retrieve URL.
+HEADERS is the optional headers to send.  BUFFER is where the
+result will be stored.  CALLBACK will be called in BUFFER with
+CBARGS, if given."
+  (let* ((url-request-extra-headers (if headers headers
+                                      (if url-request-extra-headers
+                                          url-request-extra-headers
+                                        (cons nil nil))))
+         (url-request-method "GET"))
+
+    (when (url-basic-auth url)
+      (add-to-list 'url-request-extra-headers
+                   (cons "Authorization" (url-basic-auth url))))
+    (url-compat-retrieve url url-http-get-post-process
+			 buffer callback cbargs)))
+
+(defvar url-http-post-post-process 'url-http-response-post-process)
+(defun url-http-post (url parameters &optional multipart headers buffer
+                          callback cbargs)
+  "Convenience method to use method 'POST' to retrieve URL.
+PARAMETERS are the parameters to put the the body.  If MULTIPART
+is t, then multipart/form-data will be used.  Otherwise,
+applicaton/x-www-form-urlencoded is used.  HEADERS is the
+optional headers to send.  BUFFER is where the result will be
+stored.  CALLBACK will be called in BUFFER with CBARGS, if
+given."
+
+  (let* ((url-request-extra-headers
+          (if headers headers
+            (when url-request-extra-headers url-request-extra-headers)))
+         (boundary (int-to-string (random)))
+         (cs 'utf-8)
+         (content-type
+          (if multipart
+              (concat "multipart/form-data, boundary=" boundary)
+            (format "application/x-www-form-urlencoded; charset=%s" cs)))
+         (url-request-method "POST")
+         (url-request-coding-system cs)
+         (url-request-data
+          (if multipart
+              (mm-url-encode-multipart-form-data
+               parameters boundary)
+            (mm-url-encode-www-form-urlencoded (delq nil parameters)))))
+    (mapc
+     (lambda (pair)
+       (let ((key (car pair))
+             (val (cdr pair)))
+         (if (assoc key url-request-extra-headers)
+             (setcdr (assoc key url-request-extra-headers) val)
+           (add-to-list 'url-request-extra-headers
+                        (cons key val)))))
+     (list
+      (cons "Connection" "close")
+      (cons "Content-Type" content-type)))
+
+    (url-compat-retrieve url url-http-post-post-process
+			 buffer callback cbargs)))
+
+(defun url-http-response-post-process (status &optional buffer
+                                              callback cbargs)
+  "Default post-processor for an HTTP POST request response.
+STATUS is the HTTP status code.  BUFFER, CALLBACK, and CBARGS are
+passed as well from the original POST request."
+  (declare (special url-http-end-of-headers))
+  (let ((kill-this-buffer (current-buffer)))
+    (when (and (integerp status) (not (< status 300)))
+      (mediawiki-debug kill-this-buffer "url-http-response-post-process:1")
+      (error "Oops! Invalid status: %d" status))
+
+    (when (or (not (boundp 'url-http-end-of-headers))
+              (not url-http-end-of-headers))
+      (mediawiki-debug kill-this-buffer "url-http-response-post-process:2")
+      (error "Oops! Don't see end of headers!"))
+
+    ;; FIXME: need to limit redirects
+    (if (and (listp status)
+             (eq (car status) :redirect))
+        (progn
+          (message (concat "Redirecting to " (cadr status)))
+          (url-http-get (cadr status) nil buffer callback cbargs))
+
+      (goto-char url-http-end-of-headers)
+      (forward-line)
+
+      (let ((str (decode-coding-string
+                  (buffer-substring-no-properties (point) (point-max))
+                  'utf-8)))
+        (mediawiki-debug (current-buffer) "url-http-response-post-process:3")
+        (when buffer
+          (set-buffer buffer)
+          (insert str)
+          (goto-char (point-min))
+          (set-buffer-modified-p nil))
+        (when callback
+          (apply callback (list str cbargs)))
+        (when (not (or callback buffer))
+          str)))))
 
 (defgroup mediawiki nil
   "A mode for editting pages on MediaWiki sites."
@@ -661,57 +1038,33 @@ ACTION is the API action.  ARGS is a list of arguments."
   (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
                                 (mm-url-encode-multipart-form-data
                                  (delq nil args) "==")))
-  (let* ((api-url (mediawiki-make-api-url sitename))
-         (post-data (make-hash-table :test 'equal))
-         (result-data nil))
+  (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
+                             (append args (list (cons "format" "xml")
+                                                (cons "action" action)))))
+         (result (assoc 'api
+                        (with-temp-buffer
+                          (insert raw)
+                          (xml-parse-region (point-min) (point-max))))))
+    (unless result
+      (error "There was an error parsing the result of the API call"))
 
-    ;; Prepare POST data
-    (puthash "format" "xml" post-data)
-    (puthash "action" action post-data)
-    (dolist (arg (delq nil args))
-      (when (consp arg)
-        (puthash (car arg) (cdr arg) post-data)))
+    (mediawiki-raise result 'warnings
+                     (lambda (label info)
+                       (message "Warning (%s) %s" label info)))
+    (mediawiki-raise result 'info
+                     (lambda (label info)
+                       (message  "(%s) %s" label info)))
+    (mediawiki-raise result 'error
+                     (lambda (label info)
+                       (error "(%s) %s" label info)))
 
-    ;; Make synchronous API call using web-http-post
-    (let ((callback-called nil))
-      (web-http-post
-       (lambda (httpc header data)
-         (setq result-data data)
-         (setq callback-called t))
-       :url api-url
-       :data post-data)
+    (if (cddr result)
+        (let ((action-res (assq (intern action) (cddr result))))
+          (unless action-res
+            (error "Didn't see action name in the result list"))
 
-      ;; Wait for callback to complete (simple synchronous approach)
-      (while (not callback-called)
-        (sleep-for 0.1)))
-
-    (unless result-data
-      (error "No data received from API call"))
-
-    (let ((result (assoc 'api
-                         (with-temp-buffer
-                           (insert result-data)
-                           (xml-parse-region (point-min) (point-max))))))
-      (unless result
-        (error "There was an error parsing the result of the API call"))
-
-      (mediawiki-raise result 'warnings
-                       (lambda (label info)
-                         (message "Warning (%s) %s" label info)))
-      (mediawiki-raise result 'info
-                       (lambda (label info)
-                         (message  "(%s) %s" label info)))
-      (mediawiki-raise result 'error
-                       (lambda (label info)
-                         (error "(%s) %s" label info)))
-
-      (if (cddr result)
-          (let ((action-res (assq (intern action) (cddr result))))
-            (unless action-res
-              (error "Didn't see action name in the result list"))
-
-            action-res)
-        t))))
+          action-res)
+      t)))
 
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
@@ -827,7 +1180,7 @@ variables it sets there will be local to that buffer."
 
           ;; figure out if this is a submit button and skip it if it is.
           (when (not (string-match "type=[\"']submit['\"]" el))
-            (push 'vars
+            (add-to-list 'vars
                          (if (string-match "value=[\"']\\([^\"']*\\)['\"]" el)
                              (cons el-name (match-string 1 el))
                            (cons el-name nil)))))
@@ -888,7 +1241,7 @@ fetch.  LIMIT is the upper bound on the number of results to give."
 
 (defun mediawiki-page-get-revision (page revision &optional bit)
   "Given a PAGE, extract a REVISION from the pagelist structure.
-If BIT is \='content, then return the content only.  Otherwise,
+If BIT is 'content, then return the content only.  Otherwise,
 return only the items that BIT matches.  If BIT isn't given,
 return the whole revision structure."
   (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
@@ -1030,7 +1383,7 @@ Prompt for a SUMMARY if one isn't given."
   (bury-buffer))
 
 (defun mediawiki-site-extract (sitename index)
-  "Using `mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
+  "Using 'mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
   (let* ((site (assoc sitename mediawiki-site-alist))
          (bit (nth index site)))
     (cond
@@ -1209,8 +1562,8 @@ Interactively, prompt for a SITE."
   "Return the page name under point.
 Typically, this means anything enclosed in [[PAGE]]."
   (let ((pos (point))
-        (eol (line-end-position))
-        (bol (line-beginning-position)))
+        (eol (point-at-eol))
+        (bol (point-at-bol)))
     (save-excursion
       (let* ((start  (when (search-backward "[[" bol t)
                        (+ (point) 2)))
@@ -1317,8 +1670,8 @@ entries, etc."
 
 (defun mediawiki-draft-reply ()
   "Open a temporary buffer to edit a draft.
-After finishing the editing: either use `mediawiki-draft-buffer'
-to send the data into the `mediawiki-draft-data-file'.  Check the
+After finishing the editing: either use 'mediawiki-draft-buffer'
+to send the data into the 'mediawiki-draft-data-file'.  Check the
 variable mediawiki-draft-send-archive."
   (interactive)
   (mediawiki-reply-at-point-simple)
@@ -1598,7 +1951,7 @@ as does mediawiki-unfill-region."
        "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
 (defun mediawiki-hardlines ()
-  "Set `use-hard-newlines' to NIL."
+  "Set 'use-hard-newlines' to NIL."
   (interactive)
   (setq use-hard-newlines nil))
 
@@ -1607,7 +1960,7 @@ as does mediawiki-unfill-region."
 Lines are considered long if their length is greater
 than `fill-column'.
 
-TODO: When function reaches end of buffer, `save-excursion' to
+TODO: When function reaches end of buffer, 'save-excursion' to
 starting point.  Generalise to make `previous-long-line'."
   (interactive)
   ;; global-variable: fill-column
@@ -1781,7 +2134,9 @@ Most useful for mediawiki-drafting things from Netscape or other X Windows
 application."
   (interactive)
   (with-temp-buffer
-    (insert (gui-get-selection))
+    (insert (if (fboundp 'gui-get-selection) ; Since 25.1
+                (gui-get-selection)
+              (x-get-clipboard)))
     (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
 
 (defun mediawiki-draft-view-draft ()
@@ -1825,7 +2180,7 @@ application."
 
 (defun mediawiki-draft-send (target-buffer)
   "Copy the current page in the drafts file to TARGET-BUFFER.
-If `mediawiki-draft-send-archive' is t, then additionally the
+If 'mediawiki-draft-send-archive' is t, then additionally the
 text will be archived in the draft.wiki file."
   (interactive "bTarget buffer: ")
   (mediawiki-draft-copy-page-to-register)
@@ -1866,7 +2221,7 @@ you're done entering, and it will go ahead and file the data for
 latter retrieval, and possible indexing.
 \\{mediawiki-draft-mode-map}"
   (kill-all-local-variables)
-  (text-mode)
+  (indented-text-mode)
   (define-key mediawiki-draft-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
   (define-key mediawiki-draft-mode-map "\C-c\C-d" 'mediawiki-draft-buffer))
 
