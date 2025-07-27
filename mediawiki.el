@@ -7,13 +7,13 @@
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Package-Requires: ((emacs "28.1"))
-;; Version: 2.4.2
+;; Version: 2.4.3
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2025-07-27 11:03:37 mah>
+;; Last Modified: <2025-07-27 11:42:12 mah>
 
-(defconst mediawiki-version "2.4.2"
+(defconst mediawiki-version "2.4.3"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -189,7 +189,7 @@
     "Attempt to use .authinfo to find a password for this URL."
     (url-bit-for-url 'url-password "password" url)))
 
-(when (fboundp 'url-http-create-request)
+(when (and (fboundp 'url-http-create-request) (boundp 'url-http-extra-headers))
   (if (string= "GET / HTTP/1.0\r\nMIME-Version: 1.0\r\nConnection: close\r\nHost: example.com\r\nAccept: */*\r\nUser-Agent: URL/Emacs\r\nContent-length: 4\r\n\r\ntest"
 	       (let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
 		     (url-http-data "test") (url-http-version "1.0") (url-http-referer "test")
