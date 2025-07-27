@@ -47,7 +47,7 @@ to prevent blocking the Emacs interface."
           ;; Default headers
           (when data
             '(("Content-Type" . "application/x-www-form-urlencoded")))
-          '(("User-Agent" . "MediaWiki.el/2.0 (Emacs)")))))
+          '(("User-Agent" . (format "MediaWiki.el/%s (Emacs)" mediawiki-version))))))
 
     (condition-case err
         (url-retrieve url
