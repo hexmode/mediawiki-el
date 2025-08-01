@@ -229,7 +229,7 @@ application."
 
 (defun mediawiki-draft-send (target-buffer)
   "Copy the current page in the drafts file to TARGET-BUFFER.
-If 'mediawiki-draft-send-archive' is t, then additionally the
+If `mediawiki-draft-send-archive' is t, then additionally the
 text will be archived in the draft.wiki file."
   (interactive "bTarget buffer: ")
   (mediawiki-draft-copy-page-to-register)
@@ -266,9 +266,9 @@ text will be archived in the draft.wiki file."
 
 (defun mediawiki-draft-reply ()
   "Open a temporary buffer to edit a draft.
-After finishing the editing: either use 'mediawiki-draft-buffer'
-to send the data into the 'mediawiki-draft-data-file'.  Check the
-variable mediawiki-draft-send-archive."
+After finishing the editing: either use `mediawiki-draft-buffer'
+to send the data into the `mediawiki-draft-data-file'.  Check the
+variable `mediawiki-draft-send-archive'."
   (interactive)
   (mediawiki-reply-at-point-simple)
   (beginning-of-line 1)

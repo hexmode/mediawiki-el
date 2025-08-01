@@ -12,10 +12,7 @@
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Package-Type: multi
-;; Last Modified: <2025-08-01 02:38:11 mah>
-
-(defconst mediawiki-version "2.4.3"
-  "Current version of mediawiki.el.")
+;; Last Modified: <2025-08-01 02:40:25 mah>
 
 ;; This file is NOT (yet) part of GNU Emacs.
 
@@ -187,15 +184,6 @@ it is sometimes put on MediaWiki sites.")
 This is used to determine the base URI of the wiki engine as well
 as group and page name.")
 
-(defvar mediawiki-edittoken nil
-  "The edit token for this page.")
-(defvar mediawiki-starttimestamp nil
-  "The starttimestamp for this page.")
-(defvar mediawiki-basetimestamp nil
-  "The base timestamp for this page.")
-
-(defvar mediawiki-edit-form-vars nil)
-
 (defun mediawiki-make-url (title &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
   (format (concat (mediawiki-site-url (or sitename mediawiki-site)) "%s")
@@ -206,7 +194,7 @@ as group and page name.")
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
    (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
-     (list (read-string "Wiki Page: " nil 'hist))))
+     (list (read-string "Wiki Page: " nil hist))))
   (when (or (not (stringp name))
             (string-equal "" name))
     (error "Need to specify a name"))

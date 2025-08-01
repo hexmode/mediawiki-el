@@ -69,13 +69,6 @@
     "Attempt to use .authinfo to find a password for this URL."
     (url-bit-for-url 'url-password "password" url)))
 
-;; Not defined in my Xemacs
-(unless (fboundp 'assoc-string)
-  (defun assoc-string (key list &optional case-fold)
-    (if case-fold
-        (assoc-ignore-case key list)
-      (assoc key list))))
-
 ;;; HTTP Request Creation
 
 (when (and (fboundp 'url-http-create-request) (boundp 'url-http-extra-headers))
@@ -324,7 +317,7 @@ called in BUFFER with CBARGS, if given."
 
 (defvar url-http-get-post-process 'url-http-response-post-process)
 (defun url-http-get (url &optional headers buffer callback cbargs)
-  "Convenience method to use method 'GET' to retrieve URL.
+  "Convenience method to use method \='GET' to retrieve URL.
 HEADERS is the optional headers to send.  BUFFER is where the
 result will be stored.  CALLBACK will be called in BUFFER with
 CBARGS, if given."
@@ -343,7 +336,7 @@ CBARGS, if given."
 (defvar url-http-post-post-process 'url-http-response-post-process)
 (defun url-http-post (url parameters &optional multipart headers buffer
                           callback cbargs)
-  "Convenience method to use method 'POST' to retrieve URL.
+  "Convenience method to use method \='POST' to retrieve URL.
 PARAMETERS are the parameters to put the the body.  If MULTIPART
 is t, then multipart/form-data will be used.  Otherwise,
 applicaton/x-www-form-urlencoded is used.  HEADERS is the

@@ -85,7 +85,7 @@ Where:
 ;;; Site Extraction Functions
 
 (defun mediawiki-site-extract (sitename index)
-  "Using 'mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
+  "Using `mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
   (let* ((site (assoc sitename mediawiki-site-alist))
          (bit (nth index site)))
     (cond

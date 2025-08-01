@@ -162,7 +162,7 @@ fetch.  LIMIT is the upper bound on the number of results to give."
 
 (defun mediawiki-page-get-revision (page revision &optional bit)
   "Given a PAGE, extract a REVISION from the pagelist structure.
-If BIT is 'content, then return the content only.  Otherwise,
+If BIT is \='content, then return the content only.  Otherwise,
 return only the items that BIT matches.  If BIT isn't given,
 return the whole revision structure."
   (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))

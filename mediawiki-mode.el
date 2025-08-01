@@ -31,7 +31,6 @@
 (require 'mediawiki-core)
 (require 'mediawiki-faces)
 (require 'mediawiki-font-lock)
-(require 'mediawiki-page)
 (require 'mediawiki-site)
 (require 'ring)
 
@@ -57,14 +56,6 @@
 (defvar mediawiki-imenu-generic-expression
   (list '(nil "^==+ *\\(.*[^\n=]\\)==+" 1))
   "Imenu expression for `mediawiki-mode'.  See `imenu-generic-expression'.")
-
-(defvar mediawiki-page-ring nil
-  "Ring that holds names of buffers we navigate through.")
-
-(defvar mediawiki-page-ring-index 0)
-
-(defvar mediawiki-page-title nil
-  "The title of the page corresponding to the current buffer.")
 
 ;;; Keymap and Menu
 
@@ -136,19 +127,7 @@
   (define-key mediawiki-mode-map [(control return)]
     'mediawiki-open-page-at-point))
 
-;;; Macros and Interactive Commands
-
-(defmacro mediawiki-goto-relative-page (direction)
-  "Go to the next page in DIRECTION."
-  `(let ((buff (ring-ref mediawiki-page-ring
-                        (setq mediawiki-page-ring-index
-                              (,direction mediawiki-page-ring-index 1)))))
-     (while (not (buffer-live-p buff))
-       (setq buff
-             (ring-ref mediawiki-page-ring
-                       (setq mediawiki-page-ring-index
-                             (,direction mediawiki-page-ring-index 1)))))
-     (mediawiki-pop-to-buffer buff)))
+;;; Interactive Commands
 
 (defun mediawiki-next-header ()
   "Move point to the end of the next section header."
@@ -256,6 +235,28 @@ functions inserts the following
   (if mediawiki-user-simplify-signature
       (insert "|]]''' ")
     (insert "]]''' ")))
+
+(defvar mediawiki-page-ring nil
+  "Ring that holds names of buffers we navigate through.")
+
+(defvar mediawiki-page-ring-index 0)
+
+(defvar mediawiki-page-ring nil
+  "Ring that holds names of buffers we navigate through.")
+
+(defvar mediawiki-page-ring-index 0)
+(declare-function mediawiki-pop-to-buffer "mediawiki-page")
+(defmacro mediawiki-goto-relative-page (direction)
+  "Go to the next page in DIRECTION."
+  `(let ((buff (ring-ref mediawiki-page-ring
+                        (setq mediawiki-page-ring-index
+                              (,direction mediawiki-page-ring-index 1)))))
+     (while (not (buffer-live-p buff))
+       (setq buff
+             (ring-ref mediawiki-page-ring
+                       (setq mediawiki-page-ring-index
+                             (,direction mediawiki-page-ring-index 1)))))
+     (mediawiki-pop-to-buffer buff)))
 
 (defun mediawiki-goto-previous-page ()
   "Pop up the previous page being editted."
@@ -470,17 +471,16 @@ as does mediawiki-unfill-region."
        "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
 (defun mediawiki-hardlines ()
-  "Set 'use-hard-newlines' to NIL."
+  "Set `use-hard-newlines' to NIL."
   (interactive)
   (setq use-hard-newlines nil))
 
 (defun mediawiki-next-long-line ()
   "Move forward to the next long line.
-Lines are considered long if their length is greater
-than `fill-column'.
+Lines are considered long if their length is greater than `fill-column'.
 
-TODO: When function reaches end of buffer, 'save-excursion' to
-starting point.  Generalise to make `previous-long-line'."
+TODO: When function reaches end of buffer, `save-excursion' to starting
+point.  Generalise to make `previous-long-line'."
   (interactive)
   ;; global-variable: fill-column
   (if (= (forward-line) 0)
@@ -577,32 +577,40 @@ line.  It does not promote the whole tree!"
   (when (fboundp 'zmacs-activate-region)
     (zmacs-activate-region)))
 
+(declare-function mediawiki-open "mediawiki")
+(defvar mediawiki-page-title nil
+  "The title of the page corresponding to the current buffer.")
+
 (defun mediawiki-reload ()
   "Reload the page from the server."
   (interactive)
   (when (not mediawiki-site)
     (setq mediawiki-site (mediawiki-prompt-for-site)))
-  (let ((title mediawiki-page-title))
-    (if title
-	(mediawiki-open title)
-      (error "Error: %s is not a mediawiki document" (buffer-name)))))
+  (if mediawiki-page-title
+     (mediawiki-open mediawiki-page-title)
+    (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 ;;; Major Mode Definition
 
-(define-derived-mode mediawiki-mode text-mode "MW"
-  "Major mode for editing articles written in the markup language
-used by Mediawiki.
+(defvar mediawiki-edittoken nil
+  "The edit token for this page.")
+(defvar mediawiki-starttimestamp nil
+  "The starttimestamp for this page.")
+(defvar mediawiki-basetimestamp nil
+  "The base timestamp for this page.")
 
-Wikipedia articles are usually unfilled: newline characters are not
-used for breaking paragraphs into lines. Unfortunately, Emacs does not
-handle word wrapping yet. As a workaround, mediawiki-mode turns on
-longlines-mode automatically. In case something goes wrong, the
+(define-derived-mode mediawiki-mode text-mode "MW"
+  "Major mode for editing articles written in MediaWiki's wikitext.
+
+Wikipedia articles are usually unfilled: newline characters are not used
+for breaking paragraphs into lines.  In case something goes wrong, the
 following commands may come in handy:
 
 \\[mediawiki-fill-article] fills the buffer.
 \\[mediawiki-unfill-article] unfills the buffer.
 
-Be warned that function can be dead  slow, better use mediawiki-unfill-paragraph-or-region.
+Be warned that function can be dead slow, better use
+`mediawiki-unfill-paragraph-or-region'.
 \\[mediawiki-unfill-paragraph-or-region] unfills the paragraph
 \\[mediawiki-unfill-paragraph-simple] does the same but simpler.
 
@@ -632,7 +640,8 @@ Some simple editing commands.
 \\[mediawiki-yank-prefix]
 \\[mediawiki-unfill-paragraph-or-region]
 
-\\[mediawiki-terminate-paragraph]     starts a new list item or paragraph in a context-aware manner.
+\\[mediawiki-terminate-paragraph] starts a new list item or paragraph in
+a context-aware manner.
 \\[mediawiki-next-header]     moves to the next (sub)section header.
 \\[mediawiki-prev-header]     moves to the previous (sub)section header."
 

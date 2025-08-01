@@ -35,16 +35,19 @@
 (require 'mediawiki-auth)
 (require 'mediawiki-site)
 (require 'mediawiki-utils)
+(require 'mediawiki-mode)
 (require 'ring)
 
 ;;; Page History Management
-
 (defun mediawiki-add-page-history (sitename title)
   "Update SITENAME's page history with TITLE."
   (let ((hist (cdr (assoc-string sitename mediawiki-page-history))))
     (unless hist
       (add-to-list 'mediawiki-page-history (cons sitename "")))
     (setcdr (assoc-string sitename mediawiki-page-history) (append (list title) hist))))
+
+(defvar mediawiki-page-title nil
+  "The title of the page corresponding to the current buffer.")
 
 ;;; Page Loading Functions
 
@@ -178,69 +181,6 @@ SUMMARY, and CONTENT on SITENAME."
     (setq mediawiki-edittoken (mediawiki-site-get-token sitename "csrf"))
     (mediawiki-save-page sitename title summary content try)))
 
-;;; Edit Form Processing
-
-(defun mediawiki-get-edit-form-vars (buffer)
-  "Extract the form variables from a page.
-Messages are displayed if permission is denied in some way.
-This should only be called from a BUFFER in mediawiki-mode as the
-variables it sets there will be local to that buffer."
-
-  (let* ((str (with-current-buffer buffer (buffer-string)))
-         (args (mediawiki-get-form-vars str "id" "editform")))
-    (if args
-(with-current-buffer buffer
-  (setq mediawiki-edit-form-vars args))
-      (cond
-       ((string-match mediawiki-permission-denied str)
-(message "Permission Denied"))
-       ((string-match mediawiki-view-source str)
-        ;; FIXME set read-only flag
-(message "Editing of this page is disabled, here is the source"))))))
-
-(defun mediawiki-get-form-vars (str attribute value)
-  "Look in STR for form element with ATTRIBUTE set to VALUE."
-  ;; Find the form
-  (when (string-match
-         (concat "<form [^>]*" attribute "=[\"']" value "['\"][^>]*>")
-         str)
-
-    (let* ((start-form (match-end 0))
-           (end-form (when (string-match "</form>" str start-form)
-                       (match-beginning 0)))
-           (form (substring str start-form end-form))
-           (start (string-match
-                   "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
-                   form))
-           (vars '(nil)))
-
-      ;; Continue until we can't find any more input elements
-      (while start
-
-        ;; First, capture the place where we'll start next.  Have
-        ;; to do this here since match-end doesn't seem to let you
-        ;; specify the string you were matching against, unlike
-        ;; match-string
-        (setq start (match-end 0))
-
-        ;; Capture the string that defines this element
-        (let ((el (match-string 1 form))
-              ;; get the element name
-              (el-name (match-string 2 form)))
-
-          ;; figure out if this is a submit button and skip it if it is.
-          (when (not (string-match "type=[\"']submit['\"]" el))
-            (add-to-list 'vars
-                         (if (string-match "value=[\"']\\([^\"']*\\)['\"]" el)
-                             (cons el-name (match-string 1 el))
-                           (cons el-name nil)))))
-
-        (setq start
-              (string-match
-               "<input \\([^>]*name=[\"']\\([^\"']+\\)['\"][^>]*\\)>"
-               form start)))
-      vars)))
-
 ;;; Page Navigation and Utility Functions
 
 (defun mediawiki-prompt-for-page ()
@@ -258,6 +198,7 @@ variables it sets there will be local to that buffer."
   "Prompt for a summary and return the answer."
   (completing-read  "Summary: " '()))
 
+(declare-function mediawiki-open "mediawiki")
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
   (interactive)
@@ -267,8 +208,8 @@ variables it sets there will be local to that buffer."
   "Return the page name under point.
 Typically, this means anything enclosed in [[PAGE]]."
   (let ((pos (point))
-        (eol (point-at-eol))
-        (bol (point-at-bol)))
+        (eol (pos-eol))
+        (bol (pos-bol)))
     (save-excursion
       (let* ((start  (when (search-backward "[[" bol t)
                        (+ (point) 2)))

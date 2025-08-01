@@ -34,6 +34,7 @@
 (require 'mediawiki-site)
 (require 'url-cookie)
 (require 'url-parse)
+(require 'cl)
 
 ;;; Authentication Constants
 
@@ -54,7 +55,7 @@ This will be used to verify a successful login.")
 
 ;;; Login and Logout Functions
 
-(defun mediawiki-do-login (&optional sitename username password domain)
+(defun mediawiki-do-login (&optional sitename username password)
   "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."
   (interactive)
