@@ -1,0 +1,387 @@
+
+= MediaWiki.el User Guide =
+
+A comprehensive guide to using MediaWiki.el 2.5+ for editing MediaWiki sites from Emacs.
+
+
+== Table of Contents ==
+
+* [[#installation|Installation]]
+* [[#quick-start|Quick Start]]
+* [[#configuration|Configuration]]
+* [[#basic-usage|Basic Usage]]
+* [[#advanced-features|Advanced Features]]
+* [[#authentication|Authentication]]
+* [[#troubleshooting|Troubleshooting]]
+
+
+== Installation ==
+
+
+=== From MELPA (Recommended) ===
+
+# Add MELPA to your package sources if not already done:
+
+<syntaxhighlight lang="elisp">(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)</syntaxhighlight>
+<ol start="2" style="list-style-type: decimal;">
+<li>Install the package:</li></ol>
+
+<pre>M-x package-install RET mediawiki RET</pre>
+
+=== Manual Installation ===
+
+# Download the source files
+# Place them in your <code>load-path</code> (usually <code>~/.emacs.d/</code>)
+# Add to your configuration:
+
+<syntaxhighlight lang="elisp">(require 'mediawiki)</syntaxhighlight>
+
+== Quick Start ==
+
+
+=== Basic Setup ===
+
+# Configure your first site:
+
+<pre>M-x customize-group RET mediawiki RET</pre>
+<ol start="2" style="list-style-type: decimal;">
+<li>Set up a site (example for Wikipedia):
+<ul>
+<li>'''Site Name''': <code>Wikipedia</code></li>
+<li>'''URL''': <code>https://en.wikipedia.org/</code></li>
+<li>'''Username''': <code>your-username</code></li>
+<li>'''Auth Method''': <code>basic</code> (or <code>oauth</code> for better security)</li></ul>
+</li>
+<li>Start editing:</li></ol>
+
+<pre>M-x mediawiki-site RET Wikipedia RET
+M-x mediawiki-open RET Article_Name RET</pre>
+
+=== Your First Edit ===
+
+# Open an article: <code>M-x mediawiki-open RET Sandbox RET</code>
+# Edit the content in the buffer
+# Save your changes: <code>C-x C-s</code> or <code>M-x mediawiki-save</code>
+# Provide an edit summary when prompted
+
+
+== Configuration ==
+
+
+=== Site Configuration ===
+
+MediaWiki.el supports multiple site configurations using the modern <code>mediawiki-site-alist</code> format:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'basic))
+
+        ("MyWiki" .
+         (make-mediawiki-site-config
+          :name "MyWiki"
+          :url "https://wiki.example.com/"
+          :username "admin"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "your-key"
+                        :consumer-secret "your-secret")))))</syntaxhighlight>
+
+=== Authentication Methods ===
+
+
+==== Basic Authentication ====
+
+<syntaxhighlight lang="elisp">(make-mediawiki-site-config
+ :name "MySite"
+ :url "https://wiki.example.com/"
+ :username "myuser"
+ :auth-method 'basic)</syntaxhighlight>
+* Password stored securely via auth-source
+* Supports domain authentication for enterprise wikis
+
+
+==== OAuth Authentication ====
+
+<syntaxhighlight lang="elisp">(make-mediawiki-site-config
+ :name "Wikipedia"
+ :url "https://en.wikipedia.org/"
+ :username "myuser"
+ :auth-method 'oauth
+ :auth-config '(:consumer-key "your-consumer-key"
+               :consumer-secret "your-consumer-secret"))</syntaxhighlight>
+* More secure than basic auth
+* Requires registering an OAuth consumer on the wiki
+* Tokens automatically refreshed
+
+
+=== Customization Options ===
+
+<syntaxhighlight lang="elisp">;; Enable non-blocking operations for better performance
+(setq mediawiki-use-non-blocking t)
+
+;; Set default edit summary
+(setq mediawiki-edit-summary-default "Minor edit via Emacs")
+
+;; Enable debug mode for troubleshooting
+(setq mediawiki-debug t)
+
+;; Configure session persistence
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")</syntaxhighlight>
+
+== Basic Usage ==
+
+
+=== Opening Pages ===
+
+<pre>M-x mediawiki-open RET PageName RET</pre>
+The page opens in a buffer with <code>mediawiki-mode</code> enabled, providing: - Syntax highlighting for MediaWiki markup - Convenient editing commands - Automatic mode detection for <code>.wiki</code>, <code>.mediawiki</code>, <code>.mw</code> files
+
+
+=== Saving Pages ===
+
+* '''Simple save''': <code>C-x C-s</code> or <code>M-x mediawiki-save</code>
+* '''Save with different name''': <code>C-x C-w</code> or <code>M-x mediawiki-save-as</code>
+* '''Save and close buffer''': <code>M-x mediawiki-save-and-bury</code>
+
+All save operations prompt for an edit summary, which is recommended for tracking changes.
+
+
+=== Site Management ===
+
+* '''Switch sites''': <code>M-x mediawiki-site RET SiteName RET</code>
+* '''Login to site''': <code>M-x mediawiki-do-login</code>
+* '''Logout''': <code>M-x mediawiki-do-logout</code>
+* '''View in browser''': <code>M-x mediawiki-browse</code>
+
+
+== Advanced Features ==
+
+
+=== Modern UI Enhancements ===
+
+
+==== Quick Menu ====
+
+<pre>M-x mediawiki-ui-quick-menu</pre>
+Provides fast access to common operations: - Open/Save/Browse pages - Site switching - Authentication management - Statistics and debugging
+
+
+==== Enhanced Save Dialog ====
+
+<pre>M-x mediawiki-ui-save-with-options</pre>
+Advanced save interface with: - Edit summary suggestions - Minor edit checkbox - Watch page option - Conflict detection and resolution
+
+
+==== Site Statistics ====
+
+<pre>M-x mediawiki-ui-show-site-statistics</pre>
+Displays comprehensive information about: - Site configuration and status - Authentication state - Session information - Recent operations
+
+
+=== Asynchronous Operations ===
+
+MediaWiki.el 2.5+ supports non-blocking operations:
+
+<syntaxhighlight lang="elisp">;; Enable non-blocking mode
+(setq mediawiki-use-non-blocking t)
+
+;; View async operations
+M-x mediawiki-async-list-operations
+
+;; Show async statistics
+M-x mediawiki-async-show-statistics</syntaxhighlight>
+
+=== Session Management ===
+
+* '''View session status''': <code>M-x mediawiki-session-status</code>
+* '''Clear all sessions''': <code>M-x mediawiki-session-clear-all-states</code>
+* '''Session report''': <code>M-x mediawiki-session-report-status</code>
+
+Sessions persist across Emacs restarts and include: - Authentication tokens - Edit tokens - Site preferences - Recent page history
+
+
+=== Draft Mode ===
+
+Create and edit drafts before publishing:
+
+<pre>M-x mediawiki-draft</pre>
+This opens a temporary buffer where you can: - Compose content offline - Use all mediawiki-mode features - Save as draft or publish to wiki when ready
+
+
+=== Authentication Management ===
+
+<pre>M-x mediawiki-ui-manage-authentication</pre>
+Comprehensive authentication interface for: - Testing login credentials - Managing OAuth tokens - Viewing authentication status - Refreshing expired sessions
+
+
+== Authentication ==
+
+
+=== Setting up Auth-Source ===
+
+MediaWiki.el integrates with Emacs’ auth-source library for secure password storage.
+
+
+==== Using GPG (Recommended) ====
+
+# Create <code>~/.authinfo.gpg</code>:
+
+<pre>machine en.wikipedia.org login yourusername password yourpassword
+machine wiki.example.com login admin password adminpass</pre>
+<ol start="2" style="list-style-type: decimal;">
+<li>GPG will encrypt the file automatically</li></ol>
+
+
+==== Using Plain Text (Less Secure) ====
+
+Create <code>~/.authinfo</code>:
+
+<pre>machine en.wikipedia.org login yourusername password yourpassword</pre>
+
+==== Auth-Source Configuration ====
+
+<syntaxhighlight lang="elisp">;; Use specific auth-source files
+(setq auth-sources '("~/.authinfo.gpg" "~/.authinfo"))
+
+;; Enable GPG agent for password caching
+(setq epa-pinentry-mode 'loopback)</syntaxhighlight>
+
+=== OAuth Setup ===
+
+For sites supporting OAuth (like Wikipedia):
+
+# '''Register OAuth Consumer''':
+#* Go to <code>Special:OAuthConsumerRegistration</code> on your wiki
+#* Request a consumer key/secret pair
+#* Note the callback URL requirements
+# '''Configure MediaWiki.el''':
+
+<syntaxhighlight lang="elisp">(make-mediawiki-site-config
+ :name "Wikipedia"
+ :url "https://en.wikipedia.org/"
+ :username "yourusername"
+ :auth-method 'oauth
+ :auth-config '(:consumer-key "your-consumer-key"
+               :consumer-secret "your-consumer-secret"))</syntaxhighlight>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''Complete OAuth Flow''':
+<ul>
+<li>First login attempt will open browser for authorization</li>
+<li>Grant permissions to your application</li>
+<li>Return to Emacs to complete setup</li></ul>
+</li></ol>
+
+
+== Troubleshooting ==
+
+
+=== Common Issues ===
+
+
+==== “Cannot connect to site” ====
+
+# Check internet connection
+# Verify site URL is correct
+# Test site accessibility in browser
+# Check for proxy/firewall issues
+
+
+==== “Authentication failed” ====
+
+# Verify username/password in auth-source
+# Check if account exists and is active
+# For OAuth, ensure consumer keys are valid
+# Try logging in via web browser first
+
+
+==== “Edit conflict detected” ====
+
+# Someone else edited the page simultaneously
+# MediaWiki.el will show conflict resolution options
+# Choose to merge changes or overwrite
+# Review changes before saving
+
+
+==== “Session expired” ====
+
+# Long editing sessions may timeout
+# MediaWiki.el automatically refreshes sessions
+# If problems persist, logout and login again
+# Check <code>M-x mediawiki-session-status</code>
+
+
+=== Debug Mode ===
+
+Enable debugging for detailed troubleshooting:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-debug t)</syntaxhighlight>
+Then use: - <code>M-x mediawiki-debug-view</code> - View debug buffer - <code>M-x mediawiki-session-report-status</code> - Detailed session info - <code>M-x mediawiki-ui-show-site-statistics</code> - Site diagnostics
+
+
+=== Performance Issues ===
+
+For large wikis or slow connections:
+
+<syntaxhighlight lang="elisp">;; Enable non-blocking operations
+(setq mediawiki-use-non-blocking t)
+
+;; Increase timeout values
+(setq mediawiki-http-timeout 30)
+
+;; Reduce concurrent operations
+(setq mediawiki-max-concurrent-operations 3)</syntaxhighlight>
+
+=== Getting Help ===
+
+# '''Check the debug buffer''': <code>M-x mediawiki-debug-view</code>
+# '''Review session status''': <code>M-x mediawiki-session-status</code>
+# '''Test site connectivity''': Use built-in site statistics
+# '''Check configuration''': Verify site settings in customize
+# '''Report bugs''': Visit the project repository for issue reporting
+
+
+=== Migration from Older Versions ===
+
+If upgrading from MediaWiki.el &lt; 2.5, use the migration tools:
+
+<pre>M-x mediawiki-compat-migration-wizard</pre>
+This will: - Detect legacy configuration - Convert to modern format - Validate migrated settings - Provide detailed migration report
+
+For more details, see the [[MIGRATION-GUIDE.md|Migration Guide]].
+
+
+== Tips and Best Practices ==
+
+
+=== Editing Workflow ===
+
+# Always provide meaningful edit summaries
+# Use draft mode for complex edits
+# Preview changes when possible (via browser)
+# Save frequently to avoid conflicts
+
+
+=== Site Management ===
+
+# Configure multiple sites for easy switching
+# Use OAuth when available for better security
+# Keep auth-source files encrypted
+# Regular session cleanup for privacy
+
+
+=== Performance ===
+
+# Enable non-blocking mode for better responsiveness
+# Use site statistics to monitor performance
+# Clear old sessions periodically
+# Monitor async operations for bottlenecks
+
+
+-----
+
+For more advanced usage and development information, see the [[DEVELOPER-GUIDE.md|Developer Documentation]] and [[MIGRATION-GUIDE.md|Migration Guide]].

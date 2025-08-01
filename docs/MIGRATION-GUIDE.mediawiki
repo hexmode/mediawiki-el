@@ -1,0 +1,645 @@
+
+= MediaWiki.el Migration Guide =
+
+This guide helps users migrate from older versions of MediaWiki.el (&lt; 2.5.0) to the modernized version with new architecture, enhanced features, and improved security.
+
+
+== Table of Contents ==
+
+* [[#overview|Overview]]
+* [[#whats-new-in-25|What’s New in 2.5+]]
+* [[#before-you-start|Before You Start]]
+* [[#automatic-migration|Automatic Migration]]
+* [[#manual-migration|Manual Migration]]
+* [[#configuration-changes|Configuration Changes]]
+* [[#api-changes|API Changes]]
+* [[#troubleshooting|Troubleshooting]]
+* [[#post-migration-tasks|Post-Migration Tasks]]
+
+
+== Overview ==
+
+MediaWiki.el 2.5+ represents a complete modernization of the package with:
+
+* '''New Architecture''': Modular design with clear separation of concerns
+* '''Enhanced Security''': OAuth support, auth-source integration, encrypted sessions
+* '''Better Performance''': Asynchronous operations, session persistence, retry logic
+* '''Modern UI''': Enhanced interfaces, progress feedback, conflict resolution
+* '''Comprehensive Testing''': Extensive test suite ensuring reliability
+
+The migration process preserves your existing configuration while upgrading to modern patterns.
+
+
+== What’s New in 2.5+ ==
+
+
+=== Major Changes ===
+
+
+==== Authentication System ====
+
+* '''Old''': Plain text passwords in configuration
+* '''New''': Secure auth-source integration with GPG encryption
+* '''Added''': OAuth 1.0a support for better security
+* '''Added''': Domain authentication for enterprise wikis
+
+
+==== Site Configuration ====
+
+<syntaxhighlight lang="elisp">;; OLD FORMAT (Pre-2.5)
+(setq mediawiki-site-alist
+      '(("Wikipedia" . ("https://en.wikipedia.org/" "username" "password"))))
+
+;; NEW FORMAT (2.5+)
+(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "username"
+          :auth-method 'basic))))</syntaxhighlight>
+
+==== API Layer ====
+
+* '''Old''': XML-based API calls with limited error handling
+* '''New''': JSON-based API with comprehensive error handling and retry logic
+* '''Added''': Asynchronous operations for better performance
+* '''Added''': Progress feedback and cancellation support
+
+
+==== Session Management ====
+
+* '''Old''': No session persistence, manual token management
+* '''New''': Automatic session persistence, token refresh, state recovery
+* '''Added''': Session encryption and secure storage
+
+
+==== User Interface ====
+
+* '''Added''': Modern UI enhancements (quick menu, enhanced save dialog)
+* '''Added''': Site statistics and debugging interfaces
+* '''Added''': Authentication management UI
+
+
+=== Backward Compatibility ===
+
+MediaWiki.el 2.5+ includes a comprehensive compatibility layer that: - Automatically detects legacy configuration - Provides migration wizard for complex setups - Maintains support for legacy function calls (with deprecation warnings) - Validates migrated configuration
+
+
+== Before You Start ==
+
+
+=== Backup Your Configuration ===
+
+# '''Backup your Emacs configuration''':
+
+<syntaxhighlight lang="bash">cp ~/.emacs.d/init.el ~/.emacs.d/init.el.backup
+cp ~/.emacs ~/.emacs.backup  # if using ~/.emacs</syntaxhighlight>
+<ol start="2" style="list-style-type: decimal;">
+<li>'''Backup auth files''' (if they exist):</li></ol>
+
+<syntaxhighlight lang="bash">cp ~/.authinfo ~/.authinfo.backup
+cp ~/.authinfo.gpg ~/.authinfo.gpg.backup</syntaxhighlight>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''Document your current setup''':</li></ol>
+
+<syntaxhighlight lang="elisp">;; Run this in Emacs to see your current configuration
+M-x eval-expression RET mediawiki-site-alist RET</syntaxhighlight>
+
+=== Check Current Version ===
+
+Determine your current MediaWiki.el version:
+
+<syntaxhighlight lang="elisp">M-x eval-expression RET mediawiki-version RET</syntaxhighlight>
+
+=== Prerequisites ===
+
+Ensure you have: - '''Emacs 28.1+''' (required for MediaWiki.el 2.5+) - '''Network access''' to your MediaWiki sites - '''Backup of current configuration''' (see above)
+
+
+== Automatic Migration ==
+
+
+=== Using the Migration Wizard ===
+
+The easiest way to migrate is using the built-in migration wizard:
+
+# '''Install MediaWiki.el 2.5+''':
+
+<pre>M-x package-install RET mediawiki RET</pre>
+<ol start="2" style="list-style-type: decimal;">
+<li>'''Start the migration wizard''':</li></ol>
+
+<pre>M-x mediawiki-compat-migration-wizard</pre>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''Follow the wizard prompts''':
+<ul>
+<li>'''Option 1''': Automatic migration (recommended for most users)</li>
+<li>'''Option 2''': Interactive migration (for complex setups)</li>
+<li>'''Option 3''': Preview changes (to see what will happen)</li>
+<li>'''Option 4''': Cancel</li></ul>
+</li>
+<li>'''Review migration results''':</li></ol>
+
+<pre>M-x mediawiki-compat-show-migration-report</pre>
+
+=== What the Wizard Does ===
+
+The migration wizard automatically:
+
+# '''Detects Legacy Configuration''':
+#* Old <code>mediawiki-site-alist</code> format
+#* Individual legacy variables (<code>mediawiki-site-url</code>, etc.)
+#* Deprecated API usage patterns
+# '''Converts Configuration''':
+#* Transforms to modern struct format
+#* Preserves all site settings
+#* Maintains authentication information
+# '''Validates Results''':
+#* Checks configuration integrity
+#* Identifies potential issues
+#* Provides detailed report
+
+
+=== Example Migration Session ===
+
+<pre>M-x mediawiki-compat-migration-wizard
+
+MediaWiki Configuration Migration Wizard
+==========================================
+
+Found 3 legacy configuration items:
+
+• Legacy site: Wikipedia
+  URL: https://en.wikipedia.org/
+  Username: myusername
+  Has stored password
+
+• Legacy site URL: https://wiki.example.com/
+• Legacy username: admin
+
+Migration Options:
+==================
+[1] Automatic migration (recommended)
+[2] Interactive migration
+[3] Show migration preview
+[4] Cancel migration
+
+Choose option (1-4): 1
+
+Starting automatic migration...
+Migration completed successfully!</pre>
+
+== Manual Migration ==
+
+
+=== Step-by-Step Manual Process ===
+
+If you prefer manual control or have complex configurations:
+
+
+==== 1. Convert Site Configuration ====
+
+'''Before (Legacy Format)''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" . ("https://en.wikipedia.org/" "myuser" "mypass"))
+        ("LocalWiki" . ("http://localhost/wiki/" "admin" "secret" "DOMAIN"))))</syntaxhighlight>
+'''After (Modern Format)''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "myuser"
+          :auth-method 'basic))
+
+        ("LocalWiki" .
+         (make-mediawiki-site-config
+          :name "LocalWiki"
+          :url "http://localhost/wiki/"
+          :username "admin"
+          :auth-method 'basic
+          :auth-config '(:domain "DOMAIN")))))</syntaxhighlight>
+
+==== 2. Set up Auth-Source ====
+
+Move passwords from configuration to secure storage:
+
+'''Create <code>~/.authinfo.gpg</code>''':
+
+<pre>machine en.wikipedia.org login myuser password mypass
+machine localhost login admin password secret</pre>
+
+==== 3. Update Individual Variables ====
+
+'''Legacy Variables''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-url "https://en.wikipedia.org/")
+(setq mediawiki-username "myuser")
+(setq mediawiki-password "mypass")</syntaxhighlight>
+'''Modern Equivalent''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("default" .
+         (make-mediawiki-site-config
+          :name "default"
+          :url "https://en.wikipedia.org/"
+          :username "myuser"
+          :auth-method 'basic))))
+
+(setq mediawiki-site-default "default")</syntaxhighlight>
+
+==== 4. Update Function Calls ====
+
+'''Legacy API Calls''':
+
+<syntaxhighlight lang="elisp">;; Old way
+(mediawiki-api-call "Wikipedia" "query" '(("titles" . "Main Page")))</syntaxhighlight>
+'''Modern API Calls''':
+
+<syntaxhighlight lang="elisp">;; New way
+(mediawiki-api-call-sync "Wikipedia" "query" '(("titles" . "Main Page")))
+;; Or asynchronous
+(mediawiki-api-call-async "Wikipedia" "query" '(("titles" . "Main Page"))
+                          'success-callback 'error-callback)</syntaxhighlight>
+
+== Configuration Changes ==
+
+
+=== Site Configuration Migration ===
+
+
+==== Basic Sites ====
+
+'''Legacy''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Site1" . ("https://example.com/" "user" "pass"))))</syntaxhighlight>
+'''Modern''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Site1" .
+         (make-mediawiki-site-config
+          :name "Site1"
+          :url "https://example.com/"
+          :username "user"
+          :auth-method 'basic))))</syntaxhighlight>
+
+==== Sites with Domain Authentication ====
+
+'''Legacy''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Enterprise" . ("https://wiki.company.com/" "user" "pass" "COMPANY"))))</syntaxhighlight>
+'''Modern''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Enterprise" .
+         (make-mediawiki-site-config
+          :name "Enterprise"
+          :url "https://wiki.company.com/"
+          :username "user"
+          :auth-method 'basic
+          :auth-config '(:domain "COMPANY")))))</syntaxhighlight>
+
+==== OAuth Sites ====
+
+'''New in 2.5+''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia-OAuth" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-OAuth"
+          :url "https://en.wikipedia.org/"
+          :username "user"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "your-key"
+                        :consumer-secret "your-secret")))))</syntaxhighlight>
+
+=== Variable Migrations ===
+
+{|
+!width="38%"| Legacy Variable
+!width="45%"| Modern Equivalent
+!width="16%"| Notes
+|-
+| <code>mediawiki-site-url</code>
+| <code>:url</code> in site config
+| Use structured configuration
+|-
+| <code>mediawiki-username</code>
+| <code>:username</code> in site config
+| Per-site usernames
+|-
+| <code>mediawiki-password</code>
+| auth-source
+| Secure password storage
+|-
+| <code>mediawiki-site-default</code>
+| <code>mediawiki-site-default</code>
+| Unchanged
+|}
+
+
+=== New Configuration Options ===
+
+Take advantage of new features:
+
+<syntaxhighlight lang="elisp">;; Performance settings
+(setq mediawiki-use-non-blocking t)
+(setq mediawiki-max-concurrent-operations 5)
+
+;; Session settings
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")
+(setq mediawiki-session-auto-save t)
+
+;; UI settings
+(setq mediawiki-use-modern-ui t)
+(setq mediawiki-prompt-for-summary t)
+
+;; Debug settings (for troubleshooting)
+(setq mediawiki-debug nil)</syntaxhighlight>
+
+== API Changes ==
+
+
+=== Function Deprecations ===
+
+{|
+!width="37%"| Deprecated
+!width="40%"| Replacement
+!width="21%"| Notes
+|-
+| <code>mediawiki-api-call</code>
+| <code>mediawiki-api-call-sync</code>
+| Use specific sync/async versions
+|-
+| <code>mediawiki-login</code>
+| <code>mediawiki-do-login</code>
+| Alias provided for compatibility
+|-
+| <code>mediawiki-logout</code>
+| <code>mediawiki-do-logout</code>
+| Alias provided for compatibility
+|}
+
+
+=== New Functions ===
+
+Take advantage of new functionality:
+
+<syntaxhighlight lang="elisp">;; Modern UI functions
+M-x mediawiki-ui-quick-menu
+M-x mediawiki-ui-save-with-options
+M-x mediawiki-ui-manage-authentication
+
+;; Session management
+M-x mediawiki-session-status
+M-x mediawiki-session-report-status
+
+;; Debugging and diagnostics
+M-x mediawiki-debug-view
+M-x mediawiki-ui-show-site-statistics</syntaxhighlight>
+
+=== Asynchronous Operations ===
+
+New async support for better performance:
+
+<syntaxhighlight lang="elisp">;; Async page loading with callback
+(mediawiki-api-call-async "Wikipedia" "query"
+                          '(("titles" . "Main Page"))
+                          (lambda (response)
+                            (message "Page loaded: %s" response))
+                          (lambda (error)
+                            (message "Error: %s" error)))
+
+;; Enable non-blocking mode
+(setq mediawiki-use-non-blocking t)</syntaxhighlight>
+
+== Troubleshooting ==
+
+
+=== Common Migration Issues ===
+
+
+==== Issue: “Site configuration not found” ====
+
+'''Cause''': Legacy site configuration not properly converted
+
+'''Solution''': 1. Check migration log: <code>M-x mediawiki-compat-show-migration-report</code> 2. Validate configuration: <code>M-x mediawiki-compat-validate-migrated-config</code> 3. Manually fix configuration if needed
+
+
+==== Issue: “Authentication failed after migration” ====
+
+'''Cause''': Passwords not properly moved to auth-source
+
+'''Solution''': 1. Check auth-source configuration:
+
+<syntaxhighlight lang="elisp">M-x eval-expression RET auth-sources RET</syntaxhighlight>
+<ol start="2" style="list-style-type: decimal;">
+<li>Create/update <code>~/.authinfo.gpg</code>:</li></ol>
+
+<pre>machine your.wiki.site login username password yourpassword</pre>
+<ol start="3" style="list-style-type: decimal;">
+<li>Test authentication: <code>M-x mediawiki-ui-manage-authentication</code></li></ol>
+
+
+==== Issue: “Function not found” errors ====
+
+'''Cause''': Using deprecated function names
+
+'''Solution''': 1. Enable compatibility shims:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-compat-enable-shims t)</syntaxhighlight>
+<ol start="2" style="list-style-type: decimal;">
+<li>Update function calls to modern equivalents</li>
+<li>Check deprecation warnings in <code>*Messages*</code> buffer</li></ol>
+
+
+==== Issue: “Session expired” frequently ====
+
+'''Cause''': Session persistence not configured
+
+'''Solution''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")
+(setq mediawiki-session-auto-save t)</syntaxhighlight>
+
+=== Validation and Testing ===
+
+
+==== Validate Your Migration ====
+
+<syntaxhighlight lang="elisp">;; Check configuration validity
+M-x mediawiki-compat-validate-migrated-config
+
+;; View validation report
+M-x mediawiki-compat-show-validation-report
+
+;; Test site connectivity
+M-x mediawiki-ui-show-site-statistics</syntaxhighlight>
+
+==== Test Authentication ====
+
+<syntaxhighlight lang="elisp">;; Test login to each site
+M-x mediawiki-ui-manage-authentication
+
+;; Check session status
+M-x mediawiki-session-status
+
+;; View session details
+M-x mediawiki-session-report-status</syntaxhighlight>
+
+=== Getting Help ===
+
+If migration fails or you encounter issues:
+
+# '''Enable debug mode''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-debug t)</syntaxhighlight>
+<ol start="2" style="list-style-type: decimal;">
+<li>'''Check debug output''':</li></ol>
+
+<pre>M-x mediawiki-debug-view</pre>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''Review migration log''':</li></ol>
+
+<pre>M-x mediawiki-compat-show-migration-report</pre>
+<ol start="4" style="list-style-type: decimal;">
+<li>'''Validate configuration''':</li></ol>
+
+<pre>M-x mediawiki-compat-validate-migrated-config</pre>
+
+== Post-Migration Tasks ==
+
+
+=== 1. Test Basic Operations ===
+
+After migration, verify that basic operations work:
+
+<syntaxhighlight lang="elisp">;; Test site switching
+M-x mediawiki-site RET YourSite RET
+
+;; Test page opening
+M-x mediawiki-open RET TestPage RET
+
+;; Test authentication
+M-x mediawiki-do-login
+
+;; Test saving (make a minor edit first)
+C-x C-s</syntaxhighlight>
+
+=== 2. Configure New Features ===
+
+Take advantage of 2.5+ features:
+
+<syntaxhighlight lang="elisp">;; Enable async operations
+(setq mediawiki-use-non-blocking t)
+
+;; Set up modern UI
+(setq mediawiki-use-modern-ui t)
+
+;; Configure session persistence
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")</syntaxhighlight>
+
+=== 3. Update Key Bindings ===
+
+Consider updating your key bindings to use new functions:
+
+<syntaxhighlight lang="elisp">;; Replace old bindings
+(global-set-key (kbd "C-c w m") 'mediawiki-ui-quick-menu)
+(global-set-key (kbd "C-c w s") 'mediawiki-ui-save-with-options)
+(global-set-key (kbd "C-c w a") 'mediawiki-ui-manage-authentication)</syntaxhighlight>
+
+=== 4. Clean Up Legacy Configuration ===
+
+Once migration is complete and tested:
+
+# '''Remove legacy variables''' (if any remain):
+
+<syntaxhighlight lang="elisp">;; Remove these from your config after migration
+;; (setq mediawiki-site-url ...)
+;; (setq mediawiki-username ...)
+;; (setq mediawiki-password ...)</syntaxhighlight>
+<ol start="2" style="list-style-type: decimal;">
+<li>'''Disable compatibility warnings''' (optional):</li></ol>
+
+<syntaxhighlight lang="elisp">(setq mediawiki-compat-warn-deprecated nil)</syntaxhighlight>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''Remove backup files''' (after confirming everything works):</li></ol>
+
+<syntaxhighlight lang="bash">rm ~/.emacs.d/init.el.backup
+rm ~/.authinfo.backup</syntaxhighlight>
+
+=== 5. Explore New Features ===
+
+Discover new capabilities:
+
+<syntaxhighlight lang="elisp">;; Try the quick menu
+M-x mediawiki-ui-quick-menu
+
+;; Check site statistics
+M-x mediawiki-ui-show-site-statistics
+
+;; Use enhanced save dialog
+M-x mediawiki-ui-save-with-options
+
+;; Manage authentication
+M-x mediawiki-ui-manage-authentication</syntaxhighlight>
+
+== Migration Checklist ==
+
+Use this checklist to ensure complete migration:
+
+
+=== Pre-Migration ===
+
+* ☐ Backup configuration files
+* ☐ Document current setup
+* ☐ Verify Emacs version (28.1+)
+* ☐ Test current MediaWiki.el functionality
+
+
+=== Migration Process ===
+
+* ☐ Install MediaWiki.el 2.5+
+* ☐ Run migration wizard OR migrate manually
+* ☐ Review migration report
+* ☐ Validate migrated configuration
+* ☐ Set up auth-source (if needed)
+
+
+=== Post-Migration Testing ===
+
+* ☐ Test site switching
+* ☐ Test page opening and editing
+* ☐ Test authentication (login/logout)
+* ☐ Test save operations
+* ☐ Verify session persistence
+* ☐ Check new UI features
+
+
+=== Configuration Updates ===
+
+* ☐ Enable async operations
+* ☐ Configure session persistence
+* ☐ Set up modern UI features
+* ☐ Update key bindings
+* ☐ Clean up legacy configuration
+
+
+=== Final Steps ===
+
+* ☐ Remove backup files (after testing)
+* ☐ Disable compatibility warnings (optional)
+* ☐ Document new configuration
+* ☐ Explore new features
+
+
+-----
+
+Congratulations! You’ve successfully migrated to MediaWiki.el 2.5+. Enjoy the enhanced security, performance, and features of the modernized package.
+
+For ongoing support, refer to the [[USER-GUIDE.md|User Guide]] and [[CONFIGURATION-EXAMPLES.md|Configuration Examples]].

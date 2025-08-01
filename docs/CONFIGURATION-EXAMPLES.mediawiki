@@ -1,0 +1,498 @@
+
+= MediaWiki.el Configuration Examples =
+
+This document provides practical configuration examples for various MediaWiki.el setups, from basic to advanced.
+
+
+== Table of Contents ==
+
+* [[#basic-configuration|Basic Configuration]]
+* [[#authentication-examples|Authentication Examples]]
+* [[#multi-site-setups|Multi-Site Setups]]
+* [[#advanced-configurations|Advanced Configurations]]
+* [[#performance-optimization|Performance Optimization]]
+* [[#development-and-testing|Development and Testing]]
+
+
+== Basic Configuration ==
+
+
+=== Minimal Setup ===
+
+The simplest configuration for editing Wikipedia:
+
+<syntaxhighlight lang="elisp">;; Basic Wikipedia setup
+(require 'mediawiki)
+
+(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "YourWikipediaUsername"
+          :auth-method 'basic))))
+
+;; Set Wikipedia as default site
+(setq mediawiki-site-default "Wikipedia")</syntaxhighlight>
+
+=== Single Private Wiki ===
+
+Configuration for a private MediaWiki installation:
+
+<syntaxhighlight lang="elisp">(require 'mediawiki)
+
+(setq mediawiki-site-alist
+      '(("CompanyWiki" .
+         (make-mediawiki-site-config
+          :name "CompanyWiki"
+          :url "https://wiki.company.com/"
+          :username "your.username"
+          :auth-method 'basic
+          :auth-config '(:domain "COMPANY")))))
+
+;; Company-specific settings
+(setq mediawiki-edit-summary-default "Updated via Emacs")
+(setq mediawiki-site-default "CompanyWiki")</syntaxhighlight>
+
+== Authentication Examples ==
+
+
+=== Basic Authentication with Auth-Source ===
+
+Using Emacs’ built-in auth-source for secure password storage:
+
+<syntaxhighlight lang="elisp">;; Configure auth-source
+(setq auth-sources '("~/.authinfo.gpg" "~/.authinfo"))
+
+;; Site configuration (password retrieved automatically)
+(setq mediawiki-site-alist
+      '(("MyWiki" .
+         (make-mediawiki-site-config
+          :name "MyWiki"
+          :url "https://wiki.example.com/"
+          :username "myuser"
+          :auth-method 'basic))))</syntaxhighlight>
+Corresponding <code>~/.authinfo.gpg</code> entry:
+
+<pre>machine wiki.example.com login myuser password mysecretpassword</pre>
+
+=== OAuth Authentication ===
+
+Secure OAuth setup for public wikis:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia-OAuth" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-OAuth"
+          :url "https://en.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "your-consumer-key"
+                        :consumer-secret "your-consumer-secret"
+                        :oauth-callback "oob")))))</syntaxhighlight>
+
+=== Enterprise Authentication ===
+
+Configuration for enterprise wikis with domain authentication:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Enterprise" .
+         (make-mediawiki-site-config
+          :name "Enterprise"
+          :url "https://enterprise.wiki.com/"
+          :username "john.doe"
+          :auth-method 'basic
+          :auth-config '(:domain "ENTERPRISE"
+                        :use-ldap t)))))</syntaxhighlight>
+
+== Multi-Site Setups ==
+
+
+=== Multiple Wikipedia Languages ===
+
+Configuration for editing multiple Wikipedia languages:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia-EN" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-EN"
+          :url "https://en.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "en-key"
+                        :consumer-secret "en-secret")))
+
+        ("Wikipedia-DE" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-DE"
+          :url "https://de.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "de-key"
+                        :consumer-secret "de-secret")))
+
+        ("Wikipedia-FR" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-FR"
+          :url "https://fr.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "fr-key"
+                        :consumer-secret "fr-secret")))))
+
+;; Quick site switching function
+(defun my-mediawiki-switch-language ()
+  "Quick switch between Wikipedia languages."
+  (interactive)
+  (let ((lang (completing-read "Language: "
+                              '("EN" "DE" "FR"))))
+    (mediawiki-site (concat "Wikipedia-" lang))))
+
+(global-set-key (kbd "C-c w l") 'my-mediawiki-switch-language)</syntaxhighlight>
+
+=== Mixed Environment Setup ===
+
+Personal, work, and public wiki configuration:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(;; Personal documentation wiki
+        ("PersonalWiki" .
+         (make-mediawiki-site-config
+          :name "PersonalWiki"
+          :url "https://personal.wiki.mydomain.com/"
+          :username "me"
+          :auth-method 'basic))
+
+        ;; Work wiki with enterprise auth
+        ("WorkWiki" .
+         (make-mediawiki-site-config
+          :name "WorkWiki"
+          :url "https://wiki.company.internal/"
+          :username "employee.id"
+          :auth-method 'basic
+          :auth-config '(:domain "COMPANY")))
+
+        ;; Public contributions
+        ("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "PublicUsername"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "wiki-key"
+                        :consumer-secret "wiki-secret")))
+
+        ;; Project wiki
+        ("ProjectWiki" .
+         (make-mediawiki-site-config
+          :name "ProjectWiki"
+          :url "https://project.wiki.org/"
+          :username "contributor"
+          :auth-method 'basic))))
+
+;; Context-specific defaults
+(defun my-mediawiki-context-setup ()
+  "Set up MediaWiki context based on current time/location."
+  (let ((hour (string-to-number (format-time-string "%H"))))
+    (if (and (>= hour 9) (<= hour 17))
+        (setq mediawiki-site-default "WorkWiki")
+      (setq mediawiki-site-default "PersonalWiki"))))
+
+(add-hook 'mediawiki-mode-hook 'my-mediawiki-context-setup)</syntaxhighlight>
+
+== Advanced Configurations ==
+
+
+=== Complete Feature Setup ===
+
+Full configuration with all modern features enabled:
+
+<syntaxhighlight lang="elisp">(require 'mediawiki)
+
+;; Performance and async settings
+(setq mediawiki-use-non-blocking t)
+(setq mediawiki-max-concurrent-operations 5)
+(setq mediawiki-http-timeout 30)
+
+;; Session and persistence
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")
+(setq mediawiki-session-auto-save t)
+(setq mediawiki-session-encryption t)
+
+;; UI and editing preferences
+(setq mediawiki-edit-summary-default "")
+(setq mediawiki-prompt-for-summary t)
+(setq mediawiki-use-modern-ui t)
+
+;; Debug and logging
+(setq mediawiki-debug nil) ; Enable only when troubleshooting
+(setq mediawiki-log-level 'info)
+
+;; Advanced site configuration
+(setq mediawiki-site-alist
+      '(("MainWiki" .
+         (make-mediawiki-site-config
+          :name "MainWiki"
+          :url "https://wiki.example.com/"
+          :username "advanced-user"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "advanced-key"
+                        :consumer-secret "advanced-secret"
+                        :request-token-url "/w/rest.php/oauth2/token"
+                        :authorize-url "/w/rest.php/oauth2/authorize"
+                        :access-token-url "/w/rest.php/oauth2/access_token")
+          :api-url "/w/api.php"
+          :timeout 45
+          :retry-count 3))))
+
+;; Custom hooks
+(add-hook 'mediawiki-mode-hook
+          (lambda ()
+            ;; Enable flyspell for wiki editing
+            (flyspell-mode 1)
+            ;; Custom key bindings
+            (local-set-key (kbd "C-c C-p") 'mediawiki-ui-open-with-preview)
+            (local-set-key (kbd "C-c C-s") 'mediawiki-ui-save-with-options)
+            (local-set-key (kbd "C-c C-m") 'mediawiki-ui-quick-menu)))
+
+;; Integration with other Emacs packages
+(when (featurep 'company)
+  (add-hook 'mediawiki-mode-hook 'company-mode))
+
+(when (featurep 'yasnippet)
+  (add-hook 'mediawiki-mode-hook 'yas-minor-mode))</syntaxhighlight>
+
+=== Custom Functions and Workflows ===
+
+Advanced workflow automation:
+
+<syntaxhighlight lang="elisp">;; Custom function for creating new articles
+(defun my-mediawiki-new-article (title category)
+  "Create a new article with TITLE in CATEGORY."
+  (interactive "sArticle title: \nsCategory: ")
+  (mediawiki-open title)
+  (insert (format "{{Infobox}}\n\n'''%s''' is...\n\n== Overview ==\n\n== References ==\n\n[[Category:%s]]"
+                  title category))
+  (goto-char (point-min))
+  (forward-line 2)
+  (end-of-line))
+
+;; Batch operations
+(defun my-mediawiki-batch-edit (pages summary)
+  "Edit multiple PAGES with the same SUMMARY."
+  (interactive
+   (list (split-string (read-string "Pages (space-separated): "))
+         (read-string "Edit summary: ")))
+  (dolist (page pages)
+    (mediawiki-open page)
+    ;; Perform automated edits here
+    (mediawiki-save summary)
+    (kill-buffer)))
+
+;; Site-specific templates
+(defun my-mediawiki-insert-template (template)
+  "Insert a wiki TEMPLATE at point."
+  (interactive
+   (list (completing-read "Template: "
+                         '("Infobox" "Citation needed" "Stub" "Reflist"))))
+  (insert (format "{{%s}}" template)))
+
+(define-key mediawiki-mode-map (kbd "C-c t") 'my-mediawiki-insert-template)</syntaxhighlight>
+
+== Performance Optimization ==
+
+
+=== High-Performance Setup ===
+
+Configuration optimized for large wikis and frequent editing:
+
+<syntaxhighlight lang="elisp">;; Async and performance settings
+(setq mediawiki-use-non-blocking t)
+(setq mediawiki-max-concurrent-operations 8)
+(setq mediawiki-async-timeout 60)
+
+;; HTTP optimization
+(setq mediawiki-http-timeout 45)
+(setq mediawiki-http-retry-delay 2)
+(setq mediawiki-http-max-retries 5)
+
+;; Session optimization
+(setq mediawiki-session-cache-size 50)
+(setq mediawiki-session-cleanup-interval 3600) ; 1 hour
+(setq mediawiki-token-refresh-threshold 300) ; 5 minutes
+
+;; Memory management
+(setq mediawiki-buffer-auto-cleanup t)
+(setq mediawiki-max-cached-pages 20)
+
+;; Network optimization
+(setq mediawiki-use-http-pipelining t)
+(setq mediawiki-compress-requests t)</syntaxhighlight>
+
+=== Low-Resource Setup ===
+
+Configuration for limited resource environments:
+
+<syntaxhighlight lang="elisp">;; Conservative resource usage
+(setq mediawiki-use-non-blocking nil)
+(setq mediawiki-max-concurrent-operations 1)
+(setq mediawiki-session-cache-size 5)
+
+;; Reduced timeouts
+(setq mediawiki-http-timeout 15)
+(setq mediawiki-async-timeout 20)
+
+;; Minimal UI
+(setq mediawiki-use-modern-ui nil)
+(setq mediawiki-show-progress nil)
+
+;; Conservative session handling
+(setq mediawiki-session-auto-save nil)
+(setq mediawiki-session-encryption nil)</syntaxhighlight>
+
+== Development and Testing ==
+
+
+=== Development Configuration ===
+
+Setup for MediaWiki.el development and testing:
+
+<syntaxhighlight lang="elisp">;; Development settings
+(setq mediawiki-debug t)
+(setq mediawiki-log-level 'debug)
+(setq mediawiki-debug-buffer "*MediaWiki Debug*")
+
+;; Test site configuration
+(setq mediawiki-site-alist
+      '(("TestWiki" .
+         (make-mediawiki-site-config
+          :name "TestWiki"
+          :url "http://localhost:8080/mediawiki/"
+          :username "testuser"
+          :auth-method 'basic
+          :api-url "/api.php"))))
+
+;; Development helpers
+(defun my-mediawiki-dev-reset ()
+  "Reset all MediaWiki state for testing."
+  (interactive)
+  (mediawiki-session-clear-all-states t)
+  (setq mediawiki-debug-log '())
+  (message "MediaWiki state reset"))
+
+(defun my-mediawiki-dev-inspect ()
+  "Inspect current MediaWiki state."
+  (interactive)
+  (switch-to-buffer-other-window "*MediaWiki Debug*")
+  (mediawiki-debug-view)
+  (mediawiki-session-status))
+
+;; Key bindings for development
+(global-set-key (kbd "C-c w d r") 'my-mediawiki-dev-reset)
+(global-set-key (kbd "C-c w d i") 'my-mediawiki-dev-inspect)</syntaxhighlight>
+
+=== Testing Framework Integration ===
+
+Integration with ERT (Emacs Regression Testing):
+
+<syntaxhighlight lang="elisp">;; Test configuration
+(defvar my-mediawiki-test-site
+  (make-mediawiki-site-config
+   :name "TestSite"
+   :url "http://localhost/wiki/"
+   :username "testuser"
+   :auth-method 'basic))
+
+;; Test helpers
+(defun my-mediawiki-test-setup ()
+  "Set up test environment."
+  (setq mediawiki-site-alist `(("TestSite" . ,my-mediawiki-test-site)))
+  (mediawiki-session-clear-all-states t))
+
+(defun my-mediawiki-test-teardown ()
+  "Clean up test environment."
+  (mediawiki-session-clear-all-states t))
+
+;; Example test
+(ert-deftest my-mediawiki-basic-test ()
+  "Test basic MediaWiki operations."
+  (my-mediawiki-test-setup)
+  (unwind-protect
+      (progn
+        (should (mediawiki-site "TestSite"))
+        (should (mediawiki-get-site "TestSite")))
+    (my-mediawiki-test-teardown)))</syntaxhighlight>
+
+== Migration Configuration ==
+
+
+=== Legacy Configuration Support ===
+
+For users upgrading from older versions:
+
+<syntaxhighlight lang="elisp">;; Enable backward compatibility
+(require 'mediawiki-compat)
+
+;; Legacy variable support (automatically migrated)
+(setq mediawiki-site-url "https://en.wikipedia.org/")
+(setq mediawiki-username "OldUsername")
+
+;; Automatic migration on startup
+(add-hook 'after-init-hook 'mediawiki-compat-check-and-migrate)
+
+;; Migration wizard for complex setups
+(global-set-key (kbd "C-c w m") 'mediawiki-compat-migration-wizard)</syntaxhighlight>
+
+=== Gradual Migration Strategy ===
+
+Incremental upgrade approach:
+
+<syntaxhighlight lang="elisp">;; Phase 1: Enable compatibility layer
+(require 'mediawiki-compat)
+(setq mediawiki-compat-enable-shims t)
+(setq mediawiki-compat-warn-deprecated t)
+
+;; Phase 2: Mixed old and new configuration
+(setq mediawiki-site-alist
+      '(;; New format site
+        ("NewSite" .
+         (make-mediawiki-site-config
+          :name "NewSite"
+          :url "https://new.wiki.com/"
+          :username "user"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "key"
+                        :consumer-secret "secret")))
+
+        ;; Legacy format site (will be migrated)
+        ("OldSite" . ("https://old.wiki.com/" "user" "pass"))))
+
+;; Phase 3: Complete migration
+;; Run M-x mediawiki-compat-migration-wizard
+;; Validate with M-x mediawiki-compat-validate-migrated-config</syntaxhighlight>
+
+== Custom Key Bindings ==
+
+Convenient key bindings for frequent MediaWiki operations:
+
+<syntaxhighlight lang="elisp">;; Global MediaWiki bindings
+(global-set-key (kbd "C-c w o") 'mediawiki-open)
+(global-set-key (kbd "C-c w s") 'mediawiki-save)
+(global-set-key (kbd "C-c w b") 'mediawiki-browse)
+(global-set-key (kbd "C-c w l") 'mediawiki-do-login)
+(global-set-key (kbd "C-c w q") 'mediawiki-do-logout)
+(global-set-key (kbd "C-c w d") 'mediawiki-draft)
+
+;; Site management
+(global-set-key (kbd "C-c w w") 'mediawiki-site)
+(global-set-key (kbd "C-c w m") 'mediawiki-ui-quick-menu)
+(global-set-key (kbd "C-c w a") 'mediawiki-ui-manage-authentication)
+
+;; Advanced operations
+(global-set-key (kbd "C-c w p") 'mediawiki-ui-open-with-preview)
+(global-set-key (kbd "C-c w S") 'mediawiki-ui-save-with-options)
+(global-set-key (kbd "C-c w i") 'mediawiki-ui-show-site-statistics)</syntaxhighlight>
+
+-----
+
+These examples cover most common MediaWiki.el usage scenarios. For specific use cases not covered here, consult the [[USER-GUIDE.md|User Guide]] or create custom configurations based on these patterns.

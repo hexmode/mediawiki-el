@@ -1,19 +1,20 @@
 ;;; mediawiki.el --- mediawiki frontend  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
+;; Copyright (C) 2008, 2009, 2010, 2011, 2015, 2025 Mark A. Hershberger
 
 ;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Package-Requires: ((emacs "28.1"))
-;; Version: 2.4.3
 ;; Created: Sep 17 2004
+;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
-;; Last Modified: <2025-07-27 11:42:12 mah>
+;; Version: 3.0.0
+;; Package-Type: multi
+;; Last Modified: <2025-07-26 17:59:30 mah>
 
-(defconst mediawiki-version "2.4.3"
+(defconst mediawiki-version "3.0.0"
   "Current version of mediawiki.el.")
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -150,395 +151,28 @@
 
 ;;; Code:
 
-(require 'url-http)
+;; Load the new modular components
+(require 'mediawiki-core)
+(require 'mediawiki-http)
+(require 'mediawiki-api)
+(require 'mediawiki-auth)
+(require 'mediawiki-session)
+(require 'mediawiki-page)
+(require 'mediawiki-ui)
+(require 'mediawiki-compat)
+
+;; Legacy dependencies for backward compatibility
 (require 'mml)
 (require 'mm-url)
 (require 'ring)
 (require 'subr-x)
+; Legacy web dependency removed - using modern HTTP layer
+
 (eval-when-compile
-  (require 'cl)
-  (require 'mml)
-  ;; Below copied from url-http to avoid compilation warnings
-  (defvar url-http-extra-headers)
-  (defvar url-http-target-url)
-  (defvar url-http-proxy)
-  (defvar url-http-connection-opened)
-  ;; This should only be used in xemacs, anyway
-  (setq byte-compile-not-obsolete-funcs (list 'assoc-ignore-case)))
-
-;; As of 2010-06-22, these functions are in Emacs
-(unless (fboundp 'url-bit-for-url)
-  (defun url-bit-for-url (method lookfor url)
-    (when (fboundp 'auth-source-user-or-password)
-      (let* ((urlobj (url-generic-parse-url url))
-             (bit (funcall method urlobj))
-             (methods (list 'url-recreate-url
-                            'url-host)))
-        (if (and (not bit) (> (length methods) 0))
-            (auth-source-user-or-password
-             lookfor (funcall (pop methods) urlobj) (url-type urlobj))
-          bit)))))
-
-(unless (fboundp 'url-user-for-url)
-  (defun url-user-for-url (url)
-    "Attempt to use .authinfo to find a user for this URL."
-    (url-bit-for-url 'url-user "login" url)))
-
-(unless (fboundp 'url-password-for-url)
-  (defun url-password-for-url (url)
-    "Attempt to use .authinfo to find a password for this URL."
-    (url-bit-for-url 'url-password "password" url)))
-
-(when (and (fboundp 'url-http-create-request) (boundp 'url-http-extra-headers))
-  (if (string= "GET / HTTP/1.0\r\nMIME-Version: 1.0\r\nConnection: close\r\nHost: example.com\r\nAccept: */*\r\nUser-Agent: URL/Emacs\r\nContent-length: 4\r\n\r\ntest"
-	       (let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
-		     (url-http-data "test") (url-http-version "1.0") (url-http-referer "test")
-		     url-http-method url-http-attempt-keepalives url-extensions-header
-		     url-http-extra-headers url-http-proxy url-mime-charset-string)
-		 (url-http-create-request)))
-      (defun url-http-create-request (&optional ref-url)
-	"Create an HTTP request for `url-http-target-url', referred to by REF-URL."
-	(declare (special proxy-info
-			  url-http-method url-http-data
-			  url-http-extra-headers))
-	(let* ((extra-headers)
-	       (request nil)
-	       (no-cache (cdr-safe (assoc "Pragma" url-http-extra-headers)))
-	       (using-proxy url-http-proxy)
-	       (proxy-auth (if (or (cdr-safe (assoc "Proxy-Authorization"
-						    url-http-extra-headers))
-				   (not using-proxy))
-			       nil
-			     (let ((url-basic-auth-storage
-				    'url-http-proxy-basic-auth-storage))
-			       (url-get-authentication url-http-target-url nil 'any nil))))
-	       (real-fname (concat (url-filename url-http-target-url)
-				   (with-no-warnings
-                                     (url-recreate-url-attributes url-http-target-url))))
-	       (host (url-host url-http-target-url))
-	       (auth (if (cdr-safe (assoc "Authorization" url-http-extra-headers))
-			 nil
-		       (url-get-authentication (or
-						(and (boundp 'proxy-info)
-						     proxy-info)
-						url-http-target-url) nil 'any nil))))
-	  (if (equal "" real-fname)
-	      (setq real-fname "/"))
-	  (setq no-cache (and no-cache (string-match "no-cache" no-cache)))
-	  (if auth
-	      (setq auth (concat "Authorization: " auth "\r\n")))
-	  (if proxy-auth
-	      (setq proxy-auth (concat "Proxy-Authorization: " proxy-auth "\r\n")))
-
-	  ;; Protection against stupid values in the referer
-	  (if (and ref-url (stringp ref-url) (or (string= ref-url "file:nil")
-						 (string= ref-url "")))
-	      (setq ref-url nil))
-
-	  ;; We do not want to expose the referer if the user is paranoid.
-	  (if (or (memq url-privacy-level '(low high paranoid))
-		  (and (listp url-privacy-level)
-		       (memq 'lastloc url-privacy-level)))
-	      (setq ref-url nil))
-
-	  ;; url-http-extra-headers contains an assoc-list of
-	  ;; header/value pairs that we need to put into the request.
-	  (setq extra-headers (mapconcat
-			       (lambda (x)
-				 (concat (car x) ": " (cdr x)))
-			       url-http-extra-headers "\r\n"))
-	  (if (not (equal extra-headers ""))
-	      (setq extra-headers (concat extra-headers "\r\n")))
-
-	  ;; This was done with a call to `format'.  Concatting parts has
-	  ;; the advantage of keeping the parts of each header together and
-	  ;; allows us to elide null lines directly, at the cost of making
-	  ;; the layout less clear.
-	  (setq request
-		;; We used to concat directly, but if one of the strings happens
-		;; to being multibyte (even if it only contains pure ASCII) then
-		;; every string gets converted with `string-MAKE-multibyte' which
-		;; turns the 127-255 codes into things like latin-1 accented chars
-		;; (it would work right if it used `string-TO-multibyte' instead).
-		;; So to avoid the problem we force every string to be unibyte.
-		(mapconcat
-		 ;; FIXME: Instead of `string-AS-unibyte' we'd want
-		 ;; `string-to-unibyte', so as to properly signal an error if one
-		 ;; of the strings contains a multibyte char.
-		 'string-as-unibyte
-		 (delq nil
-		       (list
-			;; The request
-			(or url-http-method "GET") " "
-			(if using-proxy (url-recreate-url url-http-target-url) real-fname)
-			" HTTP/" url-http-version "\r\n"
-			;; Version of MIME we speak
-			"MIME-Version: 1.0\r\n"
-			;; (maybe) Try to keep the connection open
-			"Connection: " (if (or using-proxy
-					       (not url-http-attempt-keepalives))
-					   "close" "keep-alive") "\r\n"
-			;; HTTP extensions we support
-			(if url-extensions-header
-			    (format
-			     "Extension: %s\r\n" url-extensions-header))
-			;; Who we want to talk to
-			(if (/= (url-port url-http-target-url)
-				(url-scheme-get-property
-				 (url-type url-http-target-url) 'default-port))
-			    (format
-			     "Host: %s:%d\r\n" host (url-port url-http-target-url))
-			  (format "Host: %s\r\n" host))
-			;; Who its from
-			(if url-personal-mail-address
-			    (concat
-			     "From: " url-personal-mail-address "\r\n"))
-			;; Encodings we understand
-			(if url-mime-encoding-string
-			    (concat
-			     "Accept-encoding: " url-mime-encoding-string "\r\n"))
-			(if url-mime-charset-string
-			    (concat
-			     "Accept-charset: " url-mime-charset-string "\r\n"))
-			;; Languages we understand
-			(if url-mime-language-string
-			    (concat
-			     "Accept-language: " url-mime-language-string "\r\n"))
-			;; Types we understand
-			"Accept: " (or url-mime-accept-string "*/*") "\r\n"
-			;; User agent
-			(url-http-user-agent-string)
-			;; Proxy Authorization
-			proxy-auth
-			;; Authorization
-			auth
-			;; Cookies
-			(url-cookie-generate-header-lines host real-fname
-							  (equal "https" (url-type url-http-target-url)))
-			;; If-modified-since
-			(if (and (not no-cache)
-				 (member url-http-method '("GET" nil)))
-			    (let ((tm (url-is-cached url-http-target-url)))
-			      (if tm
-				  (concat "If-modified-since: "
-					  (url-get-normalized-date tm) "\r\n"))))
-			;; Whence we came
-			(if ref-url (concat
-				     "Referer: " ref-url "\r\n"))
-			extra-headers
-			;; Length of data
-			(if url-http-data
-			    (concat
-			     "Content-length: " (number-to-string
-						 (length url-http-data))
-			     "\r\n"))
-			;; End request
-			"\r\n"
-			;; Any data
-			url-http-data "\r\n"))
-		 ""))
-	  (url-http-debug "Request is: \n%s" request)
-	  request))))
-
-;; There are some versions of emacs that don't have
-;; mm-url-encode-multipart-form-data.
-;; See https://lists.gnu.org/archive/html/emacs-diffs/2014-11/msg00167.html
-(unless (fboundp 'mm-url-encode-multipart-form-data)
-  (defun mm-url-encode-multipart-form-data (pairs &optional boundary)
-    "Return PAIRS encoded in multipart/form-data."
-    ;; RFC1867
-
-    ;; Get a good boundary
-    (unless boundary
-      (setq boundary (mml-compute-boundary '())))
-
-    (concat
-
-     ;; Start with the boundary
-     "--" boundary "\r\n"
-
-     ;; Create name value pairs
-     (mapconcat
-      'identity
-      ;; Delete any returned items that are empty
-      (delq nil
-            (mapcar (lambda (data)
-
-                      (cond
-                       ((consp (car data))
-                        (let ((fieldname (cadar data))
-                              (filename  (caadar data))
-                              (mimetype  (car (caadar data)))
-                              (content   (caar (caadar data))))
-
-                          (concat
-                           ;; Encode the name
-                           "Content-Disposition: form-data; name=\"" fieldname "\"\r\n"
-                           "Content-Type: " mimetype "\r\n"
-                           "Content-Transfer-Encoding: binary\r\n\r\n"
-                           content
-                           "\r\n")))
-
-                       ((stringp (car data))
-                        ;; For each pair
-
-                        (concat
-                         ;; Encode the name
-                         "Content-Disposition: form-data; name=\""
-                         (car data) "\"\r\n"
-                         "Content-Type: text/plain; charset=utf-8\r\n"
-                         "Content-Transfer-Encoding: binary\r\n\r\n"
-
-                         (cond ((stringp (cdr data))
-                                (cdr data))
-                               ((integerp (cdr data))
-                                (int-to-string (cdr data))))
-
-                         "\r\n"))
-                       (t (error "I don't handle this"))))
-                    pairs))
-      ;; use the boundary as a separator
-      (concat "--" boundary "\r\n"))
-
-     ;; put a boundary at the end.
-     "--" boundary "--\r\n")))
-
-;; Not defined in my Xemacs
-(unless (fboundp 'assoc-string)
-  (defun assoc-string (key list &optional case-fold)
-    (if case-fold
-        (assoc-ignore-case key list)
-      (assoc key list))))
-
-(defun url-compat-retrieve (url post-process buffer callback cbargs)
-  "Function to compatibly retrieve a URL.
-Some provision is made for different versions of Emacs version.
-POST-PROCESS is the function to call for post-processing.
-BUFFER is the buffer to store the result in.  CALLBACK will be
-called in BUFFER with CBARGS, if given."
-  (let ((url-user-agent (concat
-                         (if (not (eq url-user-agent 'default))
-                             (string-trim (if (functionp url-user-agent)
-                                              (funcall url-user-agent)
-                                            url-user-agent))
-                           "")
-                         " mediawiki.el " mediawiki-version "\r\n")))
-    (cond ((boundp 'url-be-asynchronous) ; Sniff w3 lib capability
-           (if callback
-               (setq url-be-asynchronous t)
-             (setq url-be-asynchronous nil))
-           (url-retrieve url t)
-           (when (not url-be-asynchronous)
-             (let ((result (funcall post-process buffer)))
-               result)))
-          (t (if callback
-                 (url-retrieve url post-process
-                               (list buffer callback cbargs))
-               (with-current-buffer (url-retrieve-synchronously url)
-                 (funcall post-process buffer)))))))
-
-(defvar url-http-get-post-process 'url-http-response-post-process)
-(defun url-http-get (url &optional headers buffer callback cbargs)
-  "Convenience method to use method 'GET' to retrieve URL.
-HEADERS is the optional headers to send.  BUFFER is where the
-result will be stored.  CALLBACK will be called in BUFFER with
-CBARGS, if given."
-  (let* ((url-request-extra-headers (if headers headers
-                                      (if url-request-extra-headers
-                                          url-request-extra-headers
-                                        (cons nil nil))))
-         (url-request-method "GET"))
-
-    (when (url-basic-auth url)
-      (add-to-list 'url-request-extra-headers
-                   (cons "Authorization" (url-basic-auth url))))
-    (url-compat-retrieve url url-http-get-post-process
-			 buffer callback cbargs)))
-
-(defvar url-http-post-post-process 'url-http-response-post-process)
-(defun url-http-post (url parameters &optional multipart headers buffer
-                          callback cbargs)
-  "Convenience method to use method 'POST' to retrieve URL.
-PARAMETERS are the parameters to put the the body.  If MULTIPART
-is t, then multipart/form-data will be used.  Otherwise,
-applicaton/x-www-form-urlencoded is used.  HEADERS is the
-optional headers to send.  BUFFER is where the result will be
-stored.  CALLBACK will be called in BUFFER with CBARGS, if
-given."
-
-  (let* ((url-request-extra-headers
-          (if headers headers
-            (when url-request-extra-headers url-request-extra-headers)))
-         (boundary (int-to-string (random)))
-         (cs 'utf-8)
-         (content-type
-          (if multipart
-              (concat "multipart/form-data, boundary=" boundary)
-            (format "application/x-www-form-urlencoded; charset=%s" cs)))
-         (url-request-method "POST")
-         (url-request-coding-system cs)
-         (url-request-data
-          (if multipart
-              (mm-url-encode-multipart-form-data
-               parameters boundary)
-            (mm-url-encode-www-form-urlencoded (delq nil parameters)))))
-    (mapc
-     (lambda (pair)
-       (let ((key (car pair))
-             (val (cdr pair)))
-         (if (assoc key url-request-extra-headers)
-             (setcdr (assoc key url-request-extra-headers) val)
-           (add-to-list 'url-request-extra-headers
-                        (cons key val)))))
-     (list
-      (cons "Connection" "close")
-      (cons "Content-Type" content-type)))
-
-    (url-compat-retrieve url url-http-post-post-process
-			 buffer callback cbargs)))
-
-(defun url-http-response-post-process (status &optional buffer
-                                              callback cbargs)
-  "Default post-processor for an HTTP POST request response.
-STATUS is the HTTP status code.  BUFFER, CALLBACK, and CBARGS are
-passed as well from the original POST request."
-  (declare (special url-http-end-of-headers))
-  (let ((kill-this-buffer (current-buffer)))
-    (when (and (integerp status) (not (< status 300)))
-      (mediawiki-debug kill-this-buffer "url-http-response-post-process:1")
-      (error "Oops! Invalid status: %d" status))
-
-    (when (or (not (boundp 'url-http-end-of-headers))
-              (not url-http-end-of-headers))
-      (mediawiki-debug kill-this-buffer "url-http-response-post-process:2")
-      (error "Oops! Don't see end of headers!"))
-
-    ;; FIXME: need to limit redirects
-    (if (and (listp status)
-             (eq (car status) :redirect))
-        (progn
-          (message (concat "Redirecting to " (cadr status)))
-          (url-http-get (cadr status) nil buffer callback cbargs))
-
-      (goto-char url-http-end-of-headers)
-      (forward-line)
-
-      (let ((str (decode-coding-string
-                  (buffer-substring-no-properties (point) (point-max))
-                  'utf-8)))
-        (mediawiki-debug (current-buffer) "url-http-response-post-process:3")
-        (when buffer
-          (set-buffer buffer)
-          (insert str)
-          (goto-char (point-min))
-          (set-buffer-modified-p nil))
-        (when callback
-          (apply callback (list str cbargs)))
-        (when (not (or callback buffer))
-          str)))))
+  (require 'cl))
 
 (defgroup mediawiki nil
-  "A mode for editting pages on MediaWiki sites."
+  "A mode for editing pages on MediaWiki sites."
   :tag "MediaWiki"
   :group 'applications)
 
@@ -556,26 +190,6 @@ per-session later."
   :tag "MediaWiki Debugging"
   :group 'mediawiki)
 
-(defcustom mediawiki-site-alist '(("Wikipedia"
-                                   "https://en.wikipedia.org/w/"
-                                   "username"
-                                   "password"
-                                   nil
-				   "Main Page"))
-  "A list of MediaWiki websites."
-  :tag "MediaWiki sites"
-  :group 'mediawiki
-  :type '(alist :tag "Site Name"
-                :key-type (string :tag "Site Name")
-                :value-type (list :tag "Parameters"
-                                  (string :tag "URL")
-                                  (string :tag "Username")
-                                  (string :tag "Password")
-                                  (choice :tag "Provide LDAP Domain?"
-                                          (string)
-                                          (other :tag "No" nil))
-                                  (string :tag "First Page"
-                                          :description "First page to open when `mediawiki-site' is called for this site"))))
 
 (defcustom mediawiki-pop-buffer-hook '()
   "List of functions to execute after popping to a buffer.
@@ -1011,7 +625,7 @@ Right now, this only means replacing \"_\" with \" \"."
 (defun mediawiki-make-api-url (&optional sitename)
   "Translate SITENAME (or MEDIAWIKI-SITE if not given) to a URL."
   (format (let* ((my-parsed (url-generic-parse-url
-                             (mediawiki-site-url (or sitename mediawiki-site))))
+                             (mediawiki-get-url (or sitename mediawiki-site))))
                  (my-path (url-filename my-parsed)))
 	    (when (or (string= my-path "") (not (string= (substring my-path -1) "/")))
 	      (setq my-path (concat my-path "/")))
@@ -1019,7 +633,7 @@ Right now, this only means replacing \"_\" with \" \"."
 	    (url-recreate-url my-parsed))))
 
 (defun mediawiki-raise (result type notif)
-  "Show a TYPE of information from the RESULT to the user using NOTIF"
+  "Show a TYPE of information from the RESULT to the user using NOTIF."
   (when (assq type (cddr result))
     (mapc (lambda (err)
             (let ((label (or (cdr (assq 'code err))
@@ -1034,43 +648,11 @@ Right now, this only means replacing \"_\" with \" \"."
               (cdr (assq type (cddr result)))
             (cddr (assq type (cddr result)))))))
 
-(defun mediawiki-api-call (sitename action &optional args)
-  "Wrapper for making an API call to SITENAME.
-ACTION is the API action.  ARGS is a list of arguments."
-  (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
-                                (mm-url-encode-multipart-form-data
-                                 (delq nil args) "==")))
-  (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
-                             (append args (list (cons "format" "xml")
-                                                (cons "action" action)))))
-         (result (assoc 'api
-                        (with-temp-buffer
-                          (insert raw)
-                          (xml-parse-region (point-min) (point-max))))))
-    (unless result
-      (error "There was an error parsing the result of the API call"))
-
-    (mediawiki-raise result 'warnings
-                     (lambda (label info)
-                       (message "Warning (%s) %s" label info)))
-    (mediawiki-raise result 'info
-                     (lambda (label info)
-                       (message  "(%s) %s" label info)))
-    (mediawiki-raise result 'error
-                     (lambda (label info)
-                       (error "(%s) %s" label info)))
-
-    (if (cddr result)
-        (let ((action-res (assq (intern action) (cddr result))))
-          (unless action-res
-            (error "Didn't see action name in the result list"))
-
-          action-res)
-      t)))
+; Legacy mediawiki-api-call function provided by compatibility layer
 
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
-  (format (concat (mediawiki-site-url (or sitename mediawiki-site))
+  (format (concat (mediawiki-get-url (or sitename mediawiki-site))
                   (if action
                       mediawiki-argument-pattern
                     "?title=%s"))
@@ -1078,15 +660,22 @@ ACTION is the API action.  ARGS is a list of arguments."
            (mediawiki-translate-pagename title))
 	  action))
 
+;;;###autoload
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
-   (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
-     (list (read-string "Wiki Page: " nil 'hist))))
+   (let* ((sitename (or mediawiki-site (mediawiki-ui-select-site)))
+          (title (if (featurep 'mediawiki-ui)
+                     (mediawiki-ui-completing-read-page "Open page: " sitename)
+                   (let ((hist (cdr (assoc-string sitename mediawiki-page-history))))
+                     (read-string "Wiki Page: " nil 'hist)))))
+     (list title)))
   (when (or (not (stringp name))
             (string-equal "" name))
     (error "Need to specify a name"))
-  (mediawiki-edit mediawiki-site name))
+  (when (featurep 'mediawiki-ui)
+    (mediawiki-ui-add-recent-page (or mediawiki-site mediawiki-site-default) name))
+  (mediawiki-edit (or mediawiki-site mediawiki-site-default) name))
 
 (defun mediawiki-reload ()
   "Reload the page from the server."
@@ -1122,6 +711,7 @@ ACTION is the API action.  ARGS is a list of arguments."
       (mediawiki-mode)
       (setq mediawiki-site sitename)
       (set-buffer-file-coding-system 'utf-8)
+      (require 'mediawiki-page)
       (insert (or (mediawiki-get sitename pagetitle) ""))
 
       (set-buffer-modified-p nil)
@@ -1182,7 +772,7 @@ variables it sets there will be local to that buffer."
 
           ;; figure out if this is a submit button and skip it if it is.
           (when (not (string-match "type=[\"']submit['\"]" el))
-            (add-to-list 'vars
+            (push 'vars
                          (if (string-match "value=[\"']\\([^\"']*\\)['\"]" el)
                              (cons el-name (match-string 1 el))
                            (cons el-name nil)))))
@@ -1195,8 +785,10 @@ variables it sets there will be local to that buffer."
 
 (defun mediawiki-logged-in-p (&optional sitename)
   "Return t if we have cookies for the SITENAME."
-  (let ((urlobj (url-generic-parse-url
-                 (mediawiki-site-url (or sitename mediawiki-site)))))
+  (let* ((site-name (or sitename mediawiki-site))
+         (site (mediawiki-get-site site-name))
+         (urlobj (url-generic-parse-url
+                 (mediawiki-site-config-url site))))
     (url-cookie-retrieve
      (url-host urlobj)
      (url-filename urlobj)
@@ -1225,17 +817,16 @@ title or a list of titles.  PROPS are the revision properites to
 fetch.  LIMIT is the upper bound on the number of results to give."
   (when (or (eq nil title) (string= "" title))
       (error "No title passed!"))
-  (let ((qresult (mediawiki-api-call
-         sitename "query"
-         (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
-               (cons "titles" (mediawiki-api-param title))
-               (when limit
-                 (cons "rvlimit" (mediawiki-api-param limit)))
-               (cons "rvprop" (mediawiki-api-param props))
-               (cons "rvslots" "main")))))
-    (if (eq t qresult)
-        (error "No results for revision query.")
-      (cddr qresult))))
+  (let* ((params `(("prop" . ,(mediawiki-api-param (list "info" "revisions")))
+                   ("titles" . ,(mediawiki-api-param title))
+                   ,@(when limit `(("rvlimit" . ,(mediawiki-api-param limit))))
+                   ("rvprop" . ,(mediawiki-api-param props))
+                   ("rvslots" . "main")))
+         (response (mediawiki-api-call-sync sitename "query" params)))
+    (if (mediawiki-api-response-success response)
+        (mediawiki-api-response-data response)
+      (error "No results for revision query: %s"
+             (mediawiki-api-get-error-info response)))))
 
 (defun mediawiki-page-get-title (page)
   "Given a PAGE from a pagelist structure, extract the title."
@@ -1243,7 +834,7 @@ fetch.  LIMIT is the upper bound on the number of results to give."
 
 (defun mediawiki-page-get-revision (page revision &optional bit)
   "Given a PAGE, extract a REVISION from the pagelist structure.
-If BIT is 'content, then return the content only.  Otherwise,
+If BIT is \='content, then return the content only.  Otherwise,
 return only the items that BIT matches.  If BIT isn't given,
 return the whole revision structure."
   (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
@@ -1283,7 +874,7 @@ return the whole revision structure."
    (t nil)))
 
 (defun mediawiki-pagelist-find-page (pagelist title)
-  "Given PAGELIST, extract the informaton for TITLE."
+  "Given PAGELIST, extract the information for TITLE."
   (let ((pl (cddr (assq 'pages pagelist)))
         page current)
     (while (and (not page)
@@ -1302,7 +893,7 @@ return the whole revision structure."
                     (list "ids" "timestamp" "flags" "comment" "user" "content"))))
     (mediawiki-pagelist-find-page pagelist title)))
 
-(defun mediawiki-get (sitename title)
+(defun mediawiki-get-old (sitename title)
   "Query SITENAME for the content of TITLE."
   (let ((page (mediawiki-api-query-title sitename title)))
     (mediawiki-save-metadata sitename page)
@@ -1324,18 +915,35 @@ return the whole revision structure."
   (setq mediawiki-starttimestamp
         (mediawiki-page-get-metadata page 'starttimestamp)))
 
+;;;###autoload
 (defun mediawiki-save (&optional summary)
   "Save the current buffer as a page on the current site.
 Prompt for a SUMMARY if one isn't given."
-  (interactive "sSummary: ")
+  (interactive
+   (list (if (featurep 'mediawiki-ui)
+             (read-string "Edit summary: " nil 'mediawiki-summary-history)
+           (read-string "Summary: "))))
   (when (not (eq major-mode 'mediawiki-mode))
     (error "Not a mediawiki-mode buffer"))
   (if mediawiki-page-title
-      (mediawiki-save-page
-       mediawiki-site
-       mediawiki-page-title
-       summary
-       (buffer-substring-no-properties (point-min) (point-max)))
+      (if (featurep 'mediawiki-ui)
+          ;; Use enhanced save with progress tracking
+          (mediawiki-page-save-async
+           mediawiki-site
+           `(:title ,mediawiki-page-title
+             :text ,(buffer-substring-no-properties (point-min) (point-max))
+             :summary ,summary)
+           (lambda (response)
+             (message "Page saved successfully: %s" mediawiki-page-title)
+             (set-buffer-modified-p nil))
+           (lambda (error)
+             (message "Failed to save page: %s" error)))
+        ;; Fallback to original implementation
+        (mediawiki-save-page
+         mediawiki-site
+         mediawiki-page-title
+         summary
+         (buffer-substring-no-properties (point-min) (point-max))))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-prompt-for-page ()
@@ -1367,6 +975,7 @@ Prompt for a SUMMARY if one isn't given."
   (mediawiki-get mediawiki-site name)
   (mediawiki-save-as name summary))
 
+;;;###autoload
 (defun mediawiki-save-as (&optional name summary)
   "Save a page on the current site wite NAME and SUMMARY."
   (interactive "sSave As: \nsSummary: ")
@@ -1378,65 +987,19 @@ Prompt for a SUMMARY if one isn't given."
        (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
+;;;###autoload
 (defun mediawiki-save-and-bury (&optional summary)
   "Prompt for a SUMMARY, save the page, then bury the buffer."
   (interactive "sSummary: ")
   (mediawiki-save summary)
   (bury-buffer))
 
-(defun mediawiki-site-extract (sitename index)
-  "Using 'mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
-  (let* ((site (assoc sitename mediawiki-site-alist))
-         (bit (nth index site)))
-    (cond
-     ((eq nil sitename)
-      (error "Sitename isn't set"))
-     ((eq nil site)
-      (error "Couldn't find a site named: %s" sitename))
-     ((stringp bit)
-      bit)
-     (nil))))
 
-(defun mediawiki-site-url (sitename)
-  "Get the url for a given SITENAME."
-  (mediawiki-site-extract sitename 1))
 
-(defmacro mediawiki-site-user-pass (sitename index method)
-  "Fetch the user or pass if provided, or use authinfo if not."
-  `(let* ((arg (mediawiki-site-extract ,sitename ,index))
-          (auth (funcall ,method (mediawiki-site-url ,sitename))))
-     (if (and arg (> (string-width arg) 0))
-         arg
-       auth)))
 
-(defun mediawiki-site-username (sitename)
-  "Get the username for a given SITENAME."
-  (mediawiki-site-user-pass sitename 2 'url-user-for-url))
 
-(defun mediawiki-site-password (sitename)
-  "Get the password for a given SITENAME."
-  (mediawiki-site-user-pass sitename 3 'url-password-for-url))
 
-(defun mediawiki-site-domain (sitename)
-  "Get the LDAP domain for a given SITENAME."
-  (let ((domain (mediawiki-site-extract sitename 4)))
-    (when (and domain (not (string= "" domain)))
-      domain)))
-
-(defun mediawiki-site-first-page (sitename)
-  "Get the first page for a given SITENAME."
-  (let ((page (mediawiki-site-extract sitename 5)))
-    (if (or (not page) (string= page ""))
-        "Main Page")))
-
-(defun mediawiki-site-get-token (sitename type)
-  "Get token(s) for SITENAME of TYPE type."
-  (cdr
-   (caadar
-    (cddr (mediawiki-api-call sitename "query"
-                              (list (cons "meta" "tokens")
-                                    (cons "type" type)))))))
-
+;;;###autoload
 (defun mediawiki-do-login (&optional sitename username password domain)
   "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."
@@ -1447,81 +1010,41 @@ Store cookies for future authentication."
   (setq mediawiki-site nil)             ; This wil be set once we are
                                         ; logged in
 
-  ;; Possibly save info once we have it, eh?
-  (lexical-let* ((user (or (mediawiki-site-username sitename)
-                           username
-                           (read-string "Username: ")))
-                 (pass (or (mediawiki-site-password sitename)
-                           password
-                           (read-passwd "Password: ")))
-                 (dom-loaded (mediawiki-site-domain sitename))
-                 (dom (when dom-loaded
-                        (if (string= "" dom-loaded)
-                            (read-string "LDAP Domain: ")
-                          dom-loaded)))
-                 (sitename sitename)
-                 (token (mediawiki-site-get-token sitename "login"))
-                 (args (list (cons "lgname" user)
-                             (cons "lgpassword" pass)
-                             (when token
-                               (cons "lgtoken" token))
-                             (when dom
-                               (cons "lgdomain" dom))))
-                 (result (cadr (mediawiki-api-call sitename "login" args))))
-    (when (string= (cdr (assq 'result result)) "NeedToken")
-      (setq result
-            (cadr (mediawiki-api-call sitename "login"
-                   (append
-                    args (list (cons "lgtoken"
-                                     (cdr (assq 'token result)))))))))
-    (when (string= "Success" (cdr (assoc 'result result)))
-      sitename)))
+  ;; Use the new authentication system
+  (condition-case err
+      (progn
+        (mediawiki-auth-basic-login sitename)
+        (setq mediawiki-site sitename)
+        sitename)
+    (error
+     (message "Login failed: %s" (error-message-string err))
+     nil)))
 
+;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)
   "Log out of SITENAME."
   (interactive)
   (when (not sitename)
     (setq sitename (mediawiki-prompt-for-site)))
 
-  (mediawiki-api-call sitename "logout" nil)
+  (mediawiki-auth-logout sitename)
   (setq mediawiki-site nil))
 
-(defun mediawiki-save-page (sitename title summary content &optional trynum)
-  "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT."
-  ;; FIXME error checking, conflicts!
-  (when (and trynum (< trynum 0))
-    (error "Too many tries."))
-  (let ((trynum (or trynum 3))
-        (token (mediawiki-site-get-token sitename "csrf")))
-    (condition-case err
-        (progn
-          (mediawiki-api-call sitename "edit"
-                              (list (cons "title"
-                                          (mediawiki-translate-pagename title))
-                                    (cons "text" content)
-                                    (cons "summary" summary)
-                                    (cons "token" token)
-                                    (cons "basetimestamp"
-                                          (or mediawiki-basetimestamp "now"))
-                                    (cons "starttimestamp"
-                                          (or mediawiki-starttimestamp "now"))))
-          (message "Saved %s to %s" title sitename))
-      (error (progn (message "try #%d: %s " trynum
-                             (concat "Retry because of error: " (cadr err)))
-                    (mediawiki-retry-save-page
-                     sitename title summary content trynum)))))
-  (set-buffer-modified-p nil))
+(defun mediawiki-save-page (sitename title summary content)
+  "On SITENAME, save the current page using TITLE, SUMMARY, and CONTENT.
+TRYNUM is used if this command is being retried (legacy parameter, now ignored)."
+  ;; Use the new page saving infrastructure
+  (condition-case err
+      (progn
+        (mediawiki-page-save sitename title content (list :summary (or summary "")))
+        (message "Saved %s to %s" title sitename)
+        (set-buffer-modified-p nil))
+    (error
+     (message "Failed to save %s: %s" title (error-message-string err))
+     (signal (car err) (cdr err)))))
 
-(defun mediawiki-retry-save-page (sitename title summary content trynum)
-  "Refresh the edit token and then try to save the current page using TITLE,
-SUMMARY, and CONTENT on SITENAME."
-  (let ((try (if trynum
-                 (- trynum 1)
-               3)))
-    (mediawiki-do-login sitename)
-    (setq mediawiki-edittoken (mediawiki-site-get-token sitename "csrf"))
-    (mediawiki-save-page sitename title summary content try)))
 
+;;;###autoload
 (defun mediawiki-browse (&optional buffer)
   "Open the BUFFER in a browser.
 If BUFFER is not given, the current buffer is used."
@@ -1553,7 +1076,11 @@ Interactively, prompt for a SITE."
   (when (or (eq nil mediawiki-site)
             (not (string-equal site mediawiki-site)))
     (setq mediawiki-site (mediawiki-do-login site)))
-  (mediawiki-edit site (mediawiki-site-first-page site)))
+  ;; Get the first page from site config, defaulting to "Main Page"
+  (let* ((site-config (mediawiki-get-site site))
+         (first-page (or (and site-config (mediawiki-site-config-first-page site-config))
+                         "Main Page")))
+    (mediawiki-edit site first-page)))
 
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
@@ -1564,8 +1091,8 @@ Interactively, prompt for a SITE."
   "Return the page name under point.
 Typically, this means anything enclosed in [[PAGE]]."
   (let ((pos (point))
-        (eol (point-at-eol))
-        (bol (point-at-bol)))
+        (eol (line-end-position))
+        (bol (line-beginning-position)))
     (save-excursion
       (let* ((start  (when (search-backward "[[" bol t)
                        (+ (point) 2)))
@@ -1672,10 +1199,10 @@ entries, etc."
 
 (defun mediawiki-draft-reply ()
   "Open a temporary buffer to edit a draft.
-After finishing the editing: either use 'mediawiki-draft-buffer'
-to send the data into the 'mediawiki-draft-data-file'.  Check the
+After finishing the editing: either use `mediawiki-draft-buffer'
+to send the data into the `mediawiki-draft-data-file'.  Check the
 variable mediawiki-draft-send-archive."
-  (interactive)
+   (interactive)
   (mediawiki-reply-at-point-simple)
   (beginning-of-line 1)
   (kill-line nil)
@@ -1953,7 +1480,7 @@ as does mediawiki-unfill-region."
        "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
 (defun mediawiki-hardlines ()
-  "Set 'use-hard-newlines' to NIL."
+  "Set variable `use-hard-newlines' to NIL."
   (interactive)
   (setq use-hard-newlines nil))
 
@@ -1962,7 +1489,7 @@ as does mediawiki-unfill-region."
 Lines are considered long if their length is greater
 than `fill-column'.
 
-TODO: When function reaches end of buffer, 'save-excursion' to
+TODO: When function reaches end of buffer, `save-excursion' to
 starting point.  Generalise to make `previous-long-line'."
   (interactive)
   ;; global-variable: fill-column
@@ -2136,9 +1663,7 @@ Most useful for mediawiki-drafting things from Netscape or other X Windows
 application."
   (interactive)
   (with-temp-buffer
-    (insert (if (fboundp 'gui-get-selection) ; Since 25.1
-                (gui-get-selection)
-              (x-get-clipboard)))
+    (insert (gui-get-selection))
     (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
 
 (defun mediawiki-draft-view-draft ()
@@ -2182,7 +1707,7 @@ application."
 
 (defun mediawiki-draft-send (target-buffer)
   "Copy the current page in the drafts file to TARGET-BUFFER.
-If 'mediawiki-draft-send-archive' is t, then additionally the
+If `mediawiki-draft-send-archive' is t, then additionally the
 text will be archived in the draft.wiki file."
   (interactive "bTarget buffer: ")
   (mediawiki-draft-copy-page-to-register)
@@ -2223,7 +1748,7 @@ you're done entering, and it will go ahead and file the data for
 latter retrieval, and possible indexing.
 \\{mediawiki-draft-mode-map}"
   (kill-all-local-variables)
-  (indented-text-mode)
+  (text-mode)
   (define-key mediawiki-draft-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
   (define-key mediawiki-draft-mode-map "\C-c\C-d" 'mediawiki-draft-buffer))
 
@@ -2305,14 +1830,14 @@ latter retrieval, and possible indexing.
   (define-key mediawiki-mode-map [(control return)]
     'mediawiki-open-page-at-point))
 
+;;;###autoload
 (define-derived-mode mediawiki-mode text-mode "MW"
-  "Major mode for editing articles written in the markup language
-used by Mediawiki.
+  "Major mode for editing articles written in the markup language used by Mediawiki.
 
-Wikipedia articles are usually unfilled: newline characters are not
-used for breaking paragraphs into lines. Unfortunately, Emacs does not
-handle word wrapping yet. As a workaround, mediawiki-mode turns on
-longlines-mode automatically. In case something goes wrong, the
+Wikipedia articles are usually unfilled: newline characters are not used
+for breaking paragraphs into lines.  Unfortunately, Emacs does not
+handle word wrapping yet.  As a workaround, mediawiki-mode turns on
+longlines-mode automatically.  In case something goes wrong, the
 following commands may come in handy:
 
 \\[mediawiki-fill-article] fills the buffer.
@@ -2396,8 +1921,25 @@ Some simple editing commands.
          mediawiki-imenu-generic-expression)
     (imenu-add-to-menubar "Contents"))
 
+  ;; Set up enhanced UI features if available
+  (when (featurep 'mediawiki-ui)
+    ;; Add quick menu key binding
+    (local-set-key (kbd "C-c C-q") #'mediawiki-ui-quick-menu)
+    ;; Enhanced open with completion
+    (local-set-key (kbd "C-c C-o") #'mediawiki-ui-open-with-preview)
+    ;; Enhanced save with options
+    (local-set-key (kbd "C-c C-s") #'mediawiki-ui-save-with-options))
+
   (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
   (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table))
+
+;; File associations
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.mediawiki\\'" . mediawiki-mode))
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.mw\\'" . mediawiki-mode))
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.wiki\\'" . mediawiki-mode))
 
 ;; (defvar mw-pagelist-mode-map
 ;;   (let ((map (make-sparse-keymap)))
@@ -2413,6 +1955,32 @@ Some simple editing commands.
 ;; (define-derived-mode mw-pagelist-mode special-mode "MW-PageList")
 
 (provide 'mediawiki)
+
+;; Updated implementation of mediawiki-get
+(defun mediawiki-get (sitename title)
+  "Query SITENAME for the content of TITLE.
+Uses the modern page retrieval functionality."
+  (require 'mediawiki-page)
+  (let ((page-data (mediawiki-page-get sitename title)))
+    (when page-data
+      ;; Save metadata for backward compatibility
+      (mediawiki-save-metadata-from-page-data sitename page-data)
+      ;; Return the content
+      (mediawiki-page-data-content page-data))))
+
+(defun mediawiki-save-metadata-from-page-data (sitename page-data)
+  "Set per-buffer variables for all the SITENAME data for PAGE-DATA.
+This function provides backward compatibility with the old metadata handling."
+  (when page-data
+    (setq mediawiki-site sitename)
+    (setq mediawiki-page-title (mediawiki-page-data-title page-data))
+
+    ;; Extract edit token from metadata if available
+    (let ((metadata (mediawiki-page-data-metadata page-data)))
+      (when metadata
+        (let ((edit-tokens (cdr (assq 'edittoken metadata))))
+          (when edit-tokens
+            (setq mediawiki-edittoken edit-tokens)))))))
 
 ;; Local Variables:
 ;; time-stamp-pattern: "20/^;; Last Modified: <%%>$"

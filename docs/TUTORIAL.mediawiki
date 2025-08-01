@@ -1,0 +1,425 @@
+
+= MediaWiki.el Tutorial =
+
+A step-by-step tutorial to get you started with MediaWiki.el quickly.
+
+
+== Tutorial 1: First Wiki Edit ==
+
+
+=== Goal ===
+
+Edit your first Wikipedia article using MediaWiki.el.
+
+
+=== Prerequisites ===
+
+* Emacs 28.1+
+* Internet connection
+* Wikipedia account (create one at https://en.wikipedia.org)
+
+
+=== Steps ===
+
+
+==== 1. Install MediaWiki.el ====
+
+<pre>M-x package-install RET mediawiki RET</pre>
+
+==== 2. Configure Your Wikipedia Account ====
+
+<pre>M-x customize-group RET mediawiki RET</pre>
+Set: - '''Mediawiki Site Alist''': Add new entry - '''Site Name''': <code>Wikipedia</code> - '''URL''': <code>https://en.wikipedia.org/</code> - '''Username''': <code>your-wikipedia-username</code> - '''Auth Method''': <code>basic</code>
+
+
+==== 3. Set up Secure Password Storage ====
+
+Create <code>~/.authinfo.gpg</code>:
+
+<pre>machine en.wikipedia.org login your-wikipedia-username password your-password</pre>
+
+==== 4. Connect to Wikipedia ====
+
+<pre>M-x mediawiki-site RET Wikipedia RET</pre>
+
+==== 5. Open Your User Sandbox ====
+
+<pre>M-x mediawiki-open RET User:YourUsername/sandbox RET</pre>
+
+==== 6. Make Your First Edit ====
+
+# Add some text: <code>Hello from Emacs!</code>
+# Save the page: <code>C-x C-s</code>
+# Enter edit summary: <code>Testing MediaWiki.el</code>
+
+
+==== 7. View Your Edit ====
+
+<pre>M-x mediawiki-browse</pre>
+'''Congratulations!''' You’ve made your first edit with MediaWiki.el.
+
+
+== Tutorial 2: Setting Up Multiple Sites ==
+
+
+=== Goal ===
+
+Configure MediaWiki.el for both Wikipedia and a private wiki.
+
+
+=== Steps ===
+
+
+==== 1. Configure Multiple Sites ====
+
+Add to your Emacs configuration:
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "wiki-username"
+          :auth-method 'basic))
+
+        ("CompanyWiki" .
+         (make-mediawiki-site-config
+          :name "CompanyWiki"
+          :url "https://wiki.company.com/"
+          :username "employee.name"
+          :auth-method 'basic
+          :auth-config '(:domain "COMPANY")))))</syntaxhighlight>
+
+==== 2. Set up Passwords ====
+
+Add to <code>~/.authinfo.gpg</code>:
+
+<pre>machine en.wikipedia.org login wiki-username password wiki-password
+machine wiki.company.com login employee.name password company-password</pre>
+
+==== 3. Switch Between Sites ====
+
+<pre>M-x mediawiki-site RET CompanyWiki RET
+M-x mediawiki-open RET Internal Documentation RET</pre>
+
+==== 4. Use Quick Menu for Fast Switching ====
+
+<pre>M-x mediawiki-ui-quick-menu</pre>
+Select “Switch Site” and choose your target site.
+
+
+== Tutorial 3: Advanced Editing Workflow ==
+
+
+=== Goal ===
+
+Learn advanced editing features and workflows.
+
+
+=== Steps ===
+
+
+==== 1. Enable Modern Features ====
+
+<syntaxhighlight lang="elisp">;; Add to your Emacs configuration
+(setq mediawiki-use-non-blocking t)
+(setq mediawiki-use-modern-ui t)
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")</syntaxhighlight>
+
+==== 2. Use Draft Mode for Complex Edits ====
+
+<pre>M-x mediawiki-draft</pre>
+* Write your content offline
+* Use all Emacs editing features
+* Save as draft or publish when ready
+
+
+==== 3. Enhanced Save Dialog ====
+
+<pre>M-x mediawiki-ui-save-with-options</pre>
+This provides: - Edit summary suggestions - Minor edit checkbox - Watch page option - Conflict detection
+
+
+==== 4. Handle Edit Conflicts ====
+
+When conflicts occur: 1. MediaWiki.el detects the conflict 2. Shows both versions side by side 3. Choose to merge or overwrite 4. Review changes before saving
+
+
+==== 5. Use Preview Before Saving ====
+
+<pre>M-x mediawiki-browse</pre>
+Opens current buffer content in browser for preview.
+
+
+== Tutorial 4: OAuth Authentication ==
+
+
+=== Goal ===
+
+Set up secure OAuth authentication for Wikipedia.
+
+
+=== Steps ===
+
+
+==== 1. Register OAuth Application ====
+
+# Go to https://en.wikipedia.org/wiki/Special:OAuthConsumerRegistration
+# Click “Request a token for a new consumer”
+# Fill out the form:
+#* '''Application name''': <code>My MediaWiki.el</code>
+#* '''Application description''': <code>Personal Emacs MediaWiki client</code>
+#* '''OAuth “callback” URL''': <code>urn:ietf:wg:oauth:2.0:oob</code>
+# Select required permissions
+# Submit and get your consumer key/secret
+
+
+==== 2. Configure OAuth in MediaWiki.el ====
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia-OAuth" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-OAuth"
+          :url "https://en.wikipedia.org/"
+          :username "your-username"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "your-consumer-key"
+                        :consumer-secret "your-consumer-secret")))))</syntaxhighlight>
+
+==== 3. Complete OAuth Flow ====
+
+# First login attempt opens browser
+# Authorize your application
+# Return to Emacs - you’re logged in!
+
+
+==== 4. Verify OAuth Setup ====
+
+<pre>M-x mediawiki-ui-manage-authentication</pre>
+Should show “OAuth authenticated” status.
+
+
+== Tutorial 5: Migration from Old Version ==
+
+
+=== Goal ===
+
+Migrate from MediaWiki.el &lt; 2.5 to the modern version.
+
+
+=== Steps ===
+
+
+==== 1. Backup Current Configuration ====
+
+<syntaxhighlight lang="bash">cp ~/.emacs.d/init.el ~/.emacs.d/init.el.backup</syntaxhighlight>
+
+==== 2. Install New Version ====
+
+<pre>M-x package-install RET mediawiki RET</pre>
+
+==== 3. Run Migration Wizard ====
+
+<pre>M-x mediawiki-compat-migration-wizard</pre>
+
+==== 4. Choose Migration Option ====
+
+* '''Option 1''': Automatic (recommended)
+* '''Option 2''': Interactive (for complex setups)
+* '''Option 3''': Preview (see what changes)
+
+
+==== 5. Review Migration Results ====
+
+<pre>M-x mediawiki-compat-show-migration-report</pre>
+
+==== 6. Validate Configuration ====
+
+<pre>M-x mediawiki-compat-validate-migrated-config</pre>
+
+==== 7. Test Migrated Setup ====
+
+# Try logging in: <code>M-x mediawiki-do-login</code>
+# Open a page: <code>M-x mediawiki-open RET TestPage RET</code>
+# Make a test edit and save
+
+
+== Tutorial 6: Troubleshooting Common Issues ==
+
+
+=== Issue 1: “Cannot connect to site” ===
+
+
+==== Diagnosis ====
+
+<pre>M-x mediawiki-ui-show-site-statistics</pre>
+
+==== Solutions ====
+
+# Check internet connection
+# Verify site URL in configuration
+# Test site accessibility in browser
+# Check for proxy/firewall issues
+
+
+=== Issue 2: “Authentication failed” ===
+
+
+==== Diagnosis ====
+
+<pre>M-x mediawiki-ui-manage-authentication</pre>
+
+==== Solutions ====
+
+# Verify credentials in auth-source
+# Check username/password are correct
+# For OAuth, verify consumer keys
+# Try logging in via web browser first
+
+
+=== Issue 3: “Edit conflicts” ===
+
+
+==== Handling ====
+
+# MediaWiki.el shows conflict notification
+# Use conflict resolution interface
+# Review both versions
+# Choose merge strategy
+# Save resolved version
+
+
+=== Issue 4: “Session expired” ===
+
+
+==== Solutions ====
+
+<pre>M-x mediawiki-session-status        # Check status
+M-x mediawiki-do-logout            # Logout
+M-x mediawiki-do-login             # Login again</pre>
+
+=== Debug Mode for Complex Issues ===
+
+<syntaxhighlight lang="elisp">(setq mediawiki-debug t)
+M-x mediawiki-debug-view           # View debug buffer</syntaxhighlight>
+
+== Tutorial 7: Power User Tips ==
+
+
+=== Custom Key Bindings ===
+
+<syntaxhighlight lang="elisp">;; Add to your Emacs configuration
+(global-set-key (kbd "C-c w o") 'mediawiki-open)
+(global-set-key (kbd "C-c w s") 'mediawiki-save)
+(global-set-key (kbd "C-c w m") 'mediawiki-ui-quick-menu)
+(global-set-key (kbd "C-c w a") 'mediawiki-ui-manage-authentication)</syntaxhighlight>
+
+=== Custom Functions ===
+
+<syntaxhighlight lang="elisp">(defun my-wiki-new-article (title)
+  "Create new article with standard template."
+  (interactive "sArticle title: ")
+  (mediawiki-open title)
+  (insert (format "'''%s''' is...\n\n== Overview ==\n\n== References ==\n" title))
+  (goto-char (point-min))
+  (forward-line 1))</syntaxhighlight>
+
+=== Integration with Other Packages ===
+
+<syntaxhighlight lang="elisp">;; Enable flyspell for wiki editing
+(add-hook 'mediawiki-mode-hook 'flyspell-mode)
+
+;; Enable company-mode for auto-completion
+(add-hook 'mediawiki-mode-hook 'company-mode)
+
+;; Enable yasnippet for templates
+(add-hook 'mediawiki-mode-hook 'yas-minor-mode)</syntaxhighlight>
+
+=== Performance Optimization ===
+
+<syntaxhighlight lang="elisp">;; Enable async operations
+(setq mediawiki-use-non-blocking t)
+
+;; Increase concurrent operations for fast editing
+(setq mediawiki-max-concurrent-operations 5)
+
+;; Enable session persistence
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")
+(setq mediawiki-session-auto-save t)</syntaxhighlight>
+
+== Next Steps ==
+
+After completing these tutorials:
+
+# '''Read the [[USER-GUIDE.md|User Guide]]''' for comprehensive documentation
+# '''Explore [[CONFIGURATION-EXAMPLES.md|Configuration Examples]]''' for advanced setups
+# '''Join the community''' and share your experience
+# '''Contribute''' improvements and bug fixes
+
+
+== Quick Reference ==
+
+
+=== Essential Commands ===
+
+{|
+! Command
+! Description
+|-
+| <code>M-x mediawiki-ui-quick-menu</code>
+| Access all features quickly
+|-
+| <code>M-x mediawiki-open</code>
+| Open a wiki page
+|-
+| <code>C-x C-s</code>
+| Save current page
+|-
+| <code>M-x mediawiki-browse</code>
+| Preview in browser
+|-
+| <code>M-x mediawiki-ui-save-with-options</code>
+| Enhanced save dialog
+|}
+
+
+=== Troubleshooting Commands ===
+
+{|
+! Command
+! Description
+|-
+| <code>M-x mediawiki-ui-show-site-statistics</code>
+| Site diagnostics
+|-
+| <code>M-x mediawiki-ui-manage-authentication</code>
+| Auth management
+|-
+| <code>M-x mediawiki-session-status</code>
+| Session information
+|-
+| <code>M-x mediawiki-debug-view</code>
+| Debug output
+|}
+
+
+=== Migration Commands ===
+
+{|
+! Command
+! Description
+|-
+| <code>M-x mediawiki-compat-migration-wizard</code>
+| Upgrade wizard
+|-
+| <code>M-x mediawiki-compat-show-migration-report</code>
+| Migration results
+|-
+| <code>M-x mediawiki-compat-validate-migrated-config</code>
+| Validate setup
+|}
+
+
+-----
+
+'''Happy wiki editing with MediaWiki.el! 🎉'''

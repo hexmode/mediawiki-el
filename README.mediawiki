@@ -1,35 +1,351 @@
-== mediawiki.el -- Edit mediawiki sites from emacs ==
+<span id="mediawiki.el"></span>
+= MediaWiki.el =
 
-This version of mediawiki.el represents a merging of wikipedia-mode.el (maintained by Uwe Brauer) from [http://www.emacswiki.org/emacs/wikipedia-mode.el EmacsWiki] for its font-lock code, menu, draft mode, replying and convenience functions to produce mediawiki.el 2.0.
+A comprehensive Emacs package for editing MediaWiki sites directly from Emacs.
 
+[https://www.gnu.org/licenses/gpl-3.0 [[File:https://img.shields.io/badge/License-GPLv3-blue.svg|License: GPL v3]]] [https://melpa.org/#/mediawiki [[File:https://melpa.org/packages/mediawiki-badge.svg|MELPA]]] [https://github.com/hexmode/mediawiki-el/actions [[File:https://github.com/hexmode/mediawiki-el/workflows/CI/badge.svg|Build Status]]]
+
+<span id="features"></span>
+== Features ==
+
+✨ '''Modern Architecture''': Modular design with async operations and robust error handling
+
+🔐 '''Secure Authentication''': OAuth support, auth-source integration, encrypted sessions
+
+🚀 '''Enhanced Performance''': Non-blocking operations, session persistence, retry logic
+
+🎨 '''Modern UI''': Quick menu, enhanced save dialog, site statistics, authentication management
+
+📝 '''Rich Editing''': Syntax highlighting, conflict resolution, draft mode, auto-completion
+
+🔄 '''Easy Migration''': Automatic migration from older versions with comprehensive compatibility layer
+
+🧪 '''Extensively Tested''': Comprehensive test suite ensuring reliability and stability
+
+<span id="quick-start"></span>
+== Quick Start ==
+
+<span id="installation"></span>
 === Installation ===
 
-If you use [http://melpa.org/#/mediawiki MELPA], you can install via the M-x package-list-packages interface. This is preferrable as you will have access to updates automatically.
+<span id="from-melpa-recommended"></span>
+==== From MELPA (Recommended) ====
 
-Otherwise, just make sure this file is in your load-path (usually ~/.emacs.d is included) and put (require 'mediawiki.el) in your ~/.emacs or ~/.emacs.d/init.el file.
+<syntaxhighlight lang="elisp">M-x package-install RET mediawiki RET</syntaxhighlight>
+<span id="from-git"></span>
+==== From git ====
 
-==== Configuration and use ====
+Add the following to your Emacs configuration:
 
- M-x customize-group RET mediawiki RET
- *dink* *dink*
- M-x mediawiki-site RET Wikipedia RET
+<syntaxhighlight lang="elisp">(use-package mediawiki
+  :vc (:url "https://github.com/hexmode/mediawiki-el" :rev :newest)
+  :bind (([(control c) ?m] . mediawiki-site)))</syntaxhighlight>
+<span id="manual-installation"></span>
+==== Manual Installation ====
 
-Open a wiki file:    M-x mediawiki-open
-Save a wiki buffer:  C-x C-s
-Save a wiki buffer with a different name:  C-x C-w
+<syntaxhighlight lang="bash">git clone https://github.com/hexmode/mediawiki-el.git</syntaxhighlight>
+Then add to your Emacs configuration:
 
-==== About Security ====
+<syntaxhighlight lang="elisp">(add-to-list 'load-path "/path/to/mediawiki-el")
+(require 'mediawiki)</syntaxhighlight>
+<span id="basic-setup"></span>
+=== Basic Setup ===
 
-Although there is a place to put your password when you customize this package, there is no need to store your password in plain text.
+# '''Configure your first site''':
 
-If mediawiki sees that the password is empty, then it will use [https://www.gnu.org/software/emacs/manual/html_mono/auth.html the auth-source library] to retrieve the password.  This will allow you to use encryption to store your passwords.
+<pre>M-x customize-group RET mediawiki RET</pre>
+<ol start="2" style="list-style-type: decimal;">
+<li>'''Or configure programmatically''':</li></ol>
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'basic))))</syntaxhighlight>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''Start editing''':</li></ol>
+
+<pre>M-x mediawiki-site RET Wikipedia RET
+M-x mediawiki-open RET PageName RET</pre>
+<span id="key-commands"></span>
+== Key Commands ==
+
+{|
+! Command
+! Key Binding
+! Description
+|-
+| <code>mediawiki-open</code>
+| <code>C-c w o</code>
+| Open a wiki page
+|-
+| <code>mediawiki-save</code>
+| <code>C-x C-s</code>
+| Save current page
+|-
+| <code>mediawiki-save-as</code>
+| <code>C-x C-w</code>
+| Save with different name
+|-
+| <code>mediawiki-browse</code>
+| <code>C-c w b</code>
+| Open current page in browser
+|-
+| <code>mediawiki-ui-quick-menu</code>
+| <code>C-c w m</code>
+| Show quick access menu
+|-
+| <code>mediawiki-do-login</code>
+| <code>C-c w l</code>
+| Login to current site
+|-
+| <code>mediawiki-do-logout</code>
+| <code>C-c w q</code>
+| Logout from current site
+|}
+
+<span id="whats-new-in-2.5"></span>
+== What’s New in 2.5+ ==
+
+<span id="enhanced-security"></span>
+=== 🔐 Enhanced Security ===
+
+* '''OAuth Authentication''': Secure authentication for public wikis
+* '''Auth-Source Integration''': Encrypted password storage via GPG
+* '''Session Encryption''': Secure session persistence
+
+<span id="better-performance"></span>
+=== 🚀 Better Performance ===
+
+* '''Asynchronous Operations''': Non-blocking network requests
+* '''Session Persistence''': State survives Emacs restarts
+* '''Smart Retry Logic''': Automatic recovery from transient failures
+
+<span id="modern-user-interface"></span>
+=== 🎨 Modern User Interface ===
+
+* '''Quick Menu''': Fast access to common operations
+* '''Enhanced Save Dialog''': Rich save options with conflict detection
+* '''Site Statistics''': Comprehensive site and operation monitoring
+* '''Authentication Manager''': Centralized credential management
+
+<span id="seamless-migration"></span>
+=== 🔄 Seamless Migration ===
+
+* '''Automatic Detection''': Finds legacy configuration automatically
+* '''Migration Wizard''': Interactive upgrade process
+* '''Validation System''': Ensures migrated configuration works correctly
+* '''Backward Compatibility''': Legacy functions continue to work with warnings
+
+<span id="documentation"></span>
+== Documentation ==
+
+* 📖 '''[[docs/USER-GUIDE.md|User Guide]]''' - Comprehensive usage documentation
+* ⚙️ '''[[docs/CONFIGURATION-EXAMPLES.md|Configuration Examples]]''' - Practical configuration examples
+* 🔄 '''[[docs/MIGRATION-GUIDE.md|Migration Guide]]''' - Upgrading from older versions
+* 🛠️ '''[[docs/DEVELOPER-GUIDE.md|Developer Guide]]''' - Technical documentation for developers
+
+<span id="configuration-examples"></span>
+== Configuration Examples ==
+
+<span id="basic-wikipedia-setup"></span>
+=== Basic Wikipedia Setup ===
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'basic))))</syntaxhighlight>
+<span id="oauth-authentication"></span>
+=== OAuth Authentication ===
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia-OAuth" .
+         (make-mediawiki-site-config
+          :name "Wikipedia-OAuth"
+          :url "https://en.wikipedia.org/"
+          :username "YourUsername"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "your-key"
+                        :consumer-secret "your-secret")))))</syntaxhighlight>
+<span id="multi-site-setup"></span>
+=== Multi-Site Setup ===
+
+<syntaxhighlight lang="elisp">(setq mediawiki-site-alist
+      '(("Wikipedia" .
+         (make-mediawiki-site-config
+          :name "Wikipedia"
+          :url "https://en.wikipedia.org/"
+          :username "PublicUser"
+          :auth-method 'oauth
+          :auth-config '(:consumer-key "wiki-key"
+                        :consumer-secret "wiki-secret")))
+
+        ("CompanyWiki" .
+         (make-mediawiki-site-config
+          :name "CompanyWiki"
+          :url "https://wiki.company.com/"
+          :username "employee.name"
+          :auth-method 'basic
+          :auth-config '(:domain "COMPANY")))))</syntaxhighlight>
+<span id="performance-optimization"></span>
+=== Performance Optimization ===
+
+<syntaxhighlight lang="elisp">;; Enable async operations
+(setq mediawiki-use-non-blocking t)
+
+;; Configure session persistence
+(setq mediawiki-session-save-file "~/.emacs.d/mediawiki-sessions")
+(setq mediawiki-session-auto-save t)
+
+;; Enable modern UI
+(setq mediawiki-use-modern-ui t)</syntaxhighlight>
+<span id="migration-from-older-versions"></span>
+== Migration from Older Versions ==
+
+If you’re upgrading from MediaWiki.el &lt; 2.5, use the migration wizard:
+
+<pre>M-x mediawiki-compat-migration-wizard</pre>
+The wizard will: - Automatically detect your legacy configuration - Convert it to the modern format - Validate the migrated setup - Provide a detailed migration report
+
+For manual migration or complex setups, see the [[docs/MIGRATION-GUIDE.md|Migration Guide]].
+
+<span id="authentication-setup"></span>
+== Authentication Setup ==
+
+<span id="using-auth-source-recommended"></span>
+=== Using Auth-Source (Recommended) ===
+
+# '''Create encrypted auth file''' (<code>~/.authinfo.gpg</code>):
+
+<pre>machine en.wikipedia.org login yourusername password yourpassword
+machine wiki.company.com login employee.name password companypass</pre>
+<ol start="2" style="list-style-type: decimal;">
+<li>'''Configure Emacs''':</li></ol>
+
+<syntaxhighlight lang="elisp">(setq auth-sources '("~/.authinfo.gpg"))</syntaxhighlight>
+<ol start="3" style="list-style-type: decimal;">
+<li>'''MediaWiki.el will automatically use stored credentials'''</li></ol>
+
+<span id="oauth-setup"></span>
+=== OAuth Setup ===
+
+For sites supporting OAuth (like Wikipedia):
+
+# '''Register OAuth application''' at <code>Special:OAuthConsumerRegistration</code>
+# '''Get consumer key and secret'''
+# '''Configure MediaWiki.el''':
+
+<syntaxhighlight lang="elisp">(make-mediawiki-site-config
+ :name "Wikipedia"
+ :url "https://en.wikipedia.org/"
+ :username "yourusername"
+ :auth-method 'oauth
+ :auth-config '(:consumer-key "your-consumer-key"
+               :consumer-secret "your-consumer-secret"))</syntaxhighlight>
+<span id="troubleshooting"></span>
+== Troubleshooting ==
+
+<span id="common-issues"></span>
+=== Common Issues ===
+
+'''Authentication Problems''':
+
+<pre>M-x mediawiki-ui-manage-authentication</pre>
+'''Site Connection Issues''':
+
+<pre>M-x mediawiki-ui-show-site-statistics</pre>
+'''Debug Mode''':
+
+<syntaxhighlight lang="elisp">(setq mediawiki-debug t)
+M-x mediawiki-debug-view</syntaxhighlight>
+'''Session Problems''':
+
+<pre>M-x mediawiki-session-status
+M-x mediawiki-session-clear-all-states</pre>
+For detailed troubleshooting, see the [[docs/USER-GUIDE.md#troubleshooting|User Guide]].
+
+<span id="development"></span>
+== Development ==
+
+<span id="running-tests"></span>
+=== Running Tests ===
+
+<syntaxhighlight lang="bash">make test                # All tests
+make test-minimal        # Basic tests
+make test-integration    # Integration tests
+make test-gpg           # GPG/encryption tests</syntaxhighlight>
+<span id="development-setup"></span>
+=== Development Setup ===
+
+<syntaxhighlight lang="elisp">;; Enable debug mode
+(setq mediawiki-debug t)
+
+;; Test site configuration
+(setq mediawiki-site-alist
+      '(("TestWiki" .
+         (make-mediawiki-site-config
+          :name "TestWiki"
+          :url "http://localhost:8080/mediawiki/"
+          :username "testuser"
+          :auth-method 'basic))))</syntaxhighlight>
+See the [[docs/DEVELOPER-GUIDE.md|Developer Guide]] for detailed development information.
+
+<span id="architecture"></span>
+== Architecture ==
+
+MediaWiki.el uses a modular architecture:
+
+<pre>├── mediawiki.el          # Main UI and user commands
+├── mediawiki-core.el     # Core data structures and utilities
+├── mediawiki-http.el     # HTTP communication layer
+├── mediawiki-api.el      # MediaWiki API client
+├── mediawiki-auth.el     # Authentication handling
+├── mediawiki-oauth.el    # OAuth implementation
+├── mediawiki-session.el  # Session management
+├── mediawiki-page.el     # Page operations
+├── mediawiki-errors.el   # Error handling
+├── mediawiki-ui.el       # Modern UI components
+└── mediawiki-compat.el   # Backward compatibility</pre>
+Key features: - '''Async-first design''' for better performance - '''Comprehensive error handling''' with automatic retry - '''Session persistence''' across Emacs restarts - '''Secure credential management''' via auth-source - '''Extensive test coverage''' ensuring reliability
+
+<span id="contributing"></span>
+== Contributing ==
+
+We welcome contributions! Please see our [[CONTRIBUTING.md|Contributing Guidelines]].
+
+<span id="quick-contribution-steps"></span>
+=== Quick Contribution Steps ===
+
+# Fork the repository
+# Create a feature branch: <code>git checkout -b my-feature</code>
+# Make changes with tests and documentation
+# Run tests: <code>make test</code>
+# Submit a pull request
+
+<span id="license"></span>
+== License ==
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+<span id="support"></span>
+== Support ==
+
+* 📚 '''Documentation''': See the [[docs/]] directory
+* 🐛 '''Bug Reports''': [https://github.com/hexmode/mediawiki-el/issues GitHub Issues]
+* 💬 '''Discussions''': [https://github.com/hexmode/mediawiki-el/discussions GitHub Discussions]
+* 📧 '''Email''': [maintainer email]
+
+<span id="acknowledgments"></span>
+== Acknowledgments ==
+
+MediaWiki.el builds upon the work of many contributors: - Original authors: Jerry, Chong Yidong, Uwe Brauer - Current maintainer: Mark A. Hershberger - All the contributors who have improved the package over the years
 
 
-=== TODO ===
+-----
 
-* Change customization to explicitly tell mediawiki.el to use the auth-source library.
-* Optionally use org-mode formatting for editing and translate that to mw
-* Move url-* methods to url-http
-* Use the MW API to support searching, etc.
-* Clean up and thoroughly test imported wikimedia.el code
-* Improve language support.  Currently there is a toggle for English or German.  This should probably just be replaced with the ability to use MediaWiki's i18n files in json format.
+'''Happy editing! 🎉'''
