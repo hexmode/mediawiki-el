@@ -1,6 +1,6 @@
 ;;; mediawiki-mode.el --- Major mode definition for MediaWiki editing  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Keywords: mediawiki wikipedia network wiki
@@ -135,7 +135,7 @@
   (let ((oldpoint (point)))
     (end-of-line)
     (if (re-search-forward "\\(^==+\\).*\\1" (point-max) t)
-        (beginning-of-line)
+      (beginning-of-line)
       (goto-char oldpoint)
       (message "No section headers after point."))))
 
@@ -155,10 +155,10 @@ paragraph will be indented in the same way."
     (save-excursion
       (beginning-of-line)
       (while (cond ((looking-at "^$") nil)
-                   ((looking-at "^\\(\\(?: \\|:+\\|[#*]+\\) *\\)")
-                    (setq indent-chars (match-string 1)) nil)
-                   ((eq (point) (point-min)) nil)
-                   ((progn (forward-line -1) t)))
+               ((looking-at "^\\(\\(?: \\|:+\\|[#*]+\\) *\\)")
+                 (setq indent-chars (match-string 1)) nil)
+               ((eq (point) (point-min)) nil)
+               ((progn (forward-line -1) t)))
         t))
     (newline) (if (not indent-chars) (newline)
 		(insert indent-chars))))
@@ -173,10 +173,10 @@ be indented in the same way."
     (save-excursion
       (beginning-of-line)
       (while (cond ((looking-at "^$") nil)
-                   ((looking-at "^\\(\\(?: \\|:+\\) *\\)")
-                    (setq indent-chars (match-string 1)) nil)
-                   ((eq (point) (point-min)) nil)
-                   ((progn (forward-line -1) t)))
+               ((looking-at "^\\(\\(?: \\|:+\\) *\\)")
+                 (setq indent-chars (match-string 1)) nil)
+               ((eq (point) (point-min)) nil)
+               ((progn (forward-line -1) t)))
         t))
     (newline)
     (if (not indent-chars) (newline)
@@ -188,11 +188,11 @@ text or inside a Wiki link.  See `fill-nobreak-predicate'."
   (save-excursion
     (let ((pos (point)))
       (or (eq (char-after (line-beginning-position)) ? )
-          (if (re-search-backward "\\[\\[" (line-beginning-position) t)
-              ;; Break if the link is really really long.
-              ;; You often get this with captioned images.
-              (null (or (> (- pos (point)) fill-column)
-                        (re-search-forward "\\]\\]" pos t))))))))
+        (if (re-search-backward "\\[\\[" (line-beginning-position) t)
+          ;; Break if the link is really really long.
+          ;; You often get this with captioned images.
+          (null (or (> (- pos (point)) fill-column)
+                  (re-search-forward "\\]\\]" pos t))))))))
 
 (defun mediawiki-fill-article ()
   "Fill the entire article."
@@ -219,13 +219,13 @@ functions inserts the following
   (interactive)
   (beginning-of-line 1)
   (if mediawiki-english-or-german
-      (progn
-        (search-forward "(UTC)")
-        (search-backward "[[User:"))
+    (progn
+      (search-forward "(UTC)")
+      (search-backward "[[User:"))
     (search-forward "(CET)")
     (search-backward "[[Benutzer:"))
   (if mediawiki-user-simplify-signature
-      (mark-word 2)
+    (mark-word 2)
     (mark-word 3))
   (copy-to-register ?M (region-beginning) (region-end) nil)
   (end-of-line 1)
@@ -233,7 +233,7 @@ functions inserts the following
   (insert ":'''Re: ")
   (insert-register ?M 1)
   (if mediawiki-user-simplify-signature
-      (insert "|]]''' ")
+    (insert "|]]''' ")
     (insert "]]''' ")))
 
 (defvar mediawiki-page-ring nil
@@ -249,13 +249,13 @@ functions inserts the following
 (defmacro mediawiki-goto-relative-page (direction)
   "Go to the next page in DIRECTION."
   `(let ((buff (ring-ref mediawiki-page-ring
-                        (setq mediawiki-page-ring-index
-                              (,direction mediawiki-page-ring-index 1)))))
+                 (setq mediawiki-page-ring-index
+                   (,direction mediawiki-page-ring-index 1)))))
      (while (not (buffer-live-p buff))
        (setq buff
-             (ring-ref mediawiki-page-ring
-                       (setq mediawiki-page-ring-index
-                             (,direction mediawiki-page-ring-index 1)))))
+         (ring-ref mediawiki-page-ring
+           (setq mediawiki-page-ring-index
+             (,direction mediawiki-page-ring-index 1)))))
      (mediawiki-pop-to-buffer buff)))
 
 (defun mediawiki-goto-previous-page ()
@@ -273,9 +273,9 @@ functions inserts the following
 If BACKWARD is t, will search backwards."
   (let* ((search (if backward 're-search-backward
                    're-search-forward))
-         (limitfunc (if backward 'point-min
-                      'point-max))
-         (point (funcall search "\\[\\[.+\\]\\]" (funcall limitfunc) t)))
+          (limitfunc (if backward 'point-min
+                       'point-max))
+          (point (funcall search "\\[\\[.+\\]\\]" (funcall limitfunc) t)))
     (when point
       (let ((point (match-beginning 0)))
         (goto-char (+ point 2))))))
@@ -297,9 +297,9 @@ Note however that the function \\[mediawiki-terminate-paragraph]
 does not work very well will longlines-mode."
   (interactive)
   (if mediawiki-enumerate-with-terminate-paragraph
-      (progn
-        (mediawiki-terminate-paragraph)
-        (insert "#"))
+    (progn
+      (mediawiki-terminate-paragraph)
+      (insert "#"))
     (newline nil)
     (insert ":#")))
 
@@ -310,23 +310,23 @@ Note however that the function \\[mediawiki-terminate-paragraph]
 does not work very well will longlines-mode."
   (interactive)
   (if mediawiki-enumerate-with-terminate-paragraph
-      (progn
-        (mediawiki-terminate-paragraph)
-        (insert "*"))
+    (progn
+      (mediawiki-terminate-paragraph)
+      (insert "*"))
     (newline nil)
     (insert ":*")))
 
 (defun mediawiki-insert (pre post)
   "Wrap the current region with PRE and POST."
   (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
-          (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
-      (let ((beg (region-beginning))
-            (end (region-end)))
-        (save-excursion
-          (goto-char beg)
-          (insert pre)
-          (goto-char (+ end (string-width pre)))
-          (insert post)))
+        (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+    (let ((beg (region-beginning))
+           (end (region-end)))
+      (save-excursion
+        (goto-char beg)
+        (insert pre)
+        (goto-char (+ end (string-width pre)))
+        (insert post)))
     (insert (concat pre " " post))
     (backward-char (+ 1 (string-width post)))))
 
@@ -376,8 +376,8 @@ surrounds region."
   "Interactively insert a user name."
   (interactive)
   (if mediawiki-english-or-german
-      (let ((user (read-string "Name of user: " )))
-        (insert (concat "[[User:" user "|" user "]]")))
+    (let ((user (read-string "Name of user: " )))
+      (insert (concat "[[User:" user "|" user "]]")))
     (let ((user (read-string "Name des Benutzers: " )))
       (insert (concat "[[Benutzer:" user "|" user "]]")))))
 
@@ -421,7 +421,7 @@ surrounds region."
 Checks the variable mediawiki-english-or-german."
   (interactive)
   (mediawiki-insert (if mediawiki-english-or-german
-                        "[[Image:"
+                      "[[Image:"
                       "[[Bild:") "]]"))
 
 (defun mediawiki-insert-audio ()
@@ -429,7 +429,7 @@ Checks the variable mediawiki-english-or-german."
 Checks The variable mediawiki-english-or-german."
   (interactive)
   (mediawiki-insert (if mediawiki-english-or-german
-                        "[[Media:"
+                      "[[Media:"
                       "[[Bild:") "]]"))
 
 (defun mediawiki-insert-signature ()
@@ -449,26 +449,26 @@ as does mediawiki-unfill-region."
   (interactive)
   (set (make-local-variable 'paragraph-start) "[ \t\n\f]")
   (set (make-local-variable 'paragraph-start)
-       "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
+    "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
   (set-fill-prefix)
   (beginning-of-line 1)
 
   (if use-hard-newlines
-      (progn
-        (set (make-local-variable 'use-hard-newlines) nil)
-        (set (make-local-variable 'sentence-end-double-space) t))
+    (progn
+      (set (make-local-variable 'use-hard-newlines) nil)
+      (set (make-local-variable 'sentence-end-double-space) t))
     (set (make-local-variable 'sentence-end-double-space) nil)
     (set (make-local-variable 'use-hard-newlines) t))
   (let ((fill-column (point-max)))
     (if (fboundp 'fill-paragraph-or-region)
-        (fill-paragraph-or-region nil)
+      (fill-paragraph-or-region nil)
       (fill-paragraph nil))))
 
 (defun mediawiki-start-paragraph ()
   "Start a Paragraph."
   (interactive)
   (set (make-local-variable 'paragraph-start)
-       "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
+    "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
 (defun mediawiki-hardlines ()
   "Set `use-hard-newlines' to NIL."
@@ -484,15 +484,15 @@ point.  Generalise to make `previous-long-line'."
   (interactive)
   ;; global-variable: fill-column
   (if (= (forward-line) 0)
-	  (let ((line-length
-			 (save-excursion
-			   (end-of-line)
-			   (current-column))))
-		(if (<= line-length fill-column)
-			(mediawiki-next-long-line)
-		  (message "Long line found")))
-	;; Stop, end of buffer reached.
- 	(error "Long line not found")))
+    (let ((line-length
+	    (save-excursion
+	      (end-of-line)
+	      (current-column))))
+      (if (<= line-length fill-column)
+	(mediawiki-next-long-line)
+	(message "Long line found")))
+    ;; Stop, end of buffer reached.
+    (error "Long line not found")))
 
 (defun mediawiki-unfill-paragraph-simple ()
   "A very simple function for unfilling a paragraph."
@@ -587,7 +587,7 @@ line.  It does not promote the whole tree!"
   (when (not mediawiki-site)
     (setq mediawiki-site (mediawiki-prompt-for-site)))
   (if mediawiki-page-title
-     (mediawiki-open mediawiki-page-title)
+    (mediawiki-open mediawiki-page-title)
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 ;;; Major Mode Definition
@@ -658,13 +658,13 @@ a context-aware manner.
   (set (make-local-variable 'comment-start) "<!-- ")
   (set (make-local-variable 'comment-end) " -->")
   (set (make-local-variable 'paragraph-start)
-       "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
+    "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$")
   (set (make-local-variable 'sentence-end-double-space) nil)
   (set (make-local-variable 'font-lock-multiline) t)
   (set (make-local-variable 'font-lock-defaults)
-       '(mediawiki-font-lock-keywords t nil nil nil))
+    '(mediawiki-font-lock-keywords t nil nil nil))
   (set (make-local-variable 'fill-nobreak-predicate)
-       'mediawiki-link-fill-nobreak-p)
+    'mediawiki-link-fill-nobreak-p)
   (set (make-local-variable 'auto-fill-inhibit-regexp) "^[ *#:|;]")
 
   ;; Support for outline-minor-mode. No key conflicts, so we'll use
@@ -672,13 +672,13 @@ a context-aware manner.
   (set (make-local-variable 'outline-regexp) "==+")
   (when (boundp 'outline-minor-mode-prefix)
     (set (make-local-variable 'outline-minor-mode-prefix) "\C-c\C-o"))
-; (set (make-local-variable 'outline-regexp) "=+")
-; (set (make-local-variable 'outline-regexp) ":")
+                                        ; (set (make-local-variable 'outline-regexp) "=+")
+                                        ; (set (make-local-variable 'outline-regexp) ":")
 
   ;; Turn on the Imenu automatically.
   (when menu-bar-mode
     (set (make-local-variable 'imenu-generic-expression)
-         mediawiki-imenu-generic-expression)
+      mediawiki-imenu-generic-expression)
     (imenu-add-to-menubar "Contents"))
 
   (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)

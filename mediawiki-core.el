@@ -1,10 +1,8 @@
 ;;; mediawiki-core.el --- Core variables and constants for mediawiki.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Package-Requires: ((emacs "28.1"))
-;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -33,7 +31,7 @@
 
 ;;; Version and Core Constants
 
-(defconst mediawiki-version "2.4.3"
+(defconst mediawiki-version "2.4.4"
   "Current version of mediawiki.el.")
 
 ;;; Core Customization Groups
@@ -104,12 +102,12 @@ Right now, this only means replacing \"_\" with \" \"."
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
   (format (concat (mediawiki-site-url (or sitename mediawiki-site))
-                  (if action
-                      mediawiki-argument-pattern
-                    "?title=%s"))
-	  (mm-url-form-encode-xwfu
-           (mediawiki-translate-pagename title))
-	  action))
+            (if action
+              mediawiki-argument-pattern
+              "?title=%s"))
+    (mm-url-form-encode-xwfu
+      (mediawiki-translate-pagename title))
+    action))
 
 (provide 'mediawiki-core)
 

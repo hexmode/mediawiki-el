@@ -1,6 +1,6 @@
 ;;; mediawiki-draft.el --- Draft functionality for MediaWiki mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2024 MediaWiki.el contributors
+;; Copyright (C) 2008-2025 MediaWiki.el contributors
 
 ;; This file is part of mediawiki.el.
 
@@ -106,25 +106,25 @@ recorded somewhere by that function."
 (defsubst mediawiki-draft-time-to-seconds (time)
   "Convert TIME to a floating point number."
   (+ (* (car time) 65536.0)
-     (cadr time)
-     (/ (or (car (cdr (cdr time))) 0) 1000000.0)))
+    (cadr time)
+    (/ (or (car (cdr (cdr time))) 0) 1000000.0)))
 
 (defsubst mediawiki-draft-mail-date (&optional rfc822-p)
   "Return a simple date.
 If RFC822-P is passed, use RFC822 format."
   (if rfc822-p
-      (format-time-string "%a, %e %b %Y %T %z" (current-time))
+    (format-time-string "%a, %e %b %Y %T %z" (current-time))
     (format-time-string "%c" (current-time))))
 
 (defun mediawiki-draft-buffer-desc ()
   "Using the first line of the current buffer, create a short description."
   (buffer-substring (point-min)
-		    (save-excursion
-		      (goto-char (point-min))
-		      (end-of-line)
-		      (if (> (- (point) (point-min)) 60)
-			  (goto-char (+ (point-min) 60)))
-		      (point))))
+    (save-excursion
+      (goto-char (point-min))
+      (end-of-line)
+      (if (> (- (point) (point-min)) 60)
+	(goto-char (+ (point-min) 60)))
+      (point))))
 
 ;;; Draft File Management
 
@@ -133,19 +133,19 @@ If RFC822-P is passed, use RFC822 format."
   (let ((text (buffer-string)))
     (with-temp-buffer
       (insert (concat "\n\n"  mediawiki-draft-leader-text "Draft: "
-                      (read-string "Enter Subject: ") " "
-                      (current-time-string) " "
-                      mediawiki-draft-leader-text
-                      "\n\n\f\n\n" text "\n\f\n"))
+                (read-string "Enter Subject: ") " "
+                (current-time-string) " "
+                mediawiki-draft-leader-text
+                "\n\n\f\n\n" text "\n\f\n"))
       (if (not (bolp))
-          (insert "\n\n"))
+        (insert "\n\n"))
       (if (find-buffer-visiting mediawiki-draft-data-file)
-          (let ((mediawiki-draft-text (buffer-string)))
-            (set-buffer (get-file-buffer mediawiki-draft-data-file))
-            (save-excursion
-              (goto-char (point-max))
-              (insert (concat "\n" mediawiki-draft-text "\n"))
-              (save-buffer)))
+        (let ((mediawiki-draft-text (buffer-string)))
+          (set-buffer (get-file-buffer mediawiki-draft-data-file))
+          (save-excursion
+            (goto-char (point-max))
+            (insert (concat "\n" mediawiki-draft-text "\n"))
+            (save-buffer)))
         (append-to-file (point-min) (point-max) mediawiki-draft-data-file)))))
 
 (defun mediawiki-draft-view-draft ()
@@ -185,13 +185,13 @@ buffer, that region, plus any context information specific to that
 region, will be mediawiki-drafted."
   (interactive)
   (let ((b (or begin (min (point) (or (mark) (point-min)))))
-	(e (or end (max (point) (or (mark) (point-max))))))
+	 (e (or end (max (point) (or (mark) (point-max))))))
     (save-restriction
       (narrow-to-region b e)
       (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)
-    (when (equal mediawiki-draft-buffer (buffer-name))
-      (mediawiki-debug (current-buffer) "mediawiki-draft-region")
-      (jump-to-register mediawiki-draft-register)))))
+      (when (equal mediawiki-draft-buffer (buffer-name))
+        (mediawiki-debug (current-buffer) "mediawiki-draft-region")
+        (jump-to-register mediawiki-draft-register)))))
 
 (defun mediawiki-draft-buffer ()
   "Mediawiki-draft-buffer sends the contents of the current (temporary)
@@ -207,7 +207,7 @@ application."
   (interactive)
   (with-temp-buffer
     (insert (if (fboundp 'gui-get-selection) ; Since 25.1
-                (gui-get-selection)
+              (gui-get-selection)
               (x-get-clipboard)))
     (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
 
@@ -243,21 +243,21 @@ text will be archived in the draft.wiki file."
     (let ((text (buffer-string)))
       (with-temp-buffer
 	(insert (concat "\n\n" mediawiki-draft-leader-text)
-		(insert-register mediawiki-draft-reply-register 1)
-		(insert (concat " " (current-time-string) " "
-				mediawiki-draft-leader-text  "\n\n\f\n\n"
-				text "\n\f\n"))
-		(if (not (bolp))
-		    (insert "\n\n"))
-		(if (find-buffer-visiting mediawiki-draft-data-file)
-		    (let ((mediawiki-draft-text (buffer-string)))
-		      (set-buffer (get-file-buffer mediawiki-draft-data-file))
-		      (save-excursion
-			(goto-char (point-max))
-			(insert (concat "\n" mediawiki-draft-text "\n"))
-			(save-buffer)))
-		  (append-to-file (point-min) (point-max)
-				  mediawiki-draft-data-file)))))
+	  (insert-register mediawiki-draft-reply-register 1)
+	  (insert (concat " " (current-time-string) " "
+		    mediawiki-draft-leader-text  "\n\n\f\n\n"
+		    text "\n\f\n"))
+	  (if (not (bolp))
+	    (insert "\n\n"))
+	  (if (find-buffer-visiting mediawiki-draft-data-file)
+	    (let ((mediawiki-draft-text (buffer-string)))
+	      (set-buffer (get-file-buffer mediawiki-draft-data-file))
+	      (save-excursion
+		(goto-char (point-max))
+		(insert (concat "\n" mediawiki-draft-text "\n"))
+		(save-buffer)))
+	    (append-to-file (point-min) (point-max)
+	      mediawiki-draft-data-file)))))
     (when (equal mediawiki-draft-buffer (buffer-name))
       (mediawiki-debug (current-buffer) "mediawiki-draft-send"))
     (switch-to-buffer target-buffer)))
@@ -274,24 +274,24 @@ variable `mediawiki-draft-send-archive'."
   (beginning-of-line 1)
   (kill-line nil)
   (save-excursion
-	(window-configuration-to-register mediawiki-draft-register)
-	(let ((buf (get-buffer-create mediawiki-draft-buffer)))
-	  (switch-to-buffer-other-window buf)
-	  (mediawiki-mode)
-	  (if mediawiki-reply-with-quote
-              (progn
-		(insert "{{Quotation|")
-		(yank)
-		(insert "'''Re: ")
-		(insert-register mediawiki-draft-reply-register 1)
-		(insert "''' |~~~~}}")
-		(backward-char 7))
-            (when mediawiki-reply-with-hline
-              (insert "----")
-              (newline 1))
-            (yank)
-            (end-of-line 1))
-	  (message " C-c C-k sends to draft, C-c C-c sends to org buffer."))))
+    (window-configuration-to-register mediawiki-draft-register)
+    (let ((buf (get-buffer-create mediawiki-draft-buffer)))
+      (switch-to-buffer-other-window buf)
+      (mediawiki-mode)
+      (if mediawiki-reply-with-quote
+        (progn
+	  (insert "{{Quotation|")
+	  (yank)
+	  (insert "'''Re: ")
+	  (insert-register mediawiki-draft-reply-register 1)
+	  (insert "''' |~~~~}}")
+	  (backward-char 7))
+        (when mediawiki-reply-with-hline
+          (insert "----")
+          (newline 1))
+        (yank)
+        (end-of-line 1))
+      (message " C-c C-k sends to draft, C-c C-c sends to org buffer."))))
 
 ;;; Draft Mode Definition
 

@@ -1,11 +1,8 @@
 ;;; mediawiki-site.el --- Site configuration and management for mediawiki.el -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2024 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.3.1
-;; Created: Sep 11 2008
-;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 
 ;; This file is part of mediawiki.el.
@@ -26,7 +23,7 @@
 ;;; Commentary:
 
 ;; This module provides site configuration and management functionality
-;; for mediawiki.el. It handles site definitions, URL construction,
+;; for mediawiki.el.  It handles site definitions, URL construction,
 ;; credential management, and site selection.
 
 ;;; Code:
@@ -44,26 +41,26 @@ Can be used to to open the whole buffer."
   :group 'mediawiki)
 
 (defcustom mediawiki-site-alist '(("Wikipedia"
-                                   "https://en.wikipedia.org/w/"
-                                   "username"
-                                   "password"
-                                   ""
-                                   :description "English Wikipedia"
-                                   :first-page "Main Page")
-                                  ("Wiktionary"
-                                   "https://en.wiktionary.org/w/"
-                                   "username"
-                                   "password"
-                                   ""
-                                   :description "English Wiktionary"
-                                   :first-page "Main Page")
-                                  ("Wikimedia Commons"
-                                   "https://commons.wikimedia.org/w/"
-                                   "username"
-                                   "password"
-                                   ""
-                                   :description "Wikimedia Commons"
-                                   :first-page "Main Page"))
+                                    "https://en.wikipedia.org/w/"
+                                    "username"
+                                    "password"
+                                    ""
+                                    :description "English Wikipedia"
+                                    :first-page "Main Page")
+                                   ("Wiktionary"
+                                     "https://en.wiktionary.org/w/"
+                                     "username"
+                                     "password"
+                                     ""
+                                     :description "English Wiktionary"
+                                     :first-page "Main Page")
+                                   ("Wikimedia Commons"
+                                     "https://commons.wikimedia.org/w/"
+                                     "username"
+                                     "password"
+                                     ""
+                                     :description "Wikimedia Commons"
+                                     :first-page "Main Page"))
   "List of MediaWiki sites and their configurations.
 Each entry is a list of the form:
   (SITENAME URL USERNAME PASSWORD DOMAIN &rest PROPERTIES)
@@ -79,35 +76,35 @@ Where:
     :first-page - Default page to open when selecting this site"
   :group 'mediawiki
   :type '(repeat (list (string :tag "Site name")
-                       (string :tag "URL")
-                       (string :tag "Username")
-                       (string :tag "Password")
-                       (string :tag "Domain")
-                       (plist :tag "Properties"
-                              :options ((:description string
-                                                      :description "Description of this site")
-                                        (:first-page string
-                                                     :description "First page to open when `mediawiki-site' is called for this site"))))))
+                   (string :tag "URL")
+                   (string :tag "Username")
+                   (string :tag "Password")
+                   (string :tag "Domain")
+                   (plist :tag "Properties"
+                     :options ((:description string
+                                 :description "Description of this site")
+                                (:first-page string
+                                  :description "First page to open when `mediawiki-site' is called for this site"))))))
 
 ;;; Site Extraction Functions
 
 (defun mediawiki-site-extract (sitename index)
   "Using `mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
   (let* ((site (assoc sitename mediawiki-site-alist))
-         (bit (nth index site)))
+          (bit (nth index site)))
     (cond
-     ((stringp bit)
-      bit)
-     ((and (listp bit) (> (length bit) 0))
-      (car bit))
-     (nil))))
+      ((stringp bit)
+        bit)
+      ((and (listp bit) (> (length bit) 0))
+        (car bit))
+      (nil))))
 
 (defun mediawiki-browse (&optional buffer)
   "Open the BUFFER in a browser.
 If BUFFER is not given, the current buffer is used."
   (interactive)
   (if mediawiki-page-title
-      (browse-url (mediawiki-make-url mediawiki-page-title "view"))
+    (browse-url (mediawiki-make-url mediawiki-page-title "view"))
     (with-current-buffer buffer
       (browse-url (mediawiki-make-url mediawiki-page-title "view")))))
 
@@ -122,7 +119,7 @@ Interactively, prompt for a SITE."
   (when (not site)
     (setq site (mediawiki-prompt-for-site)))
   (when (or (eq nil mediawiki-site)
-            (not (string-equal site mediawiki-site)))
+          (not (string-equal site mediawiki-site)))
     (setq mediawiki-site (mediawiki-do-login site)))
   (mediawiki-edit site (mediawiki-site-first-page site)))
 
@@ -133,9 +130,9 @@ Interactively, prompt for a SITE."
 (defmacro mediawiki-site-user-pass (sitename index method)
   "Fetch the user or pass if provided, or use authinfo if not."
   `(let* ((arg (mediawiki-site-extract ,sitename ,index))
-          (auth (funcall ,method (mediawiki-site-url ,sitename))))
+           (auth (funcall ,method (mediawiki-site-url ,sitename))))
      (if (and arg (> (string-width arg) 0))
-         arg
+       arg
        auth)))
 
 (defun mediawiki-site-username (sitename)
@@ -156,7 +153,7 @@ Interactively, prompt for a SITE."
   "Get the first page for a given SITENAME."
   (let ((page (mediawiki-site-extract sitename 5)))
     (if (or (not page) (string= page ""))
-        "Main Page"
+      "Main Page"
       page)))
 
 ;;; Site Selection Functions
@@ -164,12 +161,12 @@ Interactively, prompt for a SITE."
 (defun mediawiki-prompt-for-site ()
   "Prompt the user for a site."
   (let* ((prompt (concat "Sitename"
-                         (when mediawiki-site
-                           (format " (default %s)" mediawiki-site))
-                         ": "))
-         (answer (completing-read prompt mediawiki-site-alist nil t)))
+                   (when mediawiki-site
+                     (format " (default %s)" mediawiki-site))
+                   ": "))
+          (answer (completing-read prompt mediawiki-site-alist nil t)))
     (if (string= "" answer)
-        mediawiki-site
+      mediawiki-site
       answer)))
 
 ;;; Site Management Functions

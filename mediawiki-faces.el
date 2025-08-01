@@ -1,11 +1,8 @@
 ;;; mediawiki-faces.el --- Font-lock face definitions for MediaWiki mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.2.9
-;; Created: Sep 30 2008
-;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 
 ;; This file is NOT part of GNU Emacs.
@@ -62,125 +59,125 @@
 ;;; Face Definitions
 
 (defface font-mediawiki-bold-face
-    `((((class grayscale) (background light))
-       :foreground "DimGray"
-       :weight bold)
-      (((class grayscale) (background dark))
+  `((((class grayscale) (background light))
+      :foreground "DimGray"
+      :weight bold)
+     (((class grayscale) (background dark))
        :foreground "LightGray"
        :weight bold)
-      (((class color) (background light))
+     (((class color) (background light))
        :foreground "DarkOliveGreen"
        :weight bold)
-      (((class color) (background dark))
+     (((class color) (background dark))
        :foreground "OliveDrab"
        :weight bold)
-      (t
+     (t
        :weight bold))
   "Face used to highlight text to be typeset in bold."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-italic-face
   `((((class grayscale) (background light))
-     :foreground "DimGray"
-     :slant italic)
-    (((class grayscale) (background dark))
-     :foreground "LightGray"
-     :slant italic)
-    (((class color) (background light))
-     :foreground "DarkOliveGreen"
-     :slant italic)
-    (((class color) (background dark))
-     :foreground "OliveDrab"
-     :slant italic)
-    (t
-     :slant italic))
+      :foreground "DimGray"
+      :slant italic)
+     (((class grayscale) (background dark))
+       :foreground "LightGray"
+       :slant italic)
+     (((class color) (background light))
+       :foreground "DarkOliveGreen"
+       :slant italic)
+     (((class color) (background dark))
+       :foreground "OliveDrab"
+       :slant italic)
+     (t
+       :slant italic))
   "Face used to highlight text to be typeset in italic."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-math-face
   `((((class grayscale) (background light))
-     :foreground "DimGray"
-     :underline t)
-    (((class grayscale) (background dark))
-     :foreground "LightGray"
-     :underline t)
-    (((class color) (background light))
-     :foreground "SaddleBrown"
-     :underline t)
-    (((class color) (background dark))
-     :foreground "burlywood"
-     :underline t)
-    (t
-     :underline t))
+      :foreground "DimGray"
+      :underline t)
+     (((class grayscale) (background dark))
+       :foreground "LightGray"
+       :underline t)
+     (((class color) (background light))
+       :foreground "SaddleBrown"
+       :underline t)
+     (((class color) (background dark))
+       :foreground "burlywood"
+       :underline t)
+     (t
+       :underline t))
   "Face used to highlight math."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-sedate-face
   '((((class grayscale) (background light))
-     :foreground "DimGray")
-    (((class grayscale) (background dark))
-     :foreground "LightGray")
-    (((class color) (background light))
-     :foreground "DimGray")
-    (((class color) (background dark))
-     :foreground "LightGray"))
+      :foreground "DimGray")
+     (((class grayscale) (background dark))
+       :foreground "LightGray")
+     (((class color) (background light))
+       :foreground "DimGray")
+     (((class color) (background dark))
+       :foreground "LightGray"))
   "Face used to highlight sedate stuff."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-string-face
   `((((type tty) (class color))
-     :foreground "green"
-     :slant italic)
-    (((class grayscale) (background light))
-     :foreground "DimGray"
-     :slant italic)
-    (((class grayscale) (background dark))
-     :foreground "LightGray"
-     :slant italic)
-    (((class color) (background light))
-     :foreground "RosyBrown"
-     :slant italic)
-    (((class color) (background dark))
-     :foreground "LightSalmon"
-     :slant italic)
-    (t
-     :slant italic))
+      :foreground "green"
+      :slant italic)
+     (((class grayscale) (background light))
+       :foreground "DimGray"
+       :slant italic)
+     (((class grayscale) (background dark))
+       :foreground "LightGray"
+       :slant italic)
+     (((class color) (background light))
+       :foreground "RosyBrown"
+       :slant italic)
+     (((class color) (background dark))
+       :foreground "LightSalmon"
+       :slant italic)
+     (t
+       :slant italic))
   "Face used to highlight strings."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-warning-face
   `((((class grayscale)(background light))
-     :foreground "DimGray"
-     :weight bold)
-    (((class grayscale)(background dark))
-     :foreground "LightGray"
-     :weight bold)
-    (((class color)(background light))
-     :foreground "red"
-     :weight bold)
-    (((class color)(background dark))
-     :foreground "red"
-     :weight bold)
-    (t
-     :weight bold))
+      :foreground "DimGray"
+      :weight bold)
+     (((class grayscale)(background dark))
+       :foreground "LightGray"
+       :weight bold)
+     (((class color)(background light))
+       :foreground "red"
+       :weight bold)
+     (((class color)(background dark))
+       :foreground "red"
+       :weight bold)
+     (t
+       :weight bold))
   "Face for important keywords."
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-verbatim-face
   `((((class grayscale) (background light))
-     :foreground "DimGray"
-     :inherit fixed-pitch)
-    (((class grayscale) (background dark))
-     :foreground "LightGray"
-     :inherit fixed-pitch)
-    (((class color) (background light))
-     :foreground "SaddleBrown"
-     :inherit fixed-pitch)
-    (((class color) (background dark))
-     :foreground "burlywood"
-     :inherit fixed-pitch)
-    (t
-     :inherit fixed-pitch))
+      :foreground "DimGray"
+      :inherit fixed-pitch)
+     (((class grayscale) (background dark))
+       :foreground "LightGray"
+       :inherit fixed-pitch)
+     (((class color) (background light))
+       :foreground "SaddleBrown"
+       :inherit fixed-pitch)
+     (((class color) (background dark))
+       :foreground "burlywood"
+       :inherit fixed-pitch)
+     (t
+       :inherit fixed-pitch))
   "Face used to highlight TeX verbatim environments."
   :group 'font-mediawiki-highlighting-faces)
 

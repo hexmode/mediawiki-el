@@ -1,10 +1,8 @@
 ;;; mediawiki-utils.el --- General utility functions for mediawiki.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Package-Requires: ((emacs "28.1"))
-;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -58,11 +56,11 @@ examined.  If debugging is off, just kill the buffer.  This
 allows you to see what is being sent to and from the server."
   (when mediawiki-debug
     (mediawiki-debug-line
-     (concat
-      "\n\n=-=-=-=-=-=-=-=\n"
-      function "\n\n"
-      (with-current-buffer buffer
-        (buffer-string)))))
+      (concat
+        "\n\n=-=-=-=-=-=-=-=\n"
+        function "\n\n"
+        (with-current-buffer buffer
+          (buffer-string)))))
   (kill-buffer buffer))
 
 ;;; General Utility Functions

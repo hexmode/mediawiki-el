@@ -1,11 +1,8 @@
 ;;; mediawiki-page.el --- Page operations for mediawiki.el -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2024 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Version: 2.3.1
-;; Created: Sep 11 2008
-;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 
 ;; This file is part of mediawiki.el.
@@ -66,7 +63,7 @@
 
     (mediawiki-add-page-history sitename title)
     (with-current-buffer (get-buffer-create
-                          (concat sitename ": " pagetitle))
+                           (concat sitename ": " pagetitle))
       (unless (mediawiki-logged-in-p sitename)
         (mediawiki-do-login sitename))
       (ring-insert mediawiki-page-ring (current-buffer))
@@ -87,10 +84,10 @@
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
-   (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
-     (list (read-string "Wiki Page: " nil hist))))
+    (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
+      (list (read-string "Wiki Page: " nil hist))))
   (when (or (not (stringp name))
-            (string-equal "" name))
+          (string-equal "" name))
     (error "Need to specify a name"))
   (mediawiki-edit mediawiki-site name))
 
@@ -100,13 +97,13 @@
   "Set per-buffer variables for all the SITENAME data for PAGE."
   (setq mediawiki-site sitename)
   (setq mediawiki-page-title
-        (mediawiki-page-get-metadata page 'title))
+    (mediawiki-page-get-metadata page 'title))
   (setq mediawiki-edittoken
-        (mediawiki-page-get-metadata page 'edittoken))
+    (mediawiki-page-get-metadata page 'edittoken))
   (setq mediawiki-basetimestamp
-        (mediawiki-page-get-revision page 0 'timestamp))
+    (mediawiki-page-get-revision page 0 'timestamp))
   (setq mediawiki-starttimestamp
-        (mediawiki-page-get-metadata page 'starttimestamp)))
+    (mediawiki-page-get-metadata page 'starttimestamp)))
 
 ;;; Page Saving Functions
 
@@ -117,11 +114,11 @@ Prompt for a SUMMARY if one isn't given."
   (when (not (eq major-mode 'mediawiki-mode))
     (error "Not a mediawiki-mode buffer"))
   (if mediawiki-page-title
-      (mediawiki-save-page
-       mediawiki-site
-       mediawiki-page-title
-       summary
-       (buffer-substring-no-properties (point-min) (point-max)))
+    (mediawiki-save-page
+      mediawiki-site
+      mediawiki-page-title
+      summary
+      (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-save-on (&optional sitename name summary)
@@ -142,11 +139,11 @@ Prompt for a SUMMARY if one isn't given."
   "Save a page on the current site wite NAME and SUMMARY."
   (interactive "sSave As: \nsSummary: ")
   (if name
-      (mediawiki-save-page
-       mediawiki-site
-       name
-       summary
-       (buffer-substring-no-properties (point-min) (point-max)))
+    (mediawiki-save-page
+      mediawiki-site
+      name
+      summary
+      (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 (defun mediawiki-save-and-bury (&optional summary)
@@ -161,31 +158,31 @@ Prompt for a SUMMARY if one isn't given."
   (when (and trynum (< trynum 0))
     (error "Too many tries."))
   (let ((trynum (or trynum 3))
-        (token (mediawiki-site-get-token sitename "csrf")))
+         (token (mediawiki-site-get-token sitename "csrf")))
     (condition-case err
-        (progn
-          (mediawiki-api-call sitename "edit"
-                              (list (cons "title"
-                                          (mediawiki-translate-pagename title))
-                                    (cons "text" content)
-                                    (cons "summary" summary)
-                                    (cons "token" token)
-                                    (cons "basetimestamp"
-                                          (or mediawiki-basetimestamp "now"))
-                                    (cons "starttimestamp"
-                                          (or mediawiki-starttimestamp "now"))))
-          (message "Saved %s to %s" title sitename))
+      (progn
+        (mediawiki-api-call sitename "edit"
+          (list (cons "title"
+                  (mediawiki-translate-pagename title))
+            (cons "text" content)
+            (cons "summary" summary)
+            (cons "token" token)
+            (cons "basetimestamp"
+              (or mediawiki-basetimestamp "now"))
+            (cons "starttimestamp"
+              (or mediawiki-starttimestamp "now"))))
+        (message "Saved %s to %s" title sitename))
       (error (progn (message "try #%d: %s " trynum
-                             (concat "Retry because of error: " (cadr err)))
-                    (mediawiki-retry-save-page
-                     sitename title summary content trynum)))))
+                      (concat "Retry because of error: " (cadr err)))
+               (mediawiki-retry-save-page
+                 sitename title summary content trynum)))))
   (set-buffer-modified-p nil))
 
 (defun mediawiki-retry-save-page (sitename title summary content trynum)
   "Refresh the edit token and then try to save the current page using TITLE,
 SUMMARY, and CONTENT on SITENAME."
   (let ((try (if trynum
-                 (- trynum 1)
+               (- trynum 1)
                3)))
     (mediawiki-do-login sitename)
     (setq mediawiki-edittoken (mediawiki-site-get-token sitename "csrf"))
@@ -196,12 +193,12 @@ SUMMARY, and CONTENT on SITENAME."
 (defun mediawiki-prompt-for-page ()
   "Prompt for a page name and return the answer."
   (let* ((prompt (concat "Page"
-                         (when mediawiki-page-title
-                           (format " (default %s)" mediawiki-page-title))
-                         ": "))
-         (answer (completing-read prompt '())))
+                   (when mediawiki-page-title
+                     (format " (default %s)" mediawiki-page-title))
+                   ": "))
+          (answer (completing-read prompt '())))
     (if (string= "" answer)
-        mediawiki-page-title
+      mediawiki-page-title
       answer)))
 
 (defun mediawiki-prompt-for-summary ()
@@ -218,27 +215,27 @@ SUMMARY, and CONTENT on SITENAME."
   "Return the page name under point.
 Typically, this means anything enclosed in [[PAGE]]."
   (let ((pos (point))
-        (eol (pos-eol))
-        (bol (pos-bol)))
+         (eol (pos-eol))
+         (bol (pos-bol)))
     (save-excursion
       (let* ((start  (when (search-backward "[[" bol t)
                        (+ (point) 2)))
-             (end    (when (search-forward "]]" eol t)
-                       (- (point) 2)))
-             (middle (progn
-                       (goto-char start)
-                       (when (search-forward  "|" end t)
-                         (1- (point)))))
-             (pagename (when (and
-                              (not (eq nil start))
-                              (not (eq nil end))
-                              (<= pos end)
-                              (>= pos start))
-                         (buffer-substring-no-properties
-                          start (or middle end)))))
+              (end    (when (search-forward "]]" eol t)
+                        (- (point) 2)))
+              (middle (progn
+                        (goto-char start)
+                        (when (search-forward  "|" end t)
+                          (1- (point)))))
+              (pagename (when (and
+                                (not (eq nil start))
+                                (not (eq nil end))
+                                (<= pos end)
+                                (>= pos start))
+                          (buffer-substring-no-properties
+                            start (or middle end)))))
         (if (string= "/"
-                     (substring pagename 0 1))
-            (concat mediawiki-page-title pagename)
+              (substring pagename 0 1))
+          (concat mediawiki-page-title pagename)
           pagename)))))
 
 ;;; Buffer Management

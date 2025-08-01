@@ -1,9 +1,8 @@
 ;;; mediawiki-auth.el --- Authentication functionality for MediaWiki  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
+;; Copyright (C) 2008-2025 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
-;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 
 ;; This file is NOT (yet) part of GNU Emacs.
@@ -47,11 +46,11 @@ This will be used to verify a successful login.")
 (defun mediawiki-logged-in-p (&optional sitename)
   "Return t if we have cookies for the SITENAME."
   (let ((urlobj (url-generic-parse-url
-                 (mediawiki-site-url (or sitename mediawiki-site)))))
+                  (mediawiki-site-url (or sitename mediawiki-site)))))
     (url-cookie-retrieve
-     (url-host urlobj)
-     (url-filename urlobj)
-     (equal "https" (url-type urlobj)))))
+      (url-host urlobj)
+      (url-filename urlobj)
+      (equal "https" (url-type urlobj)))))
 
 ;;; Login and Logout Functions
 
@@ -68,31 +67,31 @@ Store cookies for future authentication."
 
   ;; Possibly save info once we have it, eh?
   (lexical-let* ((user (or (mediawiki-site-username sitename)
-                           username
-                           (read-string "Username: ")))
-                 (pass (or (mediawiki-site-password sitename)
-                           password
-                           (read-passwd "Password: ")))
-                 (dom-loaded (mediawiki-site-domain sitename))
-                 (dom (when dom-loaded
-                        (if (string= "" dom-loaded)
-                            (read-string "LDAP Domain: ")
-                          dom-loaded)))
-                 (sitename sitename)
-                 (token (mediawiki-site-get-token sitename "login"))
-                 (args (list (cons "lgname" user)
-                             (cons "lgpassword" pass)
-                             (when token
-                               (cons "lgtoken" token))
-                             (when dom
-                               (cons "lgdomain" dom))))
-                 (result (cadr (mediawiki-api-call sitename "login" args))))
+                         username
+                         (read-string "Username: ")))
+                  (pass (or (mediawiki-site-password sitename)
+                          password
+                          (read-passwd "Password: ")))
+                  (dom-loaded (mediawiki-site-domain sitename))
+                  (dom (when dom-loaded
+                         (if (string= "" dom-loaded)
+                           (read-string "LDAP Domain: ")
+                           dom-loaded)))
+                  (sitename sitename)
+                  (token (mediawiki-site-get-token sitename "login"))
+                  (args (list (cons "lgname" user)
+                          (cons "lgpassword" pass)
+                          (when token
+                            (cons "lgtoken" token))
+                          (when dom
+                            (cons "lgdomain" dom))))
+                  (result (cadr (mediawiki-api-call sitename "login" args))))
     (when (string= (cdr (assq 'result result)) "NeedToken")
       (setq result
-            (cadr (mediawiki-api-call sitename "login"
-                   (append
-                    args (list (cons "lgtoken"
-                                     (cdr (assq 'token result)))))))))
+        (cadr (mediawiki-api-call sitename "login"
+                (append
+                  args (list (cons "lgtoken"
+                               (cdr (assq 'token result)))))))))
     (when (string= "Success" (cdr (assoc 'result result)))
       sitename)))
 
