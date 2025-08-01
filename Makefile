@@ -16,9 +16,11 @@ export NO_INTERACTION ?= 1
 
 .PHONY: test clean
 
+FOUND_TESTS=$(wildcard tests/test-*.el)
+
 # Add test target if there are any
-ifneq ($(wildcard tests),)
-ERT_TESTS := $(shell grep -l ert-deftest tests/test-*.el)
+ifneq (${FOUND_TESTS},)
+ERT_TESTS := $(shell grep -l ert-deftest ${FOUND_TESTS})
 
 test: $(patsubst tests/%.el,%,$(ERT_TESTS))
 
@@ -58,6 +60,9 @@ editorconfig:
 
 help:
 	@echo "Available targets:"
+ifneq (${FOUND_TESTS},)
+	@echo "  test           - Run all tests"
+endif
 	@echo "  editorconfig   - Clean up whitespace"
-	@echo "  clean          - Clean up compiled files"
+	@echo "  clean          - Remove compiled files"
 	@echo "  help           - Show this help"
