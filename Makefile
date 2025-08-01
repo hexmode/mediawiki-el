@@ -14,7 +14,7 @@ AUTOLOADS = mediawiki-autoloads.el
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
 
-.PHONY: test clean
+.PHONY: test clean autoloads
 
 FOUND_TESTS=$(wildcard tests/test-*.el)
 
@@ -41,6 +41,7 @@ clean:
 	@rm -f *.elc $(AUTOLOADS)
 
 # Generate autoloader file and byte-compile
+autoloads: $(AUTOLOADS)
 $(AUTOLOADS):
 	@echo "Generating autoloader file..."
 	@$(BATCH) --eval "(progn \
@@ -63,6 +64,7 @@ help:
 ifneq (${FOUND_TESTS},)
 	@echo "  test           - Run all tests"
 endif
+	@echo "  autoloads      - Build autoloader"
 	@echo "  editorconfig   - Clean up whitespace"
 	@echo "  clean          - Remove compiled files"
 	@echo "  help           - Show this help"
