@@ -12,7 +12,7 @@
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Version: 3.0.0
 ;; Package-Type: multi
-;; Last Modified: <2025-07-26 17:59:30 mah>
+;; Last Modified: <2025-07-31 20:31:38 mah>
 
 (defconst mediawiki-version "3.0.0"
   "Current version of mediawiki.el.")
@@ -893,15 +893,30 @@ return the whole revision structure."
                     (list "ids" "timestamp" "flags" "comment" "user" "content"))))
     (mediawiki-pagelist-find-page pagelist title)))
 
-(defun mediawiki-get-old (sitename title)
-  "Query SITENAME for the content of TITLE."
-  (let ((page (mediawiki-api-query-title sitename title)))
-    (mediawiki-save-metadata sitename page)
-    (mediawiki-page-get-revision page 0 'content)))
+(defun mediawiki-get (sitename title)
+  "Query SITENAME for the content of TITLE.
+Uses the modern page retrieval functionality."
+  (require 'mediawiki-page)
+  (let ((page-data (mediawiki-page-get sitename title)))
+    (when page-data
+      ;; Save metadata for backward compatibility
+      (mediawiki-save-metadata-from-page-data sitename page-data)
+      ;; Return the content
+      (mediawiki-page-data-content page-data))))
 
-(defun mediawiki-page-get-metadata (page item)
-  "Using PAGE, extract ITEM."
-  (cdr (assoc item (cadr page))))
+(defun mediawiki-save-metadata-from-page-data (sitename page-data)
+  "Set per-buffer variables for all the SITENAME data for PAGE-DATA.
+This function provides backward compatibility with the old metadata handling."
+  (when page-data
+    (setq mediawiki-site sitename)
+    (setq mediawiki-page-title (mediawiki-page-data-title page-data))
+
+    ;; Extract edit token from metadata if available
+    (let ((metadata (mediawiki-page-data-metadata page-data)))
+      (when metadata
+        (let ((edit-tokens (cdr (assq 'edittoken metadata))))
+          (when edit-tokens
+            (setq mediawiki-edittoken edit-tokens)))))))
 
 (defun mediawiki-save-metadata (sitename page)
   "Set per-buffer variables for all the SITENAME data for PAGE."
@@ -1941,46 +1956,7 @@ Some simple editing commands.
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.wiki\\'" . mediawiki-mode))
 
-;; (defvar mw-pagelist-mode-map
-;;   (let ((map (make-sparse-keymap)))
-;;     (suppress-keymap map)
-;;     (define-key map [(return)] 'mw-pl-goto-page-at-point)
-;;     (define-key map "n"        'mw-pl-page-down)
-;;     (define-key map "C-v"      'mw-pl-page-down)
-;;     (define-key map [(next)]  'mw-pl-page-down)
-;;     (define-key map "p"        'mw-pl-page-up)
-;;     (define-key map "M-v"      'mw-pl-page-up)
-;;     (define-key map [(prior)]  'mw-pl-page-up)))
-
-;; (define-derived-mode mw-pagelist-mode special-mode "MW-PageList")
-
 (provide 'mediawiki)
-
-;; Updated implementation of mediawiki-get
-(defun mediawiki-get (sitename title)
-  "Query SITENAME for the content of TITLE.
-Uses the modern page retrieval functionality."
-  (require 'mediawiki-page)
-  (let ((page-data (mediawiki-page-get sitename title)))
-    (when page-data
-      ;; Save metadata for backward compatibility
-      (mediawiki-save-metadata-from-page-data sitename page-data)
-      ;; Return the content
-      (mediawiki-page-data-content page-data))))
-
-(defun mediawiki-save-metadata-from-page-data (sitename page-data)
-  "Set per-buffer variables for all the SITENAME data for PAGE-DATA.
-This function provides backward compatibility with the old metadata handling."
-  (when page-data
-    (setq mediawiki-site sitename)
-    (setq mediawiki-page-title (mediawiki-page-data-title page-data))
-
-    ;; Extract edit token from metadata if available
-    (let ((metadata (mediawiki-page-data-metadata page-data)))
-      (when metadata
-        (let ((edit-tokens (cdr (assq 'edittoken metadata))))
-          (when edit-tokens
-            (setq mediawiki-edittoken edit-tokens)))))))
 
 ;; Local Variables:
 ;; time-stamp-pattern: "20/^;; Last Modified: <%%>$"
