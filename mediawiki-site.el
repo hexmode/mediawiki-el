@@ -36,6 +36,13 @@
 
 ;;; Site Configuration
 
+(defcustom mediawiki-pop-buffer-hook '()
+  "List of functions to execute after popping to a buffer.
+Can be used to to open the whole buffer."
+  :options '(delete-other-windows)
+  :type 'hook
+  :group 'mediawiki)
+
 (defcustom mediawiki-site-alist '(("Wikipedia"
                                    "https://en.wikipedia.org/w/"
                                    "username"
@@ -94,6 +101,30 @@ Where:
      ((and (listp bit) (> (length bit) 0))
       (car bit))
      (nil))))
+
+(defun mediawiki-browse (&optional buffer)
+  "Open the BUFFER in a browser.
+If BUFFER is not given, the current buffer is used."
+  (interactive)
+  (if mediawiki-page-title
+      (browse-url (mediawiki-make-url mediawiki-page-title "view"))
+    (with-current-buffer buffer
+      (browse-url (mediawiki-make-url mediawiki-page-title "view")))))
+
+
+(declare-function mediawiki-edit "mediawiki-page")
+;;;###autoload
+(defun mediawiki-site (&optional site)
+  "Set up mediawiki.el for a SITE.
+Without an argument, use `mediawiki-site-default'.
+Interactively, prompt for a SITE."
+  (interactive)
+  (when (not site)
+    (setq site (mediawiki-prompt-for-site)))
+  (when (or (eq nil mediawiki-site)
+            (not (string-equal site mediawiki-site)))
+    (setq mediawiki-site (mediawiki-do-login site)))
+  (mediawiki-edit site (mediawiki-site-first-page site)))
 
 (defun mediawiki-site-url (sitename)
   "Get the url for a given SITENAME."

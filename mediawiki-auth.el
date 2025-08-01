@@ -55,6 +55,7 @@ This will be used to verify a successful login.")
 
 ;;; Login and Logout Functions
 
+;;;###autoload
 (defun mediawiki-do-login (&optional sitename username password)
   "Log into SITENAME using USERNAME, PASSWORD and DOMAIN.
 Store cookies for future authentication."

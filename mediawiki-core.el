@@ -29,6 +29,8 @@
 
 ;;; Code:
 
+(require 'mm-url)
+
 ;;; Version and Core Constants
 
 (defconst mediawiki-version "2.4.3"
@@ -42,6 +44,21 @@
   :group 'applications)
 
 ;;; Core Variables
+
+(defvar mediawiki-permission-denied
+  "[^;]The action you have requested is limited"
+  "String that indicates permission has been denied.
+Note that it should not match the mediawiki.el file itself since
+it is sometimes put on MediaWiki sites.")
+
+(defvar mediawiki-view-source
+  "ca-viewsource"
+  "String that indicates you cannot edit this page.")
+
+(defvar mediawiki-page-uri nil
+  "The URI of the page corresponding to the current buffer.
+This is used to determine the base URI of the wiki engine as well
+as group and page name.")
 
 (defcustom mediawiki-site-default "Wikipedia"
   "The default mediawiki site to point to.
@@ -82,6 +99,17 @@ Passwords in the URL are not supported yet")
 Right now, this only means replacing \"_\" with \" \"."
   (when name
     (replace-regexp-in-string "_" " " name)))
+
+(declare-function mediawiki-site-url "mediawiki-site")
+(defun mediawiki-make-url (title action &optional sitename)
+  "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
+  (format (concat (mediawiki-site-url (or sitename mediawiki-site))
+                  (if action
+                      mediawiki-argument-pattern
+                    "?title=%s"))
+	  (mm-url-form-encode-xwfu
+           (mediawiki-translate-pagename title))
+	  action))
 
 (provide 'mediawiki-core)
 

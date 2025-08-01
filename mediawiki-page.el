@@ -84,6 +84,16 @@
       (goto-char (point-min))
       (current-buffer))))
 
+(defun mediawiki-open (name)
+  "Open a wiki page specified by NAME from the mediawiki engine."
+  (interactive
+   (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
+     (list (read-string "Wiki Page: " nil hist))))
+  (when (or (not (stringp name))
+            (string-equal "" name))
+    (error "Need to specify a name"))
+  (mediawiki-edit mediawiki-site name))
+
 ;;; Page Metadata Handling
 
 (defun mediawiki-save-metadata (sitename page)
