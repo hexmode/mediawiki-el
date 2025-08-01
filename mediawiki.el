@@ -1068,15 +1068,11 @@ ACTION is the API action.  ARGS is a list of arguments."
           action-res)
       t)))
 
-(defun mediawiki-make-url (title action &optional sitename)
+(defun mediawiki-make-url (title &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
-  (format (concat (mediawiki-site-url (or sitename mediawiki-site))
-                  (if action
-                      mediawiki-argument-pattern
-                    "?title=%s"))
-	  (mm-url-form-encode-xwfu
-           (mediawiki-translate-pagename title))
-	  action))
+  (format (concat (mediawiki-site-url (or sitename mediawiki-site)) "%s")
+          (mm-url-form-encode-xwfu
+           (mediawiki-translate-pagename title))))
 
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
@@ -1527,9 +1523,9 @@ SUMMARY, and CONTENT on SITENAME."
 If BUFFER is not given, the current buffer is used."
   (interactive)
   (if mediawiki-page-title
-      (browse-url (mediawiki-make-url mediawiki-page-title "view"))
+      (browse-url (mediawiki-make-url mediawiki-page-title))
     (with-current-buffer buffer
-      (browse-url (mediawiki-make-url mediawiki-page-title "view")))))
+      (browse-url (mediawiki-make-url mediawiki-page-title)))))
 
 (defun mediawiki-prompt-for-site ()
   "Prompt the user for a site."
