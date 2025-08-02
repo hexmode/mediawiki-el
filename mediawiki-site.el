@@ -109,7 +109,7 @@ If BUFFER is not given, the current buffer is used."
     (with-current-buffer buffer
       (browse-url (mediawiki-make-url mediawiki-page-title "view")))))
 
-
+(declare-function mediawiki-do-login "mediawiki-auth")
 (declare-function mediawiki-edit "mediawiki-page")
 ;;;###autoload
 (defun mediawiki-site (&optional site)
