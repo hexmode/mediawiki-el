@@ -6,7 +6,7 @@ BATCH = $(EMACS) --batch
 .DEFAULT_GOAL := help
 
 # Test files
-TEST_FILES = $(wildcard test-*.el)
+TEST_FILES := $(wildcard tests/test-*.el)
 
 # Autoloader file
 AUTOLOADS = mediawiki-autoloads.el
@@ -16,11 +16,9 @@ export NO_INTERACTION ?= 1
 
 .PHONY: test clean autoloads
 
-FOUND_TESTS=$(wildcard tests/test-*.el)
-
 # Add test target if there are any
-ifneq (${FOUND_TESTS},)
-ERT_TESTS := $(shell grep -l ert-deftest ${FOUND_TESTS})
+ifneq ($(TEST_FILES),)
+ERT_TESTS := $(shell grep -l ert-deftest $(TEST_FILES))
 
 test: $(patsubst tests/%.el,%,$(ERT_TESTS))
 
@@ -61,7 +59,7 @@ editorconfig:
 
 help:
 	@echo "Available targets:"
-ifneq (${FOUND_TESTS},)
+ifneq ($(TEST_FILES),)
 	@echo "  test           - Run all tests"
 endif
 	@echo "  autoloads      - Build autoloader"
