@@ -129,6 +129,7 @@
 
 ;;; Interactive Commands
 
+;;;###autoload
 (defun mediawiki-next-header ()
   "Move point to the end of the next section header."
   (interactive)
@@ -139,12 +140,14 @@
       (goto-char oldpoint)
       (message "No section headers after point."))))
 
+;;;###autoload
 (defun mediawiki-prev-header ()
   "Move point to the start of the previous section header."
   (interactive)
   (unless (re-search-backward "\\(^==+\\).*\\1" (point-min) t)
     (message "No section headers before point.")))
 
+;;;###autoload
 (defun mediawiki-terminate-paragraph ()	;Version:1.58
   "End a paragraph by any means necessary.
 In a list, start a new list item; in a paragraph, start a new paragraph;
@@ -163,6 +166,7 @@ paragraph will be indented in the same way."
     (newline) (if (not indent-chars) (newline)
 		(insert indent-chars))))
 
+;;;###autoload
 (defun mediawiki-terminate-paragraph-and-indent ()
   "In a list, start a new list item.
 In a paragraph, start a new paragraph but *,# will be ignored; if
@@ -194,12 +198,14 @@ text or inside a Wiki link.  See `fill-nobreak-predicate'."
           (null (or (> (- pos (point)) fill-column)
                   (re-search-forward "\\]\\]" pos t))))))))
 
+;;;###autoload
 (defun mediawiki-fill-article ()
   "Fill the entire article."
   (interactive)
   (save-excursion
     (fill-region (point-min) (point-max))))
 
+;;;###autoload
 (defun mediawiki-unfill-article ()
   "Undo filling, deleting stand-alone newlines.
 Stand-alone newlines are those that do not end paragraphs, list
@@ -211,6 +217,7 @@ entries, etc."
       (replace-match " " nil nil nil 1)))
   (message "Stand-alone newlines deleted"))
 
+;;;###autoload
 (defun mediawiki-reply-at-point-simple ()
   "Very simple function to reply to posts in the discussion forum.
 You have to set the point around the signature, then the
@@ -258,11 +265,13 @@ functions inserts the following
              (,direction mediawiki-page-ring-index 1)))))
      (mediawiki-pop-to-buffer buff)))
 
+;;;###autoload
 (defun mediawiki-goto-previous-page ()
   "Pop up the previous page being editted."
   (interactive)
   (mediawiki-goto-relative-page -))
 
+;;;###autoload
 (defun mediawiki-goto-next-page ()
   "Pop up the previous page being editted."
   (interactive)
@@ -280,16 +289,19 @@ If BACKWARD is t, will search backwards."
       (let ((point (match-beginning 0)))
         (goto-char (+ point 2))))))
 
+;;;###autoload
 (defun mediawiki-goto-next-link ()
   "Go to the next link in the page."
   (interactive)
   (mediawiki-goto-relative-link))
 
+;;;###autoload
 (defun mediawiki-goto-prev-link ()
   "Go to the previous link in the page."
   (interactive)
   (mediawiki-goto-relative-link t))
 
+;;;###autoload
 (defun mediawiki-insert-enumerate ()
   "Primitive function for inserting enumerated items.
 Check the variable mediawiki-enumerate-with-terminate-paragraph.
@@ -303,6 +315,7 @@ does not work very well will longlines-mode."
     (newline nil)
     (insert ":#")))
 
+;;;###autoload
 (defun mediawiki-insert-itemize ()
   "Primitive function for inserting no enumerated items.
 Check the variable mediawiki-enumerate-with-terminate-paragraph.
@@ -330,6 +343,7 @@ does not work very well will longlines-mode."
     (insert (concat pre " " post))
     (backward-char (+ 1 (string-width post)))))
 
+;;;###autoload
 (defun mediawiki-insert-strong-emphasis ()
   "Mark with strong emphasis italics.
 Uses four apostrophes (e.g. ''''FOO'''').  When mark is active,
@@ -337,6 +351,7 @@ surrounds region."
   (interactive)
   (mediawiki-insert "''''" "''''"))
 
+;;;###autoload
 (defun mediawiki-insert-bold ()
   "Mark bold.
 Uses three apostrophes (e.g. '''FOO''').  When mark is active,
@@ -344,6 +359,7 @@ surrounds region."
   (interactive)
   (mediawiki-insert "'''" "'''"))
 
+;;;###autoload
 (defun mediawiki-insert-italics ()
   "Mark italics.
 Uses TWO apostrophes (e.g. ''FOO'').  When mark is active,
@@ -351,11 +367,13 @@ surrounds region."
   (interactive)
   (mediawiki-insert "''" "''"))
 
+;;;###autoload
 (defun mediawiki-insert-quotation-with-signature ()
   "Mark the current region as a quotation with your signature."
   (interactive)
   (mediawiki-insert "{{Quotation|}}" "{{~~~~}}"))
 
+;;;###autoload
 (defun mediawiki-insert-quotation ()
   "Mark the current selection as a quote.
 Use the form {{Quotation}}{{}}.  When mark is active,
@@ -363,6 +381,7 @@ surrounds region."
   (interactive)
   (mediawiki-insert "{{Quotation|}}{{" "}}"))
 
+;;;###autoload
 (defun mediawiki-insert-bible-verse-template ()
   "Insert a template for the quotation of Bible verses."
   (interactive)
@@ -372,6 +391,7 @@ surrounds region."
     (let ((verse (read-string "Verse: ")))
       (insert (concat verse "|" name " " verse "}})")))))
 
+;;;###autoload
 (defun mediawiki-insert-user ()
   "Interactively insert a user name."
   (interactive)
@@ -381,6 +401,7 @@ surrounds region."
     (let ((user (read-string "Name des Benutzers: " )))
       (insert (concat "[[Benutzer:" user "|" user "]]")))))
 
+;;;###autoload
 (defun mediawiki-insert-reply-prefix ()
   "Quotation box of the form {{Quotation}}{{}}."
   (interactive)
@@ -401,21 +422,25 @@ surrounds region."
   (insert "''' ")
   (end-of-line 1))
 
+;;;###autoload
 (defun mediawiki-insert-header ()
   "Insert subheader via == (e.g. == FOO ==)."
   (interactive)
   (mediawiki-insert "==" "=="))
 
+;;;###autoload
 (defun mediawiki-insert-link ()
   "Insert link (e.g. [[FOO]])."
   (interactive)
   (mediawiki-insert "[[" "]]"))
 
+;;;###autoload
 (defun mediawiki-insert-link-www ()
   "Insert link (e.g. [://FOO])."
   (interactive)
   (mediawiki-insert "[://" "]"))
 
+;;;###autoload
 (defun mediawiki-insert-image ()
   "Insert image link (e.g. [[Image:FOO]]).
 Checks the variable mediawiki-english-or-german."
@@ -424,6 +449,7 @@ Checks the variable mediawiki-english-or-german."
                       "[[Image:"
                       "[[Bild:") "]]"))
 
+;;;###autoload
 (defun mediawiki-insert-audio ()
   "Insert audio link (e.g. [[Media:FOO]])
 Checks The variable mediawiki-english-or-german."
@@ -432,16 +458,19 @@ Checks The variable mediawiki-english-or-german."
                       "[[Media:"
                       "[[Bild:") "]]"))
 
+;;;###autoload
 (defun mediawiki-insert-signature ()
   "Insert signature (e.g. \"~~~~:\")."
   (interactive)
   (insert "~~~~: "))
 
+;;;###autoload
 (defun mediawiki-insert-hline ()
   "Insert hline (e.g. \"----\")."
   (interactive)
   (insert "\n----\n"))
 
+;;;###autoload
 (defun mediawiki-unfill-paragraph-or-region ()
   "Unfill region.
 This function does NOT explicitly search for \"soft newlines\"
@@ -464,17 +493,20 @@ as does mediawiki-unfill-region."
       (fill-paragraph-or-region nil)
       (fill-paragraph nil))))
 
+;;;###autoload
 (defun mediawiki-start-paragraph ()
   "Start a Paragraph."
   (interactive)
   (set (make-local-variable 'paragraph-start)
     "\\*\\| \\|#\\|;\\|:\\||\\|!\\|$"))
 
+;;;###autoload
 (defun mediawiki-hardlines ()
   "Set `use-hard-newlines' to NIL."
   (interactive)
   (setq use-hard-newlines nil))
 
+;;;###autoload
 (defun mediawiki-next-long-line ()
   "Move forward to the next long line.
 Lines are considered long if their length is greater than `fill-column'.
@@ -494,12 +526,14 @@ point.  Generalise to make `previous-long-line'."
     ;; Stop, end of buffer reached.
     (error "Long line not found")))
 
+;;;###autoload
 (defun mediawiki-unfill-paragraph-simple ()
   "A very simple function for unfilling a paragraph."
   (interactive)
   (let ((fill-column (point-max)))
     (fill-paragraph nil)))
 
+;;;###autoload
 (defun mediawiki-outline-magic-keys ()
   "Set up outline magic keys.
 See https://www.emacswiki.org/emacs/OutlineMagic"
@@ -515,17 +549,20 @@ See https://www.emacswiki.org/emacs/OutlineMagic"
   (local-set-key [(control up)] 'outline-move-subtree-up)
   (local-set-key [(control down)] 'outline-move-subtree-down))
 
+;;;###autoload
 (defun mediawiki-enhance-indent ()
   "Indent a region using MediaWiki markup (e.g \":\")."
   (interactive)
   (string-rectangle (region-beginning) (region-end) ":"))
 
+;;;###autoload
 (defun mediawiki-yank-prefix ()
   "Remove indent markup from region.
 FIXME!!!"
   (interactive)
   (string-rectangle (region-beginning) (region-end) " "))
 
+;;;###autoload
 (defun mediawiki-simple-outline-promote ()
   "Simple-minded promotion of current line.
 This function simply deletes one \"=\" from the beginning and end
@@ -539,6 +576,7 @@ of the line.  It does not promote the whole tree!"
     (search-backward "=")
     (delete-char 1 nil)))
 
+;;;###autoload
 (defun mediawiki-simple-outline-demote ()
   "Simple-minded demotion of the current line.
 This function simple adds \"=\" to the beginning and end of the
@@ -552,11 +590,13 @@ line.  It does not promote the whole tree!"
     (search-backward "=")
     (insert "=")))
 
+;;;###autoload
 (defun mediawiki-rename-buffer ()
   "Make sure that the option UNIQUE is used."
   (interactive)
   (rename-buffer (read-string "Name of new buffer (unique): " ) 1))
 
+;;;###autoload
 (defun mediawiki-mark-section ()
   "Set mark at end of current logical section, and point at top."
   (interactive)
@@ -567,6 +607,7 @@ line.  It does not promote the whole tree!"
   (when (fboundp 'zmacs-activate-region)
     (zmacs-activate-region)))
 
+;;;###autoload
 (defun mediawiki-mark-signature ()
   "Set mark at end of current logical section, and point at top."
   (interactive)
@@ -581,6 +622,7 @@ line.  It does not promote the whole tree!"
 (defvar mediawiki-page-title nil
   "The title of the page corresponding to the current buffer.")
 
+;;;###autoload
 (defun mediawiki-reload ()
   "Reload the page from the server."
   (interactive)
@@ -599,6 +641,7 @@ line.  It does not promote the whole tree!"
 (defvar mediawiki-basetimestamp nil
   "The base timestamp for this page.")
 
+;;;###autoload
 (define-derived-mode mediawiki-mode text-mode "MW"
   "Major mode for editing articles written in MediaWiki's wikitext.
 

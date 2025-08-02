@@ -81,6 +81,7 @@
       (goto-char (point-min))
       (current-buffer))))
 
+;;;###autoload
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
@@ -107,6 +108,7 @@
 
 ;;; Page Saving Functions
 
+;;;###autoload
 (defun mediawiki-save (&optional summary)
   "Save the current buffer as a page on the current site.
 Prompt for a SUMMARY if one isn't given."
@@ -121,6 +123,7 @@ Prompt for a SUMMARY if one isn't given."
       (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
+;;;###autoload
 (defun mediawiki-save-on (&optional sitename name summary)
   "On SITENAME, save a page with NAME and SUMMARY."
   (interactive)
@@ -135,6 +138,7 @@ Prompt for a SUMMARY if one isn't given."
   (mediawiki-get mediawiki-site name)
   (mediawiki-save-as name summary))
 
+;;;###autoload
 (defun mediawiki-save-as (&optional name summary)
   "Save a page on the current site wite NAME and SUMMARY."
   (interactive "sSave As: \nsSummary: ")
@@ -146,6 +150,7 @@ Prompt for a SUMMARY if one isn't given."
       (buffer-substring-no-properties (point-min) (point-max)))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
+;;;###autoload
 (defun mediawiki-save-and-bury (&optional summary)
   "Prompt for a SUMMARY, save the page, then bury the buffer."
   (interactive "sSummary: ")
@@ -206,6 +211,7 @@ SUMMARY, and CONTENT on SITENAME."
   (completing-read  "Summary: " '()))
 
 (declare-function mediawiki-open "mediawiki")
+;;;###autoload
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
   (interactive)

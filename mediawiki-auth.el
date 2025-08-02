@@ -95,6 +95,7 @@ Store cookies for future authentication."
     (when (string= "Success" (cdr (assoc 'result result)))
       sitename)))
 
+;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)
   "Log out of SITENAME."
   (interactive)

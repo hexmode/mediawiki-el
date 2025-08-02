@@ -148,6 +148,7 @@ If RFC822-P is passed, use RFC822 format."
             (save-buffer)))
         (append-to-file (point-min) (point-max) mediawiki-draft-data-file)))))
 
+;;;###autoload
 (defun mediawiki-draft-view-draft ()
   "Simple shortcut to visit the drafts file."
   (interactive)
@@ -169,6 +170,7 @@ mediawiki-draft-data-file, or send the buffer using
     (mediawiki-mode)
     (message " C-c C-k sends to draft file, C-c C-c sends to org buffer.")))
 
+;;;###autoload
 (defun mediawiki-draft-page ()
   "Set the current buffer as a draft buffer."
   (interactive)
@@ -177,6 +179,7 @@ mediawiki-draft-data-file, or send the buffer using
   (mediawiki-draft)
   (yank nil))
 
+;;;###autoload
 (defun mediawiki-draft-region (&optional begin end)
   "Mediawiki-draft the data from BEGIN to END.
 If called from within the mediawiki-draft buffer, BEGIN and END are ignored,
@@ -193,6 +196,7 @@ region, will be mediawiki-drafted."
         (mediawiki-debug (current-buffer) "mediawiki-draft-region")
         (jump-to-register mediawiki-draft-register)))))
 
+;;;###autoload
 (defun mediawiki-draft-buffer ()
   "Mediawiki-draft-buffer sends the contents of the current (temporary)
 buffer to the mediawiki-draft-buffer, see the variable
@@ -200,19 +204,19 @@ mediawiki-draft-data-file."
   (interactive)
   (mediawiki-draft-region  (point-min) (point-max)))
 
+;;;###autoload
 (defun mediawiki-draft-clipboard ()
   "Mediawiki-Draft the contents of the current clipboard.
 Most useful for mediawiki-drafting things from Netscape or other X Windows
 application."
   (interactive)
   (with-temp-buffer
-    (insert (if (fboundp 'gui-get-selection) ; Since 25.1
-              (gui-get-selection)
-              (x-get-clipboard)))
+    (insert (gui-get-selection))
     (run-hook-with-args-until-success 'mediawiki-draft-handler-functions)))
 
 ;;; Register Operations
 
+;;;###autoload
 (defun mediawiki-draft-copy-page-to-register ()
   "Copy a page via the mediawiki-draft-register."
   (interactive)
@@ -222,11 +226,13 @@ application."
     (message "draft page copied to wikipedia register mediawiki-draft-page.")
     (widen)))
 
+;;;###autoload
 (defun mediawiki-draft-yank-page-to-register ()
   "Insert a page via the mediawiki-draft-register."
   (interactive)
   (insert-register mediawiki-draft-page nil))
 
+;;;###autoload
 (defun mediawiki-draft-send (target-buffer)
   "Copy the current page in the drafts file to TARGET-BUFFER.
 If `mediawiki-draft-send-archive' is t, then additionally the
@@ -264,6 +270,7 @@ text will be archived in the draft.wiki file."
 
 ;;; Reply Functionality
 
+;;;###autoload
 (defun mediawiki-draft-reply ()
   "Open a temporary buffer to edit a draft.
 After finishing the editing: either use `mediawiki-draft-buffer'
@@ -303,7 +310,7 @@ you're done entering, and it will go ahead and file the data for
 latter retrieval, and possible indexing.
 \\{mediawiki-draft-mode-map}"
   (kill-all-local-variables)
-  (indented-text-mode)
+  (text-mode)
   (define-key mediawiki-draft-mode-map "\C-c\C-k" 'mediawiki-draft-buffer)
   (define-key mediawiki-draft-mode-map "\C-c\C-d" 'mediawiki-draft-buffer))
 

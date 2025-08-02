@@ -99,6 +99,7 @@ Where:
         (car bit))
       (nil))))
 
+;;;###autoload
 (defun mediawiki-browse (&optional buffer)
   "Open the BUFFER in a browser.
 If BUFFER is not given, the current buffer is used."

@@ -12,40 +12,31 @@
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Package-Type: multi
-;; Last Modified: <2025-08-01 02:40:25 mah>
+;; Last Modified: <2025-08-01 22:27:11 mah>
 
 ;; This file is NOT (yet) part of GNU Emacs.
 
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
+;; This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+;; License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+;; version.
 
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
+;; This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+;; warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+;; details.
 
-;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; You should have received a copy of the GNU General Public License along with this program.  If not, see
+;; <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
-;; This version of mediawiki.el represents a merging of
-;; wikipedia-mode.el (maintained by Uwe Brauer <oub at mat.ucm.es>)
-;; from https://www.emacswiki.org/emacs/wikipedia-mode.el for its
-;; font-lock code, menu, draft mode, replying and convenience
-;; functions to produce mediawiki.el 2.0.
+;; This version of mediawiki.el represents a merging of wikipedia-mode.el (maintained by Uwe Brauer <oub at mat.ucm.es>)
+;; from https://www.emacswiki.org/emacs/wikipedia-mode.el for its font-lock code, menu, draft mode, replying and
+;; convenience functions to produce mediawiki.el 2.0.
 
 ;;; Installation
 
-;; If you use ELPA, you can install via the M-x package-list-packages
-;; interface. This is preferrable as you will have access to updates
-;; automatically.
-
-;; Otherwise, just make sure this file is in your load-path (usually
-;; ~/.emacs.d is included) and put (require 'mediawiki.el) in your
-;; ~/.emacs or ~/.emacs.d/init.el file.
+;; If you use ELPA, you can install via the M-x package-list-packages interface.  This is preferable as you will have
+;; access to updates automatically.
 
 ;;; Howto:
 ;;  M-x customize-group RET mediawiki RET
@@ -55,39 +46,6 @@
 ;; Open a wiki file:    M-x mediawiki-open
 ;; Save a wiki buffer:  C-x C-s
 ;; Save a wiki buffer with a different name:  C-x C-w
-
-;;; TODO
-
-;;  * Optionally use org-mode formatting for editing and translate
-;;    that to mw
-;;  * Move url-* methods to url-http
-;;  * Use the MW API to support searching, etc.
-;;  * Clean up and thoroughly test imported wikimedia.el code
-;;  * Improve language support.  Currently there is a toggle for
-;;    English or German.  This should probably just be replaced with
-;;    customizable words given MediaWiki's wide language support.
-
-;;; Changes
-
-;; 2.2.7:
-;;  * Add the ability to accept the domain
-;;  * Fix false failures when site isn't found.
-
-;; 2.2.6:
-;;  * Moved to github
-;;  * Code cleanup, flycheck
-
-;; Since 2.2.4.2
-;;  * Move to github
-;;  * Added Readme.mediawiki to with information about security.
-
-;; Since 2.2.4.1:
-;;  * Add the forgotten customizable mediawiki-debug.
-
-;; Since 2.2.4:
-;;  * Made it clearer where debugging information is found when
-;;    mediawiki-debug is non-nil by adding messages to the message
-;;    buffer when debug buffers are killed.
 
 ;;; History
 
@@ -148,94 +106,18 @@
 
 ;;; Code:
 
+;; Load all modular components
 (require 'mediawiki-core)
 (require 'mediawiki-utils)
 (require 'mediawiki-http)
-(require 'mediawiki-site)
-(require 'mediawiki-api)
-(require 'mediawiki-auth)
-(require 'mediawiki-page)
 (require 'mediawiki-faces)
 (require 'mediawiki-font-lock)
+(require 'mediawiki-api)
+(require 'mediawiki-auth)
+(require 'mediawiki-site)
+(require 'mediawiki-page)
 (require 'mediawiki-draft)
 (require 'mediawiki-mode)
-(require 'ring)
-(require 'subr-x)
-
-(defcustom mediawiki-pop-buffer-hook '()
-  "List of functions to execute after popping to a buffer.
-Can be used to to open the whole buffer."
-  :options '(delete-other-windows)
-  :type 'hook
-  :group 'mediawiki)
-
-(defvar mediawiki-permission-denied
-  "[^;]The action you have requested is limited"
-  "String that indicates permission has been denied.
-Note that it should not match the mediawiki.el file itself since
-it is sometimes put on MediaWiki sites.")
-
-(defvar mediawiki-view-source
-  "ca-viewsource"
-  "String that indicates you cannot edit this page.")
-
-(defvar mediawiki-page-uri nil
-  "The URI of the page corresponding to the current buffer.
-This is used to determine the base URI of the wiki engine as well
-as group and page name.")
-
-(defun mediawiki-make-url (title &optional sitename)
-  "Return a url when given a TITLE, ACTION and, optionally, SITENAME."
-  (format (concat (mediawiki-site-url (or sitename mediawiki-site)) "%s")
-          (mm-url-form-encode-xwfu
-           (mediawiki-translate-pagename title))))
-
-(defun mediawiki-open (name)
-  "Open a wiki page specified by NAME from the mediawiki engine."
-  (interactive
-   (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
-     (list (read-string "Wiki Page: " nil hist))))
-  (when (or (not (stringp name))
-            (string-equal "" name))
-    (error "Need to specify a name"))
-  (mediawiki-edit mediawiki-site name))
-
-(defun mediawiki-browse (&optional buffer)
-  "Open the BUFFER in a browser.
-If BUFFER is not given, the current buffer is used."
-  (interactive)
-  (if mediawiki-page-title
-      (browse-url (mediawiki-make-url mediawiki-page-title))
-    (with-current-buffer buffer
-      (browse-url (mediawiki-make-url mediawiki-page-title)))))
-
-
-
-;;;###autoload
-(defun mediawiki-site (&optional site)
-  "Set up mediawiki.el for a SITE.
-Without an argument, use `mediawiki-site-default'.
-Interactively, prompt for a SITE."
-  (interactive)
-  (when (not site)
-    (setq site (mediawiki-prompt-for-site)))
-  (when (or (eq nil mediawiki-site)
-            (not (string-equal site mediawiki-site)))
-    (setq mediawiki-site (mediawiki-do-login site)))
-  (mediawiki-edit site (mediawiki-site-first-page site)))
-
-;; (defvar mw-pagelist-mode-map
-;;   (let ((map (make-sparse-keymap)))
-;;     (suppress-keymap map)
-;;     (define-key map [(return)] 'mw-pl-goto-page-at-point)
-;;     (define-key map "n"        'mw-pl-page-down)
-;;     (define-key map "C-v"      'mw-pl-page-down)
-;;     (define-key map [(next)]  'mw-pl-page-down)
-;;     (define-key map "p"        'mw-pl-page-up)
-;;     (define-key map "M-v"      'mw-pl-page-up)
-;;     (define-key map [(prior)]  'mw-pl-page-up)))
-
-;; (define-derived-mode mw-pagelist-mode special-mode "MW-PageList")
 
 (provide 'mediawiki)
 
