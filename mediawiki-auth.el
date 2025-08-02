@@ -33,7 +33,6 @@
 (require 'mediawiki-site)
 (require 'url-cookie)
 (require 'url-parse)
-(require 'cl-lib)
 
 ;;; Authentication Constants
 
@@ -66,26 +65,26 @@ Store cookies for future authentication."
                                         ; logged in
 
   ;; Possibly save info once we have it, eh?
-  (lexical-let* ((user (or (mediawiki-site-username sitename)
-                         username
-                         (read-string "Username: ")))
-                  (pass (or (mediawiki-site-password sitename)
-                          password
-                          (read-passwd "Password: ")))
-                  (dom-loaded (mediawiki-site-domain sitename))
-                  (dom (when dom-loaded
-                         (if (string= "" dom-loaded)
-                           (read-string "LDAP Domain: ")
-                           dom-loaded)))
-                  (sitename sitename)
-                  (token (mediawiki-site-get-token sitename "login"))
-                  (args (list (cons "lgname" user)
-                          (cons "lgpassword" pass)
-                          (when token
-                            (cons "lgtoken" token))
-                          (when dom
-                            (cons "lgdomain" dom))))
-                  (result (cadr (mediawiki-api-call sitename "login" args))))
+  (let* ((user (or (mediawiki-site-username sitename)
+                 username
+                 (read-string "Username: ")))
+          (pass (or (mediawiki-site-password sitename)
+                  password
+                  (read-passwd "Password: ")))
+          (dom-loaded (mediawiki-site-domain sitename))
+          (dom (when dom-loaded
+                 (if (string= "" dom-loaded)
+                   (read-string "LDAP Domain: ")
+                   dom-loaded)))
+          (sitename sitename)
+          (token (mediawiki-site-get-token sitename "login"))
+          (args (list (cons "lgname" user)
+                  (cons "lgpassword" pass)
+                  (when token
+                    (cons "lgtoken" token))
+                  (when dom
+                    (cons "lgdomain" dom))))
+          (result (cadr (mediawiki-api-call sitename "login" args))))
     (when (string= (cdr (assq 'result result)) "NeedToken")
       (setq result
         (cadr (mediawiki-api-call sitename "login"
