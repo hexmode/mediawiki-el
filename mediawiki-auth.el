@@ -33,7 +33,7 @@
 (require 'mediawiki-site)
 (require 'url-cookie)
 (require 'url-parse)
-(require 'cl)
+(require 'cl-lib)
 
 ;;; Authentication Constants
 
