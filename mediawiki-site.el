@@ -152,7 +152,7 @@ Interactively, prompt for a SITE."
 
 (defun mediawiki-site-first-page (sitename)
   "Get the first page for a given SITENAME."
-  (let ((page (mediawiki-site-extract sitename 5)))
+  (let ((page (mediawiki-site-property sitename :first-page)))
     (if (or (not page) (string= page ""))
       "Main Page"
       page)))

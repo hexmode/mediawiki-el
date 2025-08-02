@@ -331,8 +331,7 @@ does not work very well will longlines-mode."
 
 (defun mediawiki-insert (pre post)
   "Wrap the current region with PRE and POST."
-  (if (or (and (boundp 'zmacs-region-active-p) zmacs-region-active-p)
-        (and (boundp 'transient-mark-mode) transient-mark-mode mark-active))
+  (if (and mark-active (region-beginning) (region-end) (not (= (region-beginning) (region-end))))
     (let ((beg (region-beginning))
            (end (region-end)))
       (save-excursion
