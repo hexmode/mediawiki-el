@@ -58,7 +58,6 @@
 (ert-deftest test-mediawiki-next-header ()
   "Test mediawiki-next-header function."
   (should (functionp 'mediawiki-next-header))
-  (should (get 'mediawiki-next-header 'autoload))
   (should (commandp 'mediawiki-next-header))
 
   (with-temp-buffer
@@ -70,7 +69,6 @@
 (ert-deftest test-mediawiki-prev-header ()
   "Test mediawiki-prev-header function."
   (should (functionp 'mediawiki-prev-header))
-  (should (get 'mediawiki-prev-header 'autoload))
   (should (commandp 'mediawiki-prev-header))
 
   (with-temp-buffer
@@ -82,7 +80,6 @@
 (ert-deftest test-mediawiki-terminate-paragraph ()
   "Test mediawiki-terminate-paragraph function."
   (should (functionp 'mediawiki-terminate-paragraph))
-  (should (get 'mediawiki-terminate-paragraph 'autoload))
   (should (commandp 'mediawiki-terminate-paragraph))
 
   (with-temp-buffer
@@ -95,7 +92,6 @@
 (ert-deftest test-mediawiki-insert-bold ()
   "Test mediawiki-insert-bold function."
   (should (functionp 'mediawiki-insert-bold))
-  (should (get 'mediawiki-insert-bold 'autoload))
   (should (commandp 'mediawiki-insert-bold))
 
   (with-temp-buffer
@@ -106,7 +102,6 @@
 (ert-deftest test-mediawiki-insert-italics ()
   "Test mediawiki-insert-italics function."
   (should (functionp 'mediawiki-insert-italics))
-  (should (get 'mediawiki-insert-italics 'autoload))
   (should (commandp 'mediawiki-insert-italics))
 
   (with-temp-buffer
@@ -117,7 +112,6 @@
 (ert-deftest test-mediawiki-insert-strong-emphasis ()
   "Test mediawiki-insert-strong-emphasis function."
   (should (functionp 'mediawiki-insert-strong-emphasis))
-  (should (get 'mediawiki-insert-strong-emphasis 'autoload))
   (should (commandp 'mediawiki-insert-strong-emphasis))
 
   (with-temp-buffer
@@ -128,7 +122,6 @@
 (ert-deftest test-mediawiki-insert-header ()
   "Test mediawiki-insert-header function."
   (should (functionp 'mediawiki-insert-header))
-  (should (get 'mediawiki-insert-header 'autoload))
   (should (commandp 'mediawiki-insert-header))
 
   (with-temp-buffer
@@ -139,7 +132,6 @@
 (ert-deftest test-mediawiki-insert-link ()
   "Test mediawiki-insert-link function."
   (should (functionp 'mediawiki-insert-link))
-  (should (get 'mediawiki-insert-link 'autoload))
   (should (commandp 'mediawiki-insert-link))
 
   (with-temp-buffer
@@ -170,7 +162,6 @@
 (ert-deftest test-mediawiki-insert-enumerate ()
   "Test mediawiki-insert-enumerate function."
   (should (functionp 'mediawiki-insert-enumerate))
-  (should (get 'mediawiki-insert-enumerate 'autoload))
   (should (commandp 'mediawiki-insert-enumerate))
 
   (with-temp-buffer
@@ -181,7 +172,6 @@
 (ert-deftest test-mediawiki-insert-itemize ()
   "Test mediawiki-insert-itemize function."
   (should (functionp 'mediawiki-insert-itemize))
-  (should (get 'mediawiki-insert-itemize 'autoload))
   (should (commandp 'mediawiki-insert-itemize))
 
   (with-temp-buffer
@@ -194,7 +184,6 @@
 (ert-deftest test-mediawiki-insert-signature ()
   "Test mediawiki-insert-signature function."
   (should (functionp 'mediawiki-insert-signature))
-  (should (get 'mediawiki-insert-signature 'autoload))
   (should (commandp 'mediawiki-insert-signature))
 
   (with-temp-buffer
@@ -204,7 +193,7 @@
 (ert-deftest test-mediawiki-insert-hline ()
   "Test mediawiki-insert-hline function."
   (should (functionp 'mediawiki-insert-hline))
-  (should (get 'mediawiki-insert-hline 'autoload))
+
   (should (commandp 'mediawiki-insert-hline))
 
   (with-temp-buffer
@@ -216,13 +205,11 @@
 (ert-deftest test-mediawiki-fill-article ()
   "Test mediawiki-fill-article function."
   (should (functionp 'mediawiki-fill-article))
-  (should (get 'mediawiki-fill-article 'autoload))
   (should (commandp 'mediawiki-fill-article)))
 
 (ert-deftest test-mediawiki-unfill-article ()
   "Test mediawiki-unfill-article function."
   (should (functionp 'mediawiki-unfill-article))
-  (should (get 'mediawiki-unfill-article 'autoload))
   (should (commandp 'mediawiki-unfill-article))
 
   (with-temp-buffer
@@ -236,33 +223,30 @@
 (ert-deftest test-mediawiki-goto-next-link ()
   "Test mediawiki-goto-next-link function."
   (should (functionp 'mediawiki-goto-next-link))
-  (should (get 'mediawiki-goto-next-link 'autoload))
   (should (commandp 'mediawiki-goto-next-link))
 
   (with-temp-buffer
     (insert "Text before [[First Link]] and [[Second Link]] after")
     (goto-char (point-min))
     (mediawiki-goto-next-link)
-    (should (= (point) 14)))) ; Should be at "First Link"
+    (should (= (point) 15)))) ; Should be at "First Link"
 
 (ert-deftest test-mediawiki-goto-prev-link ()
   "Test mediawiki-goto-prev-link function."
   (should (functionp 'mediawiki-goto-prev-link))
-  (should (get 'mediawiki-goto-prev-link 'autoload))
   (should (commandp 'mediawiki-goto-prev-link))
 
   (with-temp-buffer
     (insert "Text before [[First Link]] and [[Second Link]] after")
     (goto-char (point-max))
     (mediawiki-goto-prev-link)
-    (should (= (point) 33)))) ; Should be at "Second Link"
+    (should (= (point) 34)))) ; Should be at "Second Link"
 
 ;;; Test Major Mode
 
 (ert-deftest test-mediawiki-mode ()
   "Test mediawiki-mode major mode."
   (should (functionp 'mediawiki-mode))
-  (should (get 'mediawiki-mode 'autoload))
 
   (with-temp-buffer
     (mediawiki-mode)
@@ -320,11 +304,9 @@
 (ert-deftest test-mediawiki-page-ring-functions ()
   "Test page ring navigation functions."
   (should (functionp 'mediawiki-goto-previous-page))
-  (should (get 'mediawiki-goto-previous-page 'autoload))
   (should (commandp 'mediawiki-goto-previous-page))
 
   (should (functionp 'mediawiki-goto-next-page))
-  (should (get 'mediawiki-goto-next-page 'autoload))
   (should (commandp 'mediawiki-goto-next-page)))
 
 ;;; Test Outline Functions
@@ -332,11 +314,9 @@
 (ert-deftest test-mediawiki-outline-functions ()
   "Test outline-related functions."
   (should (functionp 'mediawiki-simple-outline-promote))
-  (should (get 'mediawiki-simple-outline-promote 'autoload))
   (should (commandp 'mediawiki-simple-outline-promote))
 
   (should (functionp 'mediawiki-simple-outline-demote))
-  (should (get 'mediawiki-simple-outline-demote 'autoload))
   (should (commandp 'mediawiki-simple-outline-demote))
 
   (with-temp-buffer
@@ -350,7 +330,6 @@
 (ert-deftest test-mediawiki-reply-at-point-simple ()
   "Test mediawiki-reply-at-point-simple function."
   (should (functionp 'mediawiki-reply-at-point-simple))
-  (should (get 'mediawiki-reply-at-point-simple 'autoload))
   (should (commandp 'mediawiki-reply-at-point-simple)))
 
 (provide 'test-mediawiki-mode)

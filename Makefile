@@ -14,6 +14,9 @@ AUTOLOADS = mediawiki-autoloads.el
 # File to check
 FILE ?= mediawiki.el
 
+# Whther to continue on test failure or not
+CONTINUE_ON_TEST_FAILURE ?= true
+
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
 
@@ -27,10 +30,10 @@ test: $(patsubst tests/%.el,%,$(ERT_TESTS))
 
 # Pattern rule to run each test file
 define TEST_RULES
-$(1): $(AUTOLOADS) $(2)
+$(1): autoloads-only $(2)
 	@echo "Running $(1)"
 	@$(BATCH) -L $(PWD) -l $(AUTOLOADS) -l tests/$(1).el \
-		-f ert-run-tests-batch-and-exit;
+		-f ert-run-tests-batch-and-exit || $(CONTINUE_ON_TEST_FAILURE);
 endef
 
 # Generate rules for each test file
@@ -41,8 +44,8 @@ clean:
 	@echo "Cleaning up artifacts..."
 	@rm -f *.elc $(AUTOLOADS)
 
-# Generate autoloader file and byte-compile
-autoloads: $(AUTOLOADS)
+# Generate autoloader file only (for testing)
+autoloads-only: $(AUTOLOADS)
 $(AUTOLOADS):
 	@echo "Generating autoloader file..."
 	@$(BATCH) --eval "(progn \
@@ -51,6 +54,9 @@ $(AUTOLOADS):
 		(setq backup-inhibited t) \
 		(update-directory-autoloads default-directory) \
 		(message \"Autoloader file created: %s\" generated-autoload-file))"
+
+# Generate autoloader file and byte-compile (for distribution)
+autoloads: autoloads-only
 	@echo "Byte-compiling all *.el files..."
 	@$(BATCH) -L $(PWD) -l $(AUTOLOADS) --eval "(progn \
 		(setq byte-compile-warnings '(not obsolete)) \

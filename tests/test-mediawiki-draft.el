@@ -24,7 +24,68 @@
 ;;; Code:
 
 (require 'ert)
-(require 'mediawiki-draft)
+
+;;; Test Interactive Draft Functions
+
+(ert-deftest test-mediawiki-aaa-draft-view-draft ()
+  "Test mediawiki-draft-view-draft function."
+  (should (functionp 'mediawiki-draft-view-draft))
+
+  (should (commandp 'mediawiki-draft-view-draft)))
+
+(ert-deftest test-mediawiki-aaa-draft ()
+  "Test mediawiki-draft function."
+  (should (functionp 'mediawiki-draft))
+
+  (should (commandp 'mediawiki-draft)))
+
+(ert-deftest test-mediawiki-aaa-draft-page ()
+  "Test mediawiki-draft-page function."
+  (should (functionp 'mediawiki-draft-page))
+
+  (should (commandp 'mediawiki-draft-page)))
+
+(ert-deftest test-mediawiki-aaa-draft-region ()
+  "Test mediawiki-draft-region function."
+  (should (functionp 'mediawiki-draft-region))
+
+  (should (commandp 'mediawiki-draft-region)))
+
+(ert-deftest test-mediawiki-aaa-draft-buffer ()
+  "Test mediawiki-draft-buffer function."
+  (should (functionp 'mediawiki-draft-buffer))
+
+  (should (commandp 'mediawiki-draft-buffer)))
+
+(ert-deftest test-mediawiki-aaa-draft-clipboard ()
+  "Test mediawiki-draft-clipboard function."
+  (should (functionp 'mediawiki-draft-clipboard))
+
+  (should (commandp 'mediawiki-draft-clipboard)))
+
+;;; Test Register Operations
+
+(ert-deftest test-mediawiki-aaa-draft-register-functions ()
+  "Test draft register operation functions."
+  (should (functionp 'mediawiki-draft-copy-page-to-register))
+
+  (should (commandp 'mediawiki-draft-copy-page-to-register))
+
+  (should (functionp 'mediawiki-draft-yank-page-to-register))
+
+  (should (commandp 'mediawiki-draft-yank-page-to-register))
+
+  (should (functionp 'mediawiki-draft-send))
+
+  (should (commandp 'mediawiki-draft-send)))
+
+;;; Test Reply Functionality
+
+(ert-deftest test-mediawiki-aaa-draft-reply ()
+  "Test mediawiki-draft-reply function."
+  (should (functionp 'mediawiki-draft-reply))
+
+  (should (commandp 'mediawiki-draft-reply)))
 
 ;;; Test Customization Variables
 
