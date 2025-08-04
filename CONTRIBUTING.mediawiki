@@ -1,0 +1,15 @@
+== Contributing to mediawiki.el ==
+
+This project uses a makefile to capture several actions that aid in the development of this project.
+
+=== Makefile targets ===
+
+;<tt>make test</tt>: Execute all [ERT https://www.gnu.org/software/emacs/manual/html_mono/ert.html] tests in in the <tt>[[tests]]</tt> directory.
+;<tt>make autoloads</tt>: Generate the autoloader file for this project.
+;<tt>make editorconfig</tt>: Clean up EOL and EOF whitespace per editorconfig.
+;<tt>make check-file FILE=''file.el''</tt>: Check ''file.el'' for problems with balanced parenthesis and output a clue for where to find them.  Example:
+<blockquote><pre>
+$ make check-file FILE=mediawiki-core.el
+Mark set
+Error at line 102: (defun mediawiki-make-url (title action &optional sitename)
+</pre></blockquote>

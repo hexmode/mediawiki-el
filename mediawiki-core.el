@@ -31,7 +31,7 @@
 
 ;;; Version and Core Constants
 
-(defconst mediawiki-version "2.4.4"
+(defconst mediawiki-version "2.4.6"
   "Current version of mediawiki.el.")
 
 ;;; Core Customization Groups

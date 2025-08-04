@@ -11,6 +11,9 @@ TEST_FILES := $(wildcard tests/test-*.el)
 # Autoloader file
 AUTOLOADS = mediawiki-autoloads.el
 
+# File to check
+FILE ?= mediawiki.el
+
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
 
@@ -57,12 +60,18 @@ editorconfig:
 	git ls-files -z | xargs -0 grep -PzZlv "\x0a$$" | xargs -0 -I{} -n 1 sh -c 'echo >> {}'
 	git ls-files -z | xargs -0 grep -PZl '[[:space:]]$$' | xargs -0 -I{} sed -i 's,[[:space:]]*$$,,' {}
 
+check-file:
+	@emacs --batch --eval '(condition-case err (let ((checkfile "${FILE}")) (find-file checkfile) (check-parens) (message "%s parenthesis are balanced" checkfile)) (error (let ((line-number (line-number-at-pos))) (message "Error at line %d: %s" line-number (buffer-substring-no-properties (pos-bol) (pos-eol))))))'
+
+
+
 help:
 	@echo "Available targets:"
 ifneq ($(TEST_FILES),)
 	@echo "  test           - Run all tests"
 endif
 	@echo "  autoloads      - Build autoloader"
+	@echo "  check-file     - Check the file given by FILE for un-balanced parethesis"
 	@echo "  editorconfig   - Clean up whitespace"
 	@echo "  clean          - Remove compiled files"
 	@echo "  help           - Show this help"
