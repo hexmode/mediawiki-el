@@ -91,27 +91,31 @@
   "Test that url-http-get function has correct structure."
   (should (functionp 'url-http-get))
 
-  ;; Test function signature by checking it doesn't error with nil args
-  ;; We can't test actual HTTP without mocking, so we test the function exists
-  ;; and has the expected parameter structure
-  (should (condition-case nil
-              (progn
-                ;; This will likely error due to network, but we're testing structure
-                (url-http-get "http://example.com" nil nil nil nil)
-                t)
-            (error t))))
+  ;; Mock the underlying HTTP functions to avoid network calls
+  (cl-letf (((symbol-function 'url-compat-retrieve)
+             (lambda (url post-process buffer callback cbargs)
+               ;; Mock successful retrieval without calling post-process
+               "mock-result"))
+            ((symbol-function 'url-basic-auth)
+             (lambda (url) nil)))
+
+    ;; Test function can be called without making real network requests
+    (should (url-http-get "http://example.com" nil nil nil nil))))
 
 (ert-deftest test-url-http-post-structure ()
   "Test that url-http-post function has correct structure."
   (should (functionp 'url-http-post))
 
-  ;; Test function exists and has expected parameter structure
-  (should (condition-case nil
-              (progn
-                ;; This will likely error due to network, but we're testing structure
-                (url-http-post "http://example.com" '() nil nil nil nil nil)
-                t)
-            (error t))))
+  ;; Mock the underlying HTTP functions to avoid network calls
+  (cl-letf (((symbol-function 'url-compat-retrieve)
+             (lambda (url post-process buffer callback cbargs)
+               ;; Mock successful retrieval without calling post-process
+               "mock-result"))
+            ((symbol-function 'url-basic-auth)
+             (lambda (url) nil)))
+
+    ;; Test function can be called without making real network requests
+    (should (url-http-post "http://example.com" '() nil nil nil nil nil))))
 
 ;;; Test Response Processing
 
