@@ -143,7 +143,7 @@ fetch.  LIMIT is the upper bound on the number of results to give."
                      (cons "rvprop" (mediawiki-api-param props))
                      (cons "rvslots" "main")))))
     (if (eq t qresult)
-      (error "No results for revision query.")
+      (error "No results for revision query")
       (cddr qresult))))
 
 (defun mediawiki-api-query-title (sitename title)

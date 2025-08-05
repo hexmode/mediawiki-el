@@ -726,6 +726,38 @@ a context-aware manner.
   (modify-syntax-entry ?< "(>" mediawiki-mode-syntax-table)
   (modify-syntax-entry ?> ")<" mediawiki-mode-syntax-table))
 
+;;; Derived Mode for File Operations
+
+;;;###autoload
+(define-derived-mode mediawiki-file-mode mediawiki-mode "MW-File"
+  "Major mode for editing MediaWiki markup in local files.
+
+This mode derives from `mediawiki-mode' but replaces the save and open
+keybindings to work with local files instead of wiki pages:
+
+\\[save-buffer] saves the current buffer to its file.
+\\[save-buffer-as] saves the current buffer to a different file.
+\\[find-file] opens a local file.
+\\[kill-buffer-and-window] saves and closes the current buffer.
+
+All other MediaWiki editing functionality remains the same."
+
+  ;; Override the wiki-specific keybindings with file operations
+  (define-key mediawiki-file-mode-map "\C-x\C-s" 'save-buffer)
+  (define-key mediawiki-file-mode-map "\C-c\C-c" 'kill-buffer-and-window)
+  (define-key mediawiki-file-mode-map "\C-x\C-w" 'write-file)
+  (define-key mediawiki-file-mode-map "\C-c\C-o" 'find-file)
+
+  ;; Remove the wiki-specific reload binding since it doesn't make sense for files
+  (define-key mediawiki-file-mode-map "\M-g" nil))
+
+;;; Auto Mode Association
+
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.wiki\\'" . mediawiki-file-mode))
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.mediawiki\\'" . mediawiki-file-mode))
+
 ;;; Mode Hooks
 
 (add-hook 'mediawiki-mode-hook (lambda () (outline-minor-mode nil)))

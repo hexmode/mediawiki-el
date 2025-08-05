@@ -210,7 +210,6 @@ SUMMARY, and CONTENT on SITENAME."
   "Prompt for a summary and return the answer."
   (completing-read  "Summary: " '()))
 
-(declare-function mediawiki-open "mediawiki")
 ;;;###autoload
 (defun mediawiki-open-page-at-point ()
   "Open a new buffer with the page at point."
