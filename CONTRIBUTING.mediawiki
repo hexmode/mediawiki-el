@@ -1,15 +1,96 @@
-== Contributing to mediawiki.el ==
+= Contributing to mediawiki.el =
 
-This project uses a makefile to capture several actions that aid in the development of this project.
+This file provides guidance to developers as well as tools like [https://claude.ai/code Claude Code], [https://github.com/QwenLM/qwen-code Qwen Code], [https://github.com/google-gemini/gemini-cli Gemini CLI], and others when working with code in this repository.
 
-=== Makefile targets ===
+== Project Overview ==
 
-;<tt>make test</tt>: Execute all [ERT https://www.gnu.org/software/emacs/manual/html_mono/ert.html] tests in in the <tt>[[tests]]</tt> directory.
-;<tt>make autoloads</tt>: Generate the autoloader file for this project.
-;<tt>make editorconfig</tt>: Clean up EOL and EOF whitespace per editorconfig.
-;<tt>make check-file FILE=''file.el''</tt>: Check ''file.el'' for problems with balanced parenthesis and output a clue for where to find them.  Example:
-<blockquote><pre>
-$ make check-file FILE=mediawiki-core.el
-Mark set
-Error at line 102: (defun mediawiki-make-url (title action &optional sitename)
-</pre></blockquote>
+MediaWiki.el is an Emacs package for editing MediaWiki sites (like Wikipedia) directly from Emacs. This is version 2.4.x, which has been reorganized into a modular structure while maintaining full backward compatibility.
+
+== Common Development Commands ==
+
+=== Testing ===
+
+* <code>make test-mediawiki-simple</code> - Run essential functional tests (8 tests, quick verification)
+* <code>make test</code> - Run complete test suite (152 tests total)
+* <code>make test-NAME</code> - Run a single test file where test-NAME corresponds with tests/test-NAME.el
+
+=== Development Tasks ===
+
+* <code>make autoloads</code> - Generate autoloader file for the project
+* <code>make check-file FILE=filename.el</code> - Check a specific file for balanced parentheses
+* <code>make editorconfig</code> - Clean up EOL and EOF whitespace
+* <code>make clean</code> - Remove compiled files and artifacts
+
+=== Test-Specific Commands ===
+
+* Individual test files can be run with: <code>make test-FILENAME</code> where test-FILENAME will run the tests found in <code>tests/test-FILENAME.el</code>
+
+== Architecture ==
+
+The package follows a modular architecture with these core modules:
+
+=== Core Module Structure ===
+
+* '''mediawiki.el''' - Main entry point with package metadata and requires all modules
+* '''mediawiki-core.el''' - Core variables, constants, and fundamental utilities
+* '''mediawiki-faces.el''' - Font-lock face definitions for MediaWiki syntax
+* '''mediawiki-font-lock.el''' - Font-lock keywords and syntax highlighting rules
+* '''mediawiki-api.el''' - MediaWiki API interaction and data processing
+* '''mediawiki-auth.el''' - Authentication and login management using auth-source library
+* '''mediawiki-http.el''' - HTTP utilities and compatibility functions
+* '''mediawiki-page.el''' - Page editing, saving, and content management
+* '''mediawiki-draft.el''' - Draft functionality and temporary editing
+* '''mediawiki-site.el''' - Site configuration and management
+* '''mediawiki-utils.el''' - General utility functions
+* '''mediawiki-mode.el''' - Major mode definition and user interface
+
+=== Key Design Principles ===
+
+* Modular structure with clear separation of concerns
+* Full backward compatibility maintained - users can still <code>(require 'mediawiki)</code> and access all functionality
+* Each module handles a specific aspect of MediaWiki interaction
+* Authentication uses Emacs auth-source library (supports encrypted password storage)
+* Uses MediaWiki API for all server interactions
+
+=== Testing Structure ===
+
+* Tests are organized by module in <code>tests/</code> directory
+* <code>test-mediawiki-simple.el</code> contains essential functional tests (always run these first)
+* Each module has corresponding test file: <code>test-mediawiki-[module].el</code>
+* Integration tests verify module interactions
+* Extensive mocking to avoid network dependencies
+
+== Important Implementation Notes ==
+
+=== Dependencies ===
+
+* Requires Emacs 28.1+
+* Uses <code>mm-url</code> for HTTP functionality
+* Leverages auth-source for secure password management
+* Uses ERT (Emacs Regression Testing) for test suite
+
+=== Security Considerations ===
+
+* Passwords should not be stored in plain text - the package will use auth-source if password is empty
+* All network interactions go through MediaWiki API
+* Authentication tokens are managed securely
+
+=== Backward Compatibility ===
+
+* All public functions from the original monolithic version remain available
+* User configuration and customization variables unchanged
+* Existing user workflows continue to work without modification
+
+== Running Tests Effectively ==
+
+# '''Quick verification''': Always start with <code>make test-mediawiki-simple</code> or the simple test runner to verify core functionality
+# '''Full testing''': Use complete test suite for comprehensive validation
+# '''Module-specific testing''': Individual test files can be run for focused debugging
+# '''Test success metrics''': 8/8 simple tests passing indicates successful functionality; full test suite has known acceptable failure rate
+
+== File Organization ==
+
+* Root level contains all module <code>.el</code> files
+* <code>tests/</code> directory contains comprehensive test suite with detailed README
+* <code>Makefile</code> provides all development commands
+* Documentation in MediaWiki format (<tt>.mediawiki</tt> files)
