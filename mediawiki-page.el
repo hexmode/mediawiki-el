@@ -85,8 +85,10 @@
 (defun mediawiki-open (name)
   "Open a wiki page specified by NAME from the mediawiki engine."
   (interactive
-    (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history))))
-      (list (read-string "Wiki Page: " nil hist))))
+    (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history)))
+           (temp-history-symbol (make-symbol "mediawiki-temp-history")))
+      (set temp-history-symbol hist)
+      (list (read-string "Wiki Page: " nil temp-history-symbol))))
   (when (or (not (stringp name))
           (string-equal "" name))
     (error "Need to specify a name"))

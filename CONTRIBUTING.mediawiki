@@ -62,6 +62,10 @@ The package follows a modular architecture with these core modules:
 
 == Important Implementation Notes ==
 
+== ChangeLog ==
+
+Use <code>M-x add-change-log-entry</code> to document your changes in the [[ChangeLog]].
+
 === Dependencies ===
 
 * Requires Emacs 28.1+

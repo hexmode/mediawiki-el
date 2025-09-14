@@ -1,3 +1,8 @@
+2025-09-14  Mark A. Hershberger  <mah@everybody.org>
+
+        * mediawiki-page.el (mediawiki-open): Provide a temporary symbol
+        for the page list.
+
 2015-04-03  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el: Various cleanups for flycheck.  Move to github and
@@ -117,4 +122,3 @@
 	(mediawiki-page-at-point): Identify and qualify sub-pages.
 	(mediawiki-mode): Remove any bindings that use C-h.
 	(mediawiki-insert): Fix mediawiki-insert using adopted patch from Bug#563127
-
