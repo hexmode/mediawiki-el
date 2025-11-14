@@ -91,8 +91,14 @@ Store cookies for future authentication."
                 (append
                   args (list (cons "lgtoken"
                                (cdr (assq 'token result)))))))))
-    (when (string= "Success" (cdr (assoc 'result result)))
-      sitename)))
+    (cond
+      ((string= "Success" (cdr (assoc 'result result)))
+        sitename)
+      ((string= "Failed" (cdr (assoc 'result result)))
+        (error "Login failed: %s" (cdr (assoc 'reason result))))
+      (t
+        (error "Login returned unexpected result: %s"
+          (cdr (assoc 'result result)))))))
 
 ;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)

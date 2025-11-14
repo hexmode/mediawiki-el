@@ -7,12 +7,12 @@
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Package-Requires: ((emacs "28.1"))
-;; Version: 2.4.8
+;; Version: 2.4.9
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Package-Type: multi
-;; Last Modified: <2025-09-14 19:04:55 mah>
+;; Last Modified: <2025-11-14 00:56:57 mah>
 
 ;; This file is NOT (yet) part of GNU Emacs.
 

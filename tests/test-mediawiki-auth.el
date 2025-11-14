@@ -189,6 +189,36 @@
     (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
       (should (string= "TestSite" result)))))
 
+;;; Test Failed Login
+
+(ert-deftest test-mediawiki-failed-login-mock ()
+  "Test that failed login properly reports error message."
+  ;; Mock dependencies to return a failed login
+  (cl-letf (((symbol-function 'mediawiki-site-username)
+             (lambda (site) "testuser"))
+            ((symbol-function 'mediawiki-site-password)
+             (lambda (site) "wrongpass"))
+            ((symbol-function 'mediawiki-site-domain)
+             (lambda (site) nil))
+            ((symbol-function 'mediawiki-site-get-token)
+             (lambda (site type) "login-token"))
+            ((symbol-function 'mediawiki-api-call)
+             (lambda (site action args)
+               ;; Mock failed login response
+               '(login ((result . "Failed")
+                       (reason . "The bot password for bot name \"simple\" of user \"MarkAHershberger\" must be reset."))))))
+
+    ;; Test that failed login raises an error with the reason
+    (should-error
+     (mediawiki-do-login "TestSite" "testuser" "wrongpass")
+     :type 'error)
+
+    ;; Test that error message contains the reason
+    (condition-case err
+        (mediawiki-do-login "TestSite" "testuser" "wrongpass")
+      (error
+       (should (string-match-p "bot password.*must be reset" (error-message-string err)))))))
+
 ;;; Test Interactive Functions
 
 (ert-deftest test-mediawiki-auth-interactive-functions ()

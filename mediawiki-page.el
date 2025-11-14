@@ -49,10 +49,11 @@
 ;;; Page Loading Functions
 
 (defun mediawiki-get (sitename title)
-  "Query SITENAME for the content of TITLE."
+  "Query SITENAME for the content of TITLE.
+Returns a cons cell (PAGE . CONTENT) where PAGE is the page metadata
+and CONTENT is the page content string."
   (let ((page (mediawiki-api-query-title sitename title)))
-    (mediawiki-save-metadata sitename page)
-    (mediawiki-page-get-revision page 0 'content)))
+    (cons page (mediawiki-page-get-revision page 0 'content))))
 
 (defun mediawiki-edit (sitename title)
   "Edit wiki page on SITENAME named TITLE."
@@ -71,7 +72,13 @@
       (mediawiki-mode)
       (setq mediawiki-site sitename)
       (set-buffer-file-coding-system 'utf-8)
-      (insert (or (mediawiki-get sitename pagetitle) ""))
+
+      ;; Get page content and metadata, ensuring metadata is saved in current buffer
+      (let* ((page-data (mediawiki-get sitename pagetitle))
+             (page (car page-data))
+             (content (cdr page-data)))
+        (mediawiki-save-metadata sitename page)
+        (insert (or content "")))
 
       (set-buffer-modified-p nil)
       (setq buffer-undo-list t)
@@ -88,7 +95,7 @@
     (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history)))
            (temp-history-symbol (make-symbol "mediawiki-temp-history")))
       (set temp-history-symbol hist)
-      (list (read-string "Wiki Page: " nil temp-history-symbol))))
+      (list (read-string "Wiki Page: " (mediawiki-page-at-point) temp-history-symbol))))
   (when (or (not (stringp name))
           (string-equal "" name))
     (error "Need to specify a name"))

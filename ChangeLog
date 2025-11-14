@@ -1,3 +1,13 @@
+2025-11-14  Mark A. Hershberger  <mah@everybody.org>
+
+        * mediawiki.el: Bump version to 2.4.9.
+
+        * mediawiki-page.el (mediawiki-edit, mediawiki-get): Set
+        mediawiki-site so it is buffer-local properly.
+
+        * mediawiki-auth.el (mediawiki-do-login): Ensure failure messages
+        are shown.
+
 2025-09-14  Mark A. Hershberger  <mah@everybody.org>
 
         * mediawiki-page.el (mediawiki-open): Provide a temporary symbol
