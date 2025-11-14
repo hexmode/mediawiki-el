@@ -618,7 +618,7 @@ line.  It does not promote the whole tree!"
     (zmacs-activate-region)))
 
 (declare-function mediawiki-open "mediawiki")
-(defvar mediawiki-page-title nil
+(defvar-local mediawiki-page-title nil
   "The title of the page corresponding to the current buffer.")
 
 ;;;###autoload
@@ -633,11 +633,11 @@ line.  It does not promote the whole tree!"
 
 ;;; Major Mode Definition
 
-(defvar mediawiki-edittoken nil
+(defvar-local mediawiki-edittoken nil
   "The edit token for this page.")
-(defvar mediawiki-starttimestamp nil
+(defvar-local mediawiki-starttimestamp nil
   "The starttimestamp for this page.")
-(defvar mediawiki-basetimestamp nil
+(defvar-local mediawiki-basetimestamp nil
   "The base timestamp for this page.")
 
 ;;;###autoload

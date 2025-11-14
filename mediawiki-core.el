@@ -66,7 +66,7 @@ per-session later."
   :tag "MediaWiki Site Default"
   :group 'mediawiki)
 
-(defvar mediawiki-site nil
+(defvar-local mediawiki-site nil
   "The current mediawiki site from `mediawiki-site-alist'.
 If not set, defaults to `mediawiki-site-default'.")
 

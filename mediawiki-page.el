@@ -43,7 +43,7 @@
       (add-to-list 'mediawiki-page-history (cons sitename "")))
     (setcdr (assoc-string sitename mediawiki-page-history) (append (list title) hist))))
 
-(defvar mediawiki-page-title nil
+(defvar-local mediawiki-page-title nil
   "The title of the page corresponding to the current buffer.")
 
 ;;; Page Loading Functions
