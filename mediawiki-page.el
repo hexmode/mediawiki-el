@@ -124,6 +124,8 @@ Prompt for a SUMMARY if one isn't given."
   (interactive "sSummary: ")
   (when (not (eq major-mode 'mediawiki-mode))
     (error "Not a mediawiki-mode buffer"))
+  (if (null mediawiki-site)
+    (mediawiki-site))
   (if mediawiki-page-title
     (mediawiki-save-page
       mediawiki-site

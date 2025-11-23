@@ -1,3 +1,12 @@
+2025-11-23  Mark A. Hershberger  <mah@everybody.org>
+
+        * mediawiki-page.el (mediawiki-save): Make sure we have a site.
+
+        * mediawiki-api.el (mediawiki-api-call): Raise a meaningful error
+        if sitename isn't set.
+
+        * mediawiki-auth.el (mediawiki-do-logout): Add token fetch.
+
 2025-11-14  Mark A. Hershberger  <mah@everybody.org>
 
         * mediawiki.el: Bump version to 2.4.9.

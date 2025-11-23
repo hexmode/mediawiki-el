@@ -104,11 +104,10 @@ Store cookies for future authentication."
 (defun mediawiki-do-logout (&optional sitename)
   "Log out of SITENAME."
   (interactive)
-  (when (not sitename)
-    (setq sitename (mediawiki-prompt-for-site)))
-
-  (mediawiki-api-call sitename "logout" nil)
-  (setq mediawiki-site nil))
+  (let ((sitename (or sitename (mediawiki-prompt-for-site))))
+    (mediawiki-api-call sitename "logout"
+      (list (cons "token" (mediawiki-site-get-token sitename "csrf"))))
+    (setq mediawiki-site nil)))
 
 (provide 'mediawiki-auth)
 

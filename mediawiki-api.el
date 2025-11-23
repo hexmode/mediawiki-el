@@ -71,6 +71,8 @@
 (defun mediawiki-api-call (sitename action &optional args)
   "Wrapper for making an API call to SITENAME.
 ACTION is the API action.  ARGS is a list of arguments."
+  (when (null sitename)
+    (error "No sitename given!"))
   (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
                           (mm-url-encode-multipart-form-data
                             (delq nil args) "==")))
