@@ -97,10 +97,12 @@ ACTION is the API action.  ARGS is a list of arguments."
         (error "(%s) %s" label info)))
 
     (if (cddr result)
-      (let ((action-res (assq (intern action) (cddr result))))
+      (let ((action-res (assq (intern action) (cddr result)))
+             (curtimestamp (assq 'curtimestamp (cadr result))))
         (unless action-res
           (error "Didn't see action name in the result list"))
-
+        (when curtimestamp
+          (push curtimestamp (cadr action-res)))
         action-res)
       t)))
 
@@ -143,9 +145,12 @@ fetch.  LIMIT is the upper bound on the number of results to give."
                      (when limit
                        (cons "rvlimit" (mediawiki-api-param limit)))
                      (cons "rvprop" (mediawiki-api-param props))
-                     (cons "rvslots" "main")))))
+                     (cons "rvslots" "main")
+                     (cons "curtimestamp" "1")))))
     (if (eq t qresult)
       (error "No results for revision query")
+      (when-let* ((curtimestamp (assq 'curtimestamp (cadr qresult))))
+        (push curtimestamp (cddr qresult)))
       (cddr qresult))))
 
 (defun mediawiki-api-query-title (sitename title)
@@ -194,7 +199,8 @@ return the whole revision structure."
 
 (defun mediawiki-pagelist-find-page (pagelist title)
   "Given PAGELIST, extract the informaton for TITLE."
-  (let ((pl (cddr (assq 'pages pagelist)))
+  (let ((starttimestamp (alist-get 'curtimestamp pagelist))
+        (pl (cddr (assq 'pages pagelist)))
          page current)
     (while (and (not page)
              (setq current (pop pl)))
@@ -203,6 +209,8 @@ return the whole revision structure."
       (when (string= (mediawiki-page-get-title current)
               (mediawiki-translate-pagename title))
         (setq page current)))
+    (when page
+      (push (cons 'starttimestamp starttimestamp) (cadr page)))
     page))
 
 ;;; String Extraction Utilities
