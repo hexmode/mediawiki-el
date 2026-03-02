@@ -39,9 +39,10 @@
 (defun mediawiki-add-page-history (sitename title)
   "Update SITENAME's page history with TITLE."
   (let ((hist (cdr (assoc-string sitename mediawiki-page-history))))
-    (unless hist
-      (add-to-list 'mediawiki-page-history (cons sitename "")))
-    (setcdr (assoc-string sitename mediawiki-page-history) (append (list title) hist))))
+    (unless (equal title (car hist))
+      (unless hist
+        (add-to-list 'mediawiki-page-history (cons sitename "")))
+      (setcdr (assoc-string sitename mediawiki-page-history) (append (list title) hist)))))
 
 (defvar-local mediawiki-page-title nil
   "The title of the page corresponding to the current buffer.")
