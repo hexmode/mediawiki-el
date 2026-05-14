@@ -1,5 +1,25 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-faces.el: Use quoted face specs instead of backtick
+        in all defface forms; add tests verifying no :family nil
+        warnings are produced.  Fixes #37.
+
+        * mediawiki-mode.el (mediawiki-mode): Set buffer-offer-save to
+        t so Emacs prompts before killing a modified wiki buffer.
+        Fixes #25.
+
+        * mediawiki-site.el (mediawiki-site-first-page): Fall back to
+        the legacy positional format (6th element of site entry) when
+        the :first-page keyword property is absent.  Fixes #46.
+
+        * mediawiki-font-lock.el (mediawiki-font-lock-keywords): Allow
+        newlines in {{...}} and {{{...}}} patterns so multiline
+        templates are fully highlighted.  Fixes #52.
+
+        * mediawiki.el: Bump version to 2.4.21.
+
+2026-05-14  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-auth.el (mediawiki-do-login): Fall back gracefully
         when mediawiki-site-get-token errors on pre-1.27 wikis that
         lack the token API.  Addresses PR #29.
