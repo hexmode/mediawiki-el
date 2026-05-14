@@ -722,6 +722,8 @@ a context-aware manner.
     'mediawiki-link-fill-nobreak-p)
   (set (make-local-variable 'auto-fill-inhibit-regexp) "^[ *#:|;]")
 
+  (setq-local buffer-offer-save t)
+
   ;; Support for outline-minor-mode. No key conflicts, so we'll use
   ;; the normal outline-mode prefix.
   (set (make-local-variable 'outline-regexp) "==+")

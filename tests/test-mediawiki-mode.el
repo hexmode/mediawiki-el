@@ -340,6 +340,16 @@ rather than being added via the global outline-minor-mode-hook."
   (should (functionp 'mediawiki-reply-at-point-simple))
   (should (commandp 'mediawiki-reply-at-point-simple)))
 
+;;; Test for Issue #25 — Modified buffers must offer to save on close
+
+(ert-deftest test-mediawiki-buffer-offer-save ()
+  "Modified mediawiki buffers must offer to save on close (issue #25).
+buffer-offer-save=t makes Emacs prompt before killing a modified buffer."
+  (with-temp-buffer
+    (mediawiki-mode)
+    (should (local-variable-p 'buffer-offer-save))
+    (should (buffer-local-value 'buffer-offer-save (current-buffer)))))
+
 (provide 'test-mediawiki-mode)
 
 ;;; test-mediawiki-mode.el ends here
