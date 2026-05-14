@@ -1,5 +1,17 @@
 2026-05-13  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-mode.el (mediawiki-mode-map): Add outline navigation
+        bindings (outline-promote, outline-demote, outline-move-subtree-up/down,
+        mediawiki-simple-outline-promote/demote) directly to mediawiki-mode-map.
+        (mediawiki-outline-magic-keys): Update docstring to reflect that most
+        outline keys are now bound in mediawiki-mode-map.
+        Remove global hooks that were stomping on other modes' keymaps.
+        Fixes #36.
+
+        * mediawiki.el: Bump version to 2.4.13.
+
+2026-05-13  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-page.el (mediawiki-page-at-point): Guard nil start and
         pagename to prevent crashes when cursor is outside [[...]] links.
         Fixes #54.

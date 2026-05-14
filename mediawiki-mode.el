@@ -124,8 +124,18 @@
   (define-key mediawiki-mode-map "\M-p"
     'mediawiki-goto-previous-page)
   (define-key mediawiki-mode-map "\M-n"      'mediawiki-goto-next-page)
-  (define-key mediawiki-mode-map [(control return)]
-    'mediawiki-open-page-at-point))
+   (define-key mediawiki-mode-map [(control return)]
+     'mediawiki-open-page-at-point)
+  ;; Outline navigation/restructuring (scoped to mediawiki buffers only;
+  ;; replaces the old global outline-minor-mode-hook approach from issue #36).
+  ;; outline-regexp is already set buffer-locally in mediawiki-mode, so
+  ;; these functions work without outline-minor-mode being active.
+  (define-key mediawiki-mode-map [(meta left)]    'outline-promote)
+  (define-key mediawiki-mode-map [(meta right)]   'outline-demote)
+  (define-key mediawiki-mode-map [(control left)]  'mediawiki-simple-outline-promote)
+  (define-key mediawiki-mode-map [(control right)] 'mediawiki-simple-outline-demote)
+  (define-key mediawiki-mode-map [(control up)]    'outline-move-subtree-up)
+  (define-key mediawiki-mode-map [(control down)]  'outline-move-subtree-down))
 
 ;;; Interactive Commands
 
@@ -534,7 +544,10 @@ point.  Generalise to make `previous-long-line'."
 
 ;;;###autoload
 (defun mediawiki-outline-magic-keys ()
-  "Set up outline magic keys.
+  "Set up additional outline magic keys in the current buffer.
+Most outline keys are already bound in `mediawiki-mode-map'.  This
+function adds bindings for `outline-cycle' (from the external
+`outline-magic' package) if you have it installed.
 See https://www.emacswiki.org/emacs/OutlineMagic"
   (interactive)
   (unless  (featurep 'xemacs)
@@ -760,8 +773,7 @@ All other MediaWiki editing functionality remains the same."
 
 ;;; Mode Hooks
 
-(add-hook 'mediawiki-mode-hook (lambda () (outline-minor-mode nil)))
-(add-hook 'outline-minor-mode-hook 'mediawiki-outline-magic-keys)
+
 
 (provide 'mediawiki-mode)
 
