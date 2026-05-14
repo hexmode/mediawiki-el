@@ -1,5 +1,18 @@
 2026-05-13  Mark A. Hershberger  <mah@everybody.org>
 
+	* tests/test-mediawiki-api-xml.el: New file with 11 XML-format
+	integration tests covering the full HTTP mock → parse → extract
+	chain.  Serves as regression harness for the planned XML→JSON
+	migration (issue #39).
+
+	* tests/test-mediawiki-api.el: Fix 3 failing tests by correcting
+	mock XML parse structures to match xml-parse-region output (nil
+	attrs slots, realistic warning shape).
+
+	* mediawiki.el: Bump version to 2.4.15.
+
+2026-05-13  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-page.el (mediawiki-add-page-history): Don't add
         consecutive duplicates to page history.  Closes #56.
 

@@ -85,7 +85,7 @@
   ;; Create mock page structure with old format
   (let ((mock-page '(page
                      ((title . "Test Page"))
-                     (revisions
+                     (revisions nil
                       (rev ((timestamp . "2025-01-01T00:00:00Z")
                             (user . "TestUser"))
                            "Test content")))))
@@ -105,7 +105,7 @@
   ;; Test with new slot-based format
   (let ((mock-page '(page
                      ((title . "Test Page"))
-                     (revisions
+                     (revisions nil
                       (rev ((timestamp . "2025-01-01T00:00:00Z"))
                            (slots nil (slot ((contentmodel . "wikitext")) "Slot content")))))))
 
@@ -119,10 +119,10 @@
   "Test mediawiki-pagelist-find-page function."
   ;; Create mock pagelist structure
   (let ((mock-pagelist '(query nil
-                         (pages
-                          (page1 ((title . "Main Page")) (revisions))
-                          (page2 ((title . "Test Page")) (revisions))
-                          (page3 ((title . "Another Page")) (revisions))))))
+                         (pages nil
+                          (page1 ((title . "Main Page")) (revisions nil))
+                          (page2 ((title . "Test Page")) (revisions nil))
+                          (page3 ((title . "Another Page")) (revisions nil))))))
 
     ;; Test finding existing page
     (let ((result (mediawiki-pagelist-find-page mock-pagelist "Test Page")))
@@ -162,10 +162,12 @@
 
 (ert-deftest test-mediawiki-raise ()
   "Test mediawiki-raise function."
-  ;; Create mock API result with warnings
+  ;; Create mock API result with realistic warning structure:
+  ;; label = module name (element tag), info = text content (list)
   (let ((mock-result '(api nil
-                       (warnings
-                        (warning ((code . "test-warning") (info . "Test warning message")))))))
+                       (warnings nil
+                        (main ((xml:space . "preserve"))
+                         "Test warning message")))))
 
     ;; Test warning extraction
     (let ((warnings-found '()))
@@ -174,8 +176,9 @@
                          (push (cons label info) warnings-found)))
 
       (should (= 1 (length warnings-found)))
-      (should (string= "test-warning" (caar warnings-found)))
-      (should (string= "Test warning message" (cdar warnings-found)))))
+      ;; label is the module name (symbol), info is the text content (list)
+      (should (eq 'main (caar warnings-found)))
+      (should (equal '("Test warning message") (cdar warnings-found)))))
 
   ;; Test with no warnings
   (let ((mock-result '(api nil (query))))
