@@ -1,5 +1,14 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
+        * tests/test-mediawiki-http.el (test-url-bit-for-url): Accept
+        nil as a valid result.  On Emacs 28 the native url-bit-for-url
+        uses a different auth-source calling convention, so the mock
+        does not intercept it and nil is returned.
+
+        * mediawiki.el: Bump version to 2.4.19.
+
+2026-05-14  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-page.el (mediawiki-page-at-point): Replace pos-eol
         and pos-bol (Emacs 29+) with line-end-position and
         line-beginning-position for Emacs 28 compatibility.
