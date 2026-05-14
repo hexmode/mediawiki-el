@@ -1,5 +1,11 @@
 2025-11-23  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-site.el (mediawiki-site): Require mediawiki in function
+        body to fix void-function error on first call after deferred load.
+        Fixes #53.
+
+        * mediawiki.el: Bump version to 2.4.11.
+
         * mediawiki-page.el (mediawiki-save): Make sure we have a site.
 
         * mediawiki-api.el (mediawiki-api-call): Raise a meaningful error

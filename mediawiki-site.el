@@ -117,6 +117,7 @@ If BUFFER is not given, the current buffer is used."
 Without an argument, use `mediawiki-site-default'.
 Interactively, prompt for a SITE."
   (interactive)
+  (require 'mediawiki)
   (when (not site)
     (setq site (mediawiki-prompt-for-site)))
   (when (or (eq nil mediawiki-site)
