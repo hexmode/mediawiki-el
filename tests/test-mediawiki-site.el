@@ -226,6 +226,27 @@
         ;; Should have even number of elements (key-value pairs)
         (should (= 0 (mod (length plist) 2)))))))
 
+;;; Tests for Issue #46 — Legacy positional first-page config
+
+(ert-deftest test-mediawiki-site-first-page-positional ()
+  "Legacy positional config: 6th element (index 5) used as first-page (issue #46)."
+  (let ((mediawiki-site-alist
+         '(("TestWiki" "http://test.example.com/w/" "user" "pass" "" "CustomPage"))))
+    (should (string= "CustomPage" (mediawiki-site-first-page "TestWiki")))))
+
+(ert-deftest test-mediawiki-site-first-page-keyword ()
+  "Keyword :first-page config should still work after fix (issue #46)."
+  (let ((mediawiki-site-alist
+         '(("TestWiki" "http://test.example.com/w/" "user" "pass" ""
+            :first-page "KeywordPage"))))
+    (should (string= "KeywordPage" (mediawiki-site-first-page "TestWiki")))))
+
+(ert-deftest test-mediawiki-site-first-page-default ()
+  "Empty config falls back to Main Page (issue #46)."
+  (let ((mediawiki-site-alist
+         '(("TestWiki" "http://test.example.com/w/" "user" "pass" ""))))
+    (should (string= "Main Page" (mediawiki-site-first-page "TestWiki")))))
+
 (provide 'test-mediawiki-site)
 
 ;;; test-mediawiki-site.el ends here

@@ -152,8 +152,12 @@ Interactively, prompt for a SITE."
       domain)))
 
 (defun mediawiki-site-first-page (sitename)
-  "Get the first page for a given SITENAME."
-  (let ((page (mediawiki-site-property sitename :first-page)))
+  "Get the first page for a given SITENAME.
+Supports both the keyword format (:first-page \"Page\") and the legacy
+positional format where the 6th element (index 5) is the first page."
+  (let ((page (or (mediawiki-site-property sitename :first-page)
+                  ;; Legacy positional format: index 5 as plain string
+                  (mediawiki-site-extract sitename 5))))
     (if (or (not page) (string= page ""))
       "Main Page"
       page)))
