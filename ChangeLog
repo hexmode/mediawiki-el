@@ -1,3 +1,11 @@
+2026-05-13  Mark A. Hershberger  <mah@everybody.org>
+
+        * mediawiki-page.el (mediawiki-page-at-point): Guard nil start and
+        pagename to prevent crashes when cursor is outside [[...]] links.
+        Fixes #54.
+
+        * mediawiki.el: Bump version to 2.4.12.
+
 2025-11-23  Mark A. Hershberger  <mah@everybody.org>
 
         * mediawiki-site.el (mediawiki-site): Require mediawiki in function

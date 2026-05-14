@@ -238,9 +238,9 @@ Typically, this means anything enclosed in [[PAGE]]."
                        (+ (point) 2)))
               (end    (when (search-forward "]]" eol t)
                         (- (point) 2)))
-              (middle (progn
+              (middle (when start
                         (goto-char start)
-                        (when (search-forward  "|" end t)
+                        (when (search-forward "|" end t)
                           (1- (point)))))
               (pagename (when (and
                                 (not (eq nil start))
@@ -249,10 +249,11 @@ Typically, this means anything enclosed in [[PAGE]]."
                                 (>= pos start))
                           (buffer-substring-no-properties
                             start (or middle end)))))
-        (if (string= "/"
-              (substring pagename 0 1))
-          (concat mediawiki-page-title pagename)
-          pagename)))))
+        (when pagename
+          (if (string= "/"
+                (substring pagename 0 1))
+            (concat mediawiki-page-title pagename)
+            pagename))))))
 
 ;;; Buffer Management
 
