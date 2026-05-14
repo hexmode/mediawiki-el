@@ -164,6 +164,51 @@ Error/warning handling moved into mediawiki-api-call."
   (should-not (mediawiki-raise '() 'warnings #'ignore))
   (should-not (mediawiki-raise '() 'error #'ignore)))
 
+;;; Test JSON Parsing (Regression Test for Empty Response Bug)
+
+(ert-deftest test-mediawiki-json-parse-empty ()
+  "Test that empty JSON {} parses to nil (regression test for issue #39).
+
+This tests the fix for the logout bug where {} was incorrectly treated
+as a parse error. The json-parse-string returns nil for empty {}."
+  ;; Simulate what mediawiki-api-call does with json-parse-string
+  (let ((result (condition-case err
+                    (json-parse-string "{}"
+                      :object-type 'alist
+                      :array-type 'list
+                      :null-object nil
+                      :false-object nil)
+                  (error (error "Parse error: %s" err)))))
+    ;; Empty {} should parse to nil, not signal an error
+    (should (eq result nil))
+    ;; alist-get on nil returns nil gracefully (doesn't error)
+    (should-not (alist-get 'error result))))
+
+(ert-deftest test-mediawiki-json-parse-non-empty ()
+  "Test that non-empty JSON parses correctly to an alist."
+  (let ((result (json-parse-string "{\"error\":{\"code\":\"badtoken\",\"info\":\"Invalid token\"}}"
+                     :object-type 'alist
+                     :array-type 'list
+                     :null-object nil
+                     :false-object nil)))
+    (should (listp result))
+    (should (alist-get 'error result))
+    (should (string= "badtoken" (alist-get 'code (alist-get 'error result))))))
+
+(ert-deftest test-mediawiki-json-parse-normal-response ()
+  "Test that normal JSON responses parse to usable alists."
+  (let ((result (json-parse-string "{\"query\":{\"pages\":{\"1\":{\"title\":\"Test\"}}}}"
+                     :object-type 'alist
+                     :array-type 'list
+                     :null-object nil
+                     :false-object nil)))
+    (should (listp result))
+    (should (alist-get 'query result))
+    ;; JSON numeric keys become symbols like \1 in Emacs Lisp
+    (should (string= "Test"
+                    (alist-get 'title
+                              (car (alist-get 'pages (alist-get 'query result))))))))
+
 ;;; Test Mocked API Functions
 
 (ert-deftest test-mediawiki-api-call-structure ()

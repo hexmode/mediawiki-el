@@ -69,13 +69,15 @@ Returns the full parsed JSON response as an alist."
   (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
                 (append args (list (cons "format" "json")
                                (cons "action" action)))))
-          (result (json-parse-string raw
-                    :object-type 'alist
-                    :array-type 'list
-                    :null-object nil
-                    :false-object nil)))
-    (unless result
-      (error "There was an error parsing the result of the API call"))
+          (result (condition-case _err
+                    (json-parse-string raw
+                      :object-type 'alist
+                      :array-type 'list
+                      :null-object nil
+                      :false-object nil)
+                    (error
+                     (error "There was an error parsing the result of the API call")))))
+    ;; result is nil for empty {} responses (e.g. action=logout) — valid, not an error
     ;; Handle errors
     (when-let ((err (alist-get 'error result)))
       (error "(%s) %s"

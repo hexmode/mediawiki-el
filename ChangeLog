@@ -1,5 +1,13 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-api.el (mediawiki-api-call): Handle empty JSON
+        response ({}) from action=logout.  json-parse-string returns nil
+        for an empty object, which the previous nil-check wrongly treated
+        as a parse failure.  Use condition-case instead so genuine parse
+        errors are caught while valid empty responses pass through.
+
+2026-05-14  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-api.el (mediawiki-api-call): Switch from XML to
         JSON format.  Replace xml-parse-region with json-parse-string.
         Returns full parsed JSON alist instead of action sub-element.
