@@ -127,14 +127,14 @@
        (6 font-lock-keyword-face t t)
        (7 font-lock-builtin-face t t))
 
-    ;; Wiki variables
-    '("\\({{\\)\\(.+?\\)\\(}}\\)"
+    ;; Wiki variables (multiline: \\(?:.\\|\n\\)+? allows newlines)
+    '("\\({{\\)\\(\\(?:.\\|\n\\)+?\\)\\(}}\\)"
        (1 font-lock-builtin-face t t)
        (2 font-lock-variable-name-face t t)
        (3 font-lock-builtin-face t t))
 
-    ;; Semantic variables
-    '("\\({{{\\)\\(.+?\\)\\(}}}\\)"
+    ;; Semantic variables (multiline: \\(?:.\\|\n\\)+? allows newlines)
+    '("\\({{{\\)\\(\\(?:.\\|\n\\)+?\\)\\(}}}\\)"
        (1 font-lock-builtin-face t t)
        (2 font-lock-variable-name-face t t)
        (3 font-lock-builtin-face t t))

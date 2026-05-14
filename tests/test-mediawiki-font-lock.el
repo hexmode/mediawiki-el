@@ -192,6 +192,50 @@
                       (string-match regexp "test")
                     (error t))))))
 
+;;; Tests for Issue #52 — Multiline template font-lock
+
+(ert-deftest test-mediawiki-font-lock-multiline-template ()
+  "Multiline templates {{...}} should be fully highlighted (issue #52)."
+  (with-temp-buffer
+    (mediawiki-mode)
+    (insert "{{eqn|l=1\n     |o=something\n     |r=2}}")
+    (font-lock-ensure)
+    ;; Opening {{ at position 1-2 should have builtin face.
+    ;; This check also proves the multiline match succeeded: the regex must
+    ;; find }} (on line 3) to match at all, so a match at position 1 implies
+    ;; the full multiline template was recognised.
+    (goto-char 1)
+    (let ((face (get-text-property (point) 'face)))
+      (should (or (eq face 'font-lock-builtin-face)
+                  (and (listp face) (memq 'font-lock-builtin-face face)))))
+    ;; Template content on line 1 gets variable-name face only when the
+    ;; multiline match succeeds (position 3 = first char of "eqn|l=1...").
+    ;; We check line 1 rather than line 2 because the preformatted rule
+    ;; (^ .*$) overrides the template face on lines that start with spaces.
+    (goto-char 3)
+    (let ((face (get-text-property (point) 'face)))
+      (should (or (eq face 'font-lock-variable-name-face)
+                  (and (listp face) (memq 'font-lock-variable-name-face face)))))))
+
+(ert-deftest test-mediawiki-font-lock-multiline-variable ()
+  "Multiline variables {{{...}}} should be fully highlighted (issue #52)."
+  (with-temp-buffer
+    (mediawiki-mode)
+    (insert "{{{param|default\nvalue}}}")
+    (font-lock-ensure)
+    ;; Opening {{{ at position 1-3 should have builtin face
+    (goto-char 1)
+    (let ((face (get-text-property (point) 'face)))
+      (should (or (eq face 'font-lock-builtin-face)
+                  (and (listp face) (memq 'font-lock-builtin-face face)))))
+    ;; Content on second line should have variable-name face.
+    ;; Line 2 is "value}}}" which does not start with a space, so the
+    ;; preformatted rule does not interfere here.
+    (goto-char (+ 1 (length "{{{param|default\n")))
+    (let ((face (get-text-property (point) 'face)))
+      (should (or (eq face 'font-lock-variable-name-face)
+                  (and (listp face) (memq 'font-lock-variable-name-face face)))))))
+
 (provide 'test-mediawiki-font-lock)
 
 ;;; test-mediawiki-font-lock.el ends here
