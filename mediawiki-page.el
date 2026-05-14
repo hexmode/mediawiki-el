@@ -232,8 +232,8 @@ SUMMARY, and CONTENT on SITENAME."
   "Return the page name under point.
 Typically, this means anything enclosed in [[PAGE]]."
   (let ((pos (point))
-         (eol (pos-eol))
-         (bol (pos-bol)))
+         (eol (line-end-position))
+         (bol (line-beginning-position)))
     (save-excursion
       (let* ((start  (when (search-backward "[[" bol t)
                        (+ (point) 2)))
