@@ -98,7 +98,7 @@ mediawiki-api-call calls (message ...) for warnings, not (error ...)."
   (let ((page '((pageid . 1) (ns . 0) (title . "Test Page")
                 (revisions . (((revid . 100) (user . "Admin")
                                 (timestamp . "2024-01-01T00:00:00Z")
-                                (slots . ((main . ((content . "Hello World")))))))))))
+                                (slots . ((main . ((* . "Hello World")))))))))))
     (should (string= "Hello World" (mediawiki-page-get-revision page 0 'content)))
     (should (string= "2024-01-01T00:00:00Z" (mediawiki-page-get-revision page 0 'timestamp)))
     (should (string= "Admin" (mediawiki-page-get-revision page 0 'user)))))
@@ -137,13 +137,13 @@ pages is an alist of (id-symbol . page-alist) pairs."
   "Mock mediawiki-api-call returning JSON query result, verify pagelist returned.
 mediawiki-api-query-revisions returns ((curtimestamp . \"...\") (pages . (...)))."
   (cl-letf (((symbol-function 'mediawiki-api-call)
-             (lambda (site action args)
-               ;; Simulate full JSON result as returned by api-call
-               '((curtimestamp . "2024-01-01")
-                 (query . ((pages . ((\1 . ((pageid . 1) (ns . 0) (title . "Test Page")
-                                            (revisions . (((revid . 100) (user . "Admin")
-                                                            (timestamp . "2024-01-01T00:00:00Z")
-                                                            (slots . ((main . ((content . "Hello World"))))))))))))))))))
+(lambda (site action args)
+                ;; Simulate full JSON result as returned by api-call
+                '((curtimestamp . "2024-01-01")
+                  (query . ((pages . ((\1 . ((pageid . 1) (ns . 0) (title . "Test Page")
+                                             (revisions . (((revid . 100) (user . "Admin")
+                                                             (timestamp . "2024-01-01T00:00:00Z")
+                                                             (slots . ((main . ((* . "Hello World"))))))))))))))))))
     (let ((result (mediawiki-api-query-revisions "TestSite" "Test Page" '("content"))))
       (should (listp result))
       ;; curtimestamp at top level
@@ -158,10 +158,10 @@ mediawiki-api-query-revisions returns ((curtimestamp . \"...\") (pages . (...)))
 JSON: {\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{
   \"pageid\":1,\"ns\":0,\"title\":\"Test Page\",\"revisions\":[{
     \"revid\":100,\"user\":\"Admin\",\"timestamp\":\"2024-01-01T00:00:00Z\",
-    \"slots\":{\"main\":{\"contentmodel\":\"wikitext\",\"content\":\"Wiki page content here\"}}}]}}}}"
+    \"slots\":{\"main\":{\"contentmodel\":\"wikitext\",\"*\":\"Wiki page content here\"}}}]}}}}"
   (cl-letf (((symbol-function 'url-http-post)
              (lambda (url args)
-               "{\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{\"pageid\":1,\"ns\":0,\"title\":\"Test Page\",\"revisions\":[{\"revid\":100,\"user\":\"Admin\",\"timestamp\":\"2024-01-01T00:00:00Z\",\"slots\":{\"main\":{\"contentmodel\":\"wikitext\",\"content\":\"Wiki page content here\"}}}]}}}}"))
+               "{\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{\"pageid\":1,\"ns\":0,\"title\":\"Test Page\",\"revisions\":[{\"revid\":100,\"user\":\"Admin\",\"timestamp\":\"2024-01-01T00:00:00Z\",\"slots\":{\"main\":{\"contentmodel\":\"wikitext\",\"*\":\"Wiki page content here\"}}}]}}}}"))
             ((symbol-function 'mediawiki-make-api-url)
              (lambda (&optional site) "https://example.com/w/api.php"))
             ((symbol-function 'mediawiki-debug-line) #'ignore))

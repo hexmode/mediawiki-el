@@ -1,5 +1,24 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki.el: Bump version to 3.0.1.
+
+        * mediawiki-api.el (mediawiki-page-get-revision): Fix content
+        key extraction from JSON.  MediaWiki API uses "*" as the key
+        for page content in slots, not "content".  Changed from
+        (alist-get 'content ...) to (alist-get '* ...).
+
+        * mediawiki-auth.el (mediawiki-do-login): Include reason in
+        error message for unexpected login results (e.g., "Aborted").
+        Previously only showed the result code without the helpful
+        explanation.
+
+        * tests/test-mediawiki-api.el: Add regression tests for empty
+        JSON parsing (test-mediawiki-json-parse-empty).  Update
+        test fixtures to use "*" key for slot content.
+
+        * tests/test-mediawiki-api-json.el: Rename from
+        test-mediawiki-api-xml.el to reflect JSON-based testing.
+
         * mediawiki-api.el (mediawiki-api-call): Handle empty JSON
         response ({}) from action=logout.  json-parse-string returns nil
         for an empty object, which the previous nil-check wrongly treated

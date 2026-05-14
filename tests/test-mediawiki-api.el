@@ -82,11 +82,11 @@
 
 (ert-deftest test-mediawiki-page-get-revision ()
   "Test mediawiki-page-get-revision function."
-  ;; JSON alist page structure with slots
+  ;; JSON alist page structure with slots (using * key per MediaWiki API spec)
   (let ((mock-page '((title . "Test Page")
                      (revisions . (((timestamp . "2025-01-01T00:00:00Z")
                                     (user . "TestUser")
-                                    (slots . ((main . ((content . "Test content")))))))))))
+                                    (slots . ((main . ((* . "Test content")))))))))))
     ;; Test getting content
     (should (string= "Test content"
                      (mediawiki-page-get-revision mock-page 0 'content)))
@@ -102,7 +102,7 @@
   ;; Test with slot-based content
   (let ((mock-page '((title . "Test Page")
                      (revisions . (((timestamp . "2025-01-01T00:00:00Z")
-                                    (slots . ((main . ((content . "Slot content")))))))))))
+                                    (slots . ((main . ((* . "Slot content")))))))))))
 
     ;; Test getting content from slot format
     (should (string= "Slot content"

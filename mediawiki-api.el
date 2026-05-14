@@ -156,10 +156,10 @@ If BIT is another symbol, return that field from the revision alist.
 If BIT is nil, return the whole revision alist."
   (let ((rev (nth revision (alist-get 'revisions page))))
     (cond
-      ((eq bit 'content)
-       (alist-get 'content
-         (alist-get 'main
-           (alist-get 'slots rev))))
+((eq bit 'content)
+        (alist-get '*
+          (alist-get 'main
+            (alist-get 'slots rev))))
       (bit
        (alist-get bit rev))
       (t rev))))

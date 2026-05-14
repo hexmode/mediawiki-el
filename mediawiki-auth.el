@@ -100,8 +100,9 @@ Store cookies for future authentication."
       ((string= "Failed" (alist-get 'result result))
         (error "Login failed: %s" (alist-get 'reason result)))
       (t
-        (error "Login returned unexpected result: %s"
-          (alist-get 'result result))))))
+        (error "Login returned unexpected result: %s (%s)"
+          (alist-get 'result result)
+          (or (alist-get 'reason result) "see documentation at https://www.mediawiki.org/wiki/API:Login#Error_types"))))))
 
 ;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)
