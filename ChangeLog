@@ -1,5 +1,12 @@
 2026-05-13  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-page.el (mediawiki-add-page-history): Don't add
+        consecutive duplicates to page history.  Closes #56.
+
+        * mediawiki.el: Bump version to 2.4.14.
+
+2026-05-13  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-mode.el (mediawiki-mode-map): Add outline navigation
         bindings (outline-promote, outline-demote, outline-move-subtree-up/down,
         mediawiki-simple-outline-promote/demote) directly to mediawiki-mode-map.
