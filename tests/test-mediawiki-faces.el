@@ -24,7 +24,9 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 (require 'mediawiki-faces)
+(require 'mediawiki-mode)
 
 ;;; Test Face Variables
 
@@ -123,6 +125,36 @@
   (should (documentation-property 'font-mediawiki-string-face 'face-documentation))
   (should (documentation-property 'font-mediawiki-warning-face 'face-documentation))
   (should (documentation-property 'font-mediawiki-verbatim-face 'face-documentation)))
+
+;;; Tests for Issue #37 — No :family nil face attribute warnings
+
+(ert-deftest test-mediawiki-faces-no-nil-attributes ()
+  "No mediawiki face should have :family set to nil (issue #37).
+face-attribute returns 'unspecified for unset attrs, never nil.
+A nil value would produce 'Invalid face attribute :family nil' warnings."
+  (require 'mediawiki-faces)
+  (dolist (face '(font-mediawiki-bold-face
+                  font-mediawiki-italic-face
+                  font-mediawiki-math-face
+                  font-mediawiki-sedate-face
+                  font-mediawiki-string-face
+                  font-mediawiki-verbatim-face
+                  font-mediawiki-warning-face))
+    (when (facep face)
+      (should-not (null (face-attribute face :family nil t))))))
+
+(ert-deftest test-mediawiki-mode-no-face-warnings ()
+  "Enabling mediawiki-mode should not produce face attribute warnings."
+  (let ((warnings '()))
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (type msg &rest _)
+                 (when (string-match-p "face\\|family" (format "%s" msg))
+                   (push msg warnings)))))
+      (with-temp-buffer
+        (mediawiki-mode)
+        (insert "'''bold''' ''italic'' == Header ==")
+        (font-lock-ensure)))
+    (should (null warnings))))
 
 (provide 'test-mediawiki-faces)
 

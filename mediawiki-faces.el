@@ -59,7 +59,7 @@
 ;;; Face Definitions
 
 (defface font-mediawiki-bold-face
-  `((((class grayscale) (background light))
+  '((((class grayscale) (background light))
       :foreground "DimGray"
       :weight bold)
      (((class grayscale) (background dark))
@@ -77,7 +77,7 @@
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-italic-face
-  `((((class grayscale) (background light))
+  '((((class grayscale) (background light))
       :foreground "DimGray"
       :slant italic)
      (((class grayscale) (background dark))
@@ -95,7 +95,7 @@
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-math-face
-  `((((class grayscale) (background light))
+  '((((class grayscale) (background light))
       :foreground "DimGray"
       :underline t)
      (((class grayscale) (background dark))
@@ -125,7 +125,7 @@
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-string-face
-  `((((type tty) (class color))
+  '((((type tty) (class color))
       :foreground "green"
       :slant italic)
      (((class grayscale) (background light))
@@ -146,7 +146,7 @@
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-warning-face
-  `((((class grayscale)(background light))
+  '((((class grayscale)(background light))
       :foreground "DimGray"
       :weight bold)
      (((class grayscale)(background dark))
@@ -164,7 +164,7 @@
   :group 'font-mediawiki-highlighting-faces)
 
 (defface font-mediawiki-verbatim-face
-  `((((class grayscale) (background light))
+  '((((class grayscale) (background light))
       :foreground "DimGray"
       :inherit fixed-pitch)
      (((class grayscale) (background dark))
