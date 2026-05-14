@@ -134,9 +134,9 @@
   ;; Mock dependencies
   (cl-letf (((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               '(login ((result . "Success")))))
+               '((login . ((result . "Success"))))))
             ((symbol-function 'mediawiki-site-get-token)
-             (lambda (site type) "test-token"))
+              (lambda (site type) "test-token"))
             ((symbol-function 'url-cookie-retrieve)
              (lambda (host path secure) '(("session" "test")))))
 
@@ -152,13 +152,12 @@
   "Test complete edit workflow with mocked dependencies."
   (cl-letf (((symbol-function 'mediawiki-api-query-title)
              (lambda (site title)
-               ;; Correct XML parse structure: nil attrs on revisions element
-               '(page ((title . "Test Page")
-                       (edittoken . "token")
-                       (starttimestamp . "2025-01-01T00:00:00Z"))
-                      (revisions nil
-                        (rev ((timestamp . "2025-01-01T00:00:00Z"))
-                          "Test content")))))
+               ;; JSON alist page structure
+               '((title . "Test Page")
+                 (edittoken . "token")
+                 (starttimestamp . "2025-01-01T00:00:00Z")
+                 (revisions . (((timestamp . "2025-01-01T00:00:00Z")
+                                 (slots . ((main . ((content . "Test content")))))))))))
             ((symbol-function 'mediawiki-do-login)
              (lambda (site) site))
             ((symbol-function 'mediawiki-logged-in-p)

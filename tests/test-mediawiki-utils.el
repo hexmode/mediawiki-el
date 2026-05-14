@@ -124,12 +124,10 @@
 
 (ert-deftest test-mediawiki-page-get-metadata ()
   "Test mediawiki-page-get-metadata function."
-  ;; Create a mock page structure
-  (let ((mock-page '(page
-                     ((title . "Test Page")
-                      (edittoken . "test-token")
-                      (starttimestamp . "2025-01-01T00:00:00Z"))
-                     (revisions . "test-revisions"))))
+  ;; Create a mock page structure (JSON alist)
+  (let ((mock-page '((title . "Test Page")
+                     (edittoken . "test-token")
+                     (starttimestamp . "2025-01-01T00:00:00Z"))))
 
     ;; Test extracting different metadata items
     (should (string= "Test Page"

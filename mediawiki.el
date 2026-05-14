@@ -7,7 +7,7 @@
 ;;      Uwe Brauer <oub at mat.ucm.es> for wikimedia.el
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; Package-Requires: ((emacs "28.1"))
-;; Version: 2.4.21
+;; Version: 3.0.0
 ;; Created: Sep 17 2004
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el

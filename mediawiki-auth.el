@@ -86,21 +86,22 @@ Store cookies for future authentication."
                     (cons "lgtoken" token))
                   (when dom
                     (cons "lgdomain" dom))))
-          (result (cadr (mediawiki-api-call sitename "login" args))))
-    (when (string= (cdr (assq 'result result)) "NeedToken")
+          (result (alist-get 'login (mediawiki-api-call sitename "login" args))))
+    (when (string= (alist-get 'result result) "NeedToken")
       (setq result
-        (cadr (mediawiki-api-call sitename "login"
-                (append
-                  args (list (cons "lgtoken"
-                               (cdr (assq 'token result)))))))))
+        (alist-get 'login
+          (mediawiki-api-call sitename "login"
+            (append
+              args (list (cons "lgtoken"
+                           (alist-get 'token result))))))))
     (cond
-      ((string= "Success" (cdr (assoc 'result result)))
+      ((string= "Success" (alist-get 'result result))
         sitename)
-      ((string= "Failed" (cdr (assoc 'result result)))
-        (error "Login failed: %s" (cdr (assoc 'reason result))))
+      ((string= "Failed" (alist-get 'result result))
+        (error "Login failed: %s" (alist-get 'reason result)))
       (t
         (error "Login returned unexpected result: %s"
-          (cdr (assoc 'result result)))))))
+          (alist-get 'result result))))))
 
 ;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)

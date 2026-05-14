@@ -32,7 +32,7 @@
 (require 'mediawiki-http)
 (require 'mediawiki-utils)
 (require 'url)
-(require 'xml)
+(require 'json)
 (require 'mm-url)
 (require 'mediawiki-site)
 
@@ -51,60 +51,44 @@
 ;;; API Error and Information Handling
 
 (defun mediawiki-raise (result type notif)
-  "Show a TYPE of information from the RESULT to the user using NOTIF"
-  (when (assq type (cddr result))
-    (mapc (lambda (err)
-            (let ((label (or (cdr (assq 'code err))
-                           (car err)))
-                   (info (or (cdr (assq 'info err))
-                           (cddr err))))
-              (when info
-                (funcall notif label info))))
-
-      ;; Poor man's attempt at backward compatible xml form handling
-      (if (listp (cdr (assq type (cddr result))))
-        (cdr (assq type (cddr result)))
-        (cddr (assq type (cddr result)))))))
+  "Deprecated.  Error and warning handling is now done in `mediawiki-api-call'.
+This function is kept for backward compatibility and does nothing."
+  nil)
 
 ;;; Core API Call Function
 
 (defun mediawiki-api-call (sitename action &optional args)
   "Wrapper for making an API call to SITENAME.
-ACTION is the API action.  ARGS is a list of arguments."
+ACTION is the API action.  ARGS is a list of arguments.
+Returns the full parsed JSON response as an alist."
   (when (null sitename)
     (error "No sitename given!"))
   (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
                           (mm-url-encode-multipart-form-data
                             (delq nil args) "==")))
   (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
-                (append args (list (cons "format" "xml")
+                (append args (list (cons "format" "json")
                                (cons "action" action)))))
-          (result (assoc 'api
-                    (with-temp-buffer
-                      (insert raw)
-                      (xml-parse-region (point-min) (point-max))))))
+          (result (json-parse-string raw
+                    :object-type 'alist
+                    :array-type 'list
+                    :null-object nil
+                    :false-object nil)))
     (unless result
       (error "There was an error parsing the result of the API call"))
-
-    (mediawiki-raise result 'warnings
-      (lambda (label info)
-        (message "Warning (%s) %s" label info)))
-    (mediawiki-raise result 'info
-      (lambda (label info)
-        (message  "(%s) %s" label info)))
-    (mediawiki-raise result 'error
-      (lambda (label info)
-        (error "(%s) %s" label info)))
-
-    (if (cddr result)
-      (let ((action-res (assq (intern action) (cddr result)))
-             (curtimestamp (assq 'curtimestamp (cadr result))))
-        (unless action-res
-          (error "Didn't see action name in the result list"))
-        (when curtimestamp
-          (push curtimestamp (cadr action-res)))
-        action-res)
-      t)))
+    ;; Handle errors
+    (when-let ((err (alist-get 'error result)))
+      (error "(%s) %s"
+        (alist-get 'code err)
+        (alist-get 'info err)))
+    ;; Handle warnings (log via message, do not error)
+    (when-let ((warnings (alist-get 'warnings result)))
+      (dolist (w warnings)
+        (let* ((label (car w))
+               (info (alist-get 'warnings (cdr w))))
+          (when info
+            (message "Warning (%s) %s" label info)))))
+    result))
 
 ;;; Parameter Formatting
 
@@ -123,22 +107,22 @@ ACTION is the API action.  ARGS is a list of arguments."
 
 (defun mediawiki-site-get-token (sitename type)
   "Get token(s) for SITENAME of TYPE type."
-  (cdr
-    (caadar
-      (cddr (mediawiki-api-call sitename "query"
-              (list (cons "meta" "tokens")
-                (cons "type" type)))))))
+  (let* ((result (mediawiki-api-call sitename "query"
+                   (list (cons "meta" "tokens")
+                     (cons "type" type))))
+         (tokens (alist-get 'tokens (alist-get 'query result))))
+    (alist-get (intern (concat type "token")) tokens)))
 
 ;;; Query Functions
 
 (defun mediawiki-api-query-revisions (sitename title props &optional limit)
   "Get a list of revisions and properties for a given page.
 SITENAME is the site to use.  TITLE is a string containing one
-title or a list of titles.  PROPS are the revision properites to
+title or a list of titles.  PROPS are the revision properties to
 fetch.  LIMIT is the upper bound on the number of results to give."
   (when (or (eq nil title) (string= "" title))
     (error "No title passed!"))
-  (let ((qresult (mediawiki-api-call
+  (let* ((result (mediawiki-api-call
                    sitename "query"
                    (list (cons "prop" (mediawiki-api-param (list "info" "revisions")))
                      (cons "titles" (mediawiki-api-param title))
@@ -147,11 +131,8 @@ fetch.  LIMIT is the upper bound on the number of results to give."
                      (cons "rvprop" (mediawiki-api-param props))
                      (cons "rvslots" "main")
                      (cons "curtimestamp" "1")))))
-    (if (eq t qresult)
-      (error "No results for revision query")
-      (when-let* ((curtimestamp (assq 'curtimestamp (cadr qresult))))
-        (push curtimestamp (cddr qresult)))
-      (cddr qresult))))
+    (list (cons 'curtimestamp (alist-get 'curtimestamp result))
+          (cons 'pages (alist-get 'pages (alist-get 'query result))))))
 
 (defun mediawiki-api-query-title (sitename title)
   "Query SITENAME for TITLE."
@@ -163,55 +144,39 @@ fetch.  LIMIT is the upper bound on the number of results to give."
 ;;; Page Data Extraction Functions
 
 (defun mediawiki-page-get-title (page)
-  "Given a PAGE from a pagelist structure, extract the title."
-  (cdr (assq 'title (cadr page))))
+  "Given a PAGE alist, extract the title."
+  (alist-get 'title page))
 
 (defun mediawiki-page-get-revision (page revision &optional bit)
-  "Given a PAGE, extract a REVISION from the pagelist structure.
-If BIT is \='content, then return the content only.  Otherwise,
-return only the items that BIT matches.  If BIT isn't given,
-return the whole revision structure."
-  (let ((rev (cdr (nth revision (cddr (assq 'revisions (cddr page)))))))
+  "Given a PAGE alist, extract a REVISION.
+If BIT is 'content, return the content string.
+If BIT is another symbol, return that field from the revision alist.
+If BIT is nil, return the whole revision alist."
+  (let ((rev (nth revision (alist-get 'revisions page))))
     (cond
       ((eq bit 'content)
-        ;; Handle new slot-based format introduced with rvslots parameter
-        (let ((content-data (cadr rev)))
-          (cond
-            ;; Check if this is the new slots format
-            ((and (listp content-data) (eq (car content-data) 'slots))
-              ;; New format: (slots nil (slot ((attrs...)) "content"))
-              ;; Extract the content string from the slot structure
-              (let ((slot-element (nth 2 content-data)))  ; Get the slot element
-                (if (and (listp slot-element) (eq (car slot-element) 'slot))
-                  ;; The content is the last element in the slot
-                  (car (last slot-element))
-                  "")))
-            ;; Check if content-data is already a string (old format)
-            ((stringp content-data)
-              content-data)
-            ;; Fallback
-            (t ""))))
-      ((assoc bit (car rev))
-        (cdr (assoc bit (car rev))))
+       (alist-get 'content
+         (alist-get 'main
+           (alist-get 'slots rev))))
+      (bit
+       (alist-get bit rev))
       (t rev))))
 
 ;;; Page List Utilities
 
 (defun mediawiki-pagelist-find-page (pagelist title)
-  "Given PAGELIST, extract the informaton for TITLE."
+  "Given PAGELIST, extract the information for TITLE."
   (let ((starttimestamp (alist-get 'curtimestamp pagelist))
-        (pl (cddr (assq 'pages pagelist)))
-         page current)
-    (while (and (not page)
-             (setq current (pop pl)))
-      ;; This fails when underbars are here instead of spaces,
-      ;; so we make sure that it has the mediawiki pagename
-      (when (string= (mediawiki-page-get-title current)
-              (mediawiki-translate-pagename title))
-        (setq page current)))
+        (pages (alist-get 'pages pagelist))
+        page)
+    (dolist (p pages)
+      (let ((page-data (cdr p)))
+        (when (string= (alist-get 'title page-data)
+                       (mediawiki-translate-pagename title))
+          (setq page page-data))))
     (when page
-      (push (cons 'starttimestamp starttimestamp) (cadr page)))
-    page))
+      (push (cons 'starttimestamp starttimestamp) page)
+      page)))
 
 ;;; String Extraction Utilities
 

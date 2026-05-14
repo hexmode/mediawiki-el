@@ -1,5 +1,26 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-api.el (mediawiki-api-call): Switch from XML to
+        JSON format.  Replace xml-parse-region with json-parse-string.
+        Returns full parsed JSON alist instead of action sub-element.
+        (mediawiki-raise): Deprecate; error/warning handling is now
+        internal to mediawiki-api-call.
+        (mediawiki-site-get-token): Update for JSON response structure.
+        (mediawiki-api-query-revisions): Update for JSON response.
+        (mediawiki-page-get-title, mediawiki-page-get-revision)
+        (mediawiki-pagelist-find-page): Update all data extraction
+        functions for flat JSON alists.
+
+        * mediawiki-auth.el (mediawiki-do-login): Update login response
+        parsing for JSON alist structure.
+
+        * mediawiki-utils.el (mediawiki-page-get-metadata): Use
+        alist-get for flat JSON alist instead of cadr/assoc.
+
+        * mediawiki.el: Bump version to 3.0.0.
+
+2026-05-14  Mark A. Hershberger  <mah@everybody.org>
+
         * mediawiki-faces.el: Use quoted face specs instead of backtick
         in all defface forms; add tests verifying no :family nil
         warnings are produced.  Fixes #37.

@@ -72,25 +72,22 @@
 
 (ert-deftest test-mediawiki-page-get-title ()
   "Test mediawiki-page-get-title function."
-  ;; Create mock page structure
-  (let ((mock-page '(page ((title . "Test Page") (pageid . "123")) (revisions))))
+  ;; JSON alist page structure
+  (let ((mock-page '((title . "Test Page") (pageid . 123))))
     (should (string= "Test Page" (mediawiki-page-get-title mock-page))))
 
   ;; Test with different title
-  (let ((mock-page '(page ((title . "Another Page") (pageid . "456")) (revisions))))
+  (let ((mock-page '((title . "Another Page") (pageid . 456))))
     (should (string= "Another Page" (mediawiki-page-get-title mock-page)))))
 
 (ert-deftest test-mediawiki-page-get-revision ()
   "Test mediawiki-page-get-revision function."
-  ;; Create mock page structure with old format
-  (let ((mock-page '(page
-                     ((title . "Test Page"))
-                     (revisions nil
-                      (rev ((timestamp . "2025-01-01T00:00:00Z")
-                            (user . "TestUser"))
-                           "Test content")))))
-
-    ;; Test getting content (old format)
+  ;; JSON alist page structure with slots
+  (let ((mock-page '((title . "Test Page")
+                     (revisions . (((timestamp . "2025-01-01T00:00:00Z")
+                                    (user . "TestUser")
+                                    (slots . ((main . ((content . "Test content")))))))))))
+    ;; Test getting content
     (should (string= "Test content"
                      (mediawiki-page-get-revision mock-page 0 'content)))
 
@@ -102,12 +99,10 @@
     (should (string= "TestUser"
                      (mediawiki-page-get-revision mock-page 0 'user))))
 
-  ;; Test with new slot-based format
-  (let ((mock-page '(page
-                     ((title . "Test Page"))
-                     (revisions nil
-                      (rev ((timestamp . "2025-01-01T00:00:00Z"))
-                           (slots nil (slot ((contentmodel . "wikitext")) "Slot content")))))))
+  ;; Test with slot-based content
+  (let ((mock-page '((title . "Test Page")
+                     (revisions . (((timestamp . "2025-01-01T00:00:00Z")
+                                    (slots . ((main . ((content . "Slot content")))))))))))
 
     ;; Test getting content from slot format
     (should (string= "Slot content"
@@ -117,12 +112,12 @@
 
 (ert-deftest test-mediawiki-pagelist-find-page ()
   "Test mediawiki-pagelist-find-page function."
-  ;; Create mock pagelist structure
-  (let ((mock-pagelist '(query nil
-                         (pages nil
-                          (page1 ((title . "Main Page")) (revisions nil))
-                          (page2 ((title . "Test Page")) (revisions nil))
-                          (page3 ((title . "Another Page")) (revisions nil))))))
+  ;; JSON alist pagelist structure: pages is an alist of (id . page-alist) pairs
+  (let ((mock-pagelist
+         `((curtimestamp . "2024-01-01")
+           (pages . ((\1 . ((title . "Main Page")))
+                     (\2 . ((title . "Test Page")))
+                     (\3 . ((title . "Another Page"))))))))
 
     ;; Test finding existing page
     (let ((result (mediawiki-pagelist-find-page mock-pagelist "Test Page")))
@@ -161,33 +156,13 @@
 ;;; Test API Error Handling
 
 (ert-deftest test-mediawiki-raise ()
-  "Test mediawiki-raise function."
-  ;; Create mock API result with realistic warning structure:
-  ;; label = module name (element tag), info = text content (list)
-  (let ((mock-result '(api nil
-                       (warnings nil
-                        (main ((xml:space . "preserve"))
-                         "Test warning message")))))
-
-    ;; Test warning extraction
-    (let ((warnings-found '()))
-      (mediawiki-raise mock-result 'warnings
-                       (lambda (label info)
-                         (push (cons label info) warnings-found)))
-
-      (should (= 1 (length warnings-found)))
-      ;; label is the module name (symbol), info is the text content (list)
-      (should (eq 'main (caar warnings-found)))
-      (should (equal '("Test warning message") (cdar warnings-found)))))
-
-  ;; Test with no warnings
-  (let ((mock-result '(api nil (query))))
-    (let ((warnings-found '()))
-      (mediawiki-raise mock-result 'warnings
-                       (lambda (label info)
-                         (push (cons label info) warnings-found)))
-
-      (should (= 0 (length warnings-found))))))
+  "mediawiki-raise is deprecated and is now a no-op (issue #39).
+Error/warning handling moved into mediawiki-api-call."
+  ;; Function still exists for backward compatibility
+  (should (functionp 'mediawiki-raise))
+  ;; Returns nil regardless of input
+  (should-not (mediawiki-raise '() 'warnings #'ignore))
+  (should-not (mediawiki-raise '() 'error #'ignore)))
 
 ;;; Test Mocked API Functions
 

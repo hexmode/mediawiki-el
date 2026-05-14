@@ -66,8 +66,8 @@ allows you to see what is being sent to and from the server."
 ;;; General Utility Functions
 
 (defun mediawiki-page-get-metadata (page item)
-  "Using PAGE, extract ITEM."
-  (cdr (assoc item (cadr page))))
+  "Using PAGE alist, extract ITEM."
+  (alist-get item page))
 
 (provide 'mediawiki-utils)
 

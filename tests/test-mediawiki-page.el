@@ -76,13 +76,12 @@
 
 (ert-deftest test-mediawiki-save-metadata ()
   "Test mediawiki-save-metadata function."
-  ;; Create mock page structure
-  (let ((mock-page '(page
-                     ((title . "Test Page")
-                      (edittoken . "test-token")
-                      (starttimestamp . "2025-01-01T00:00:00Z"))
-                     (revisions nil
-                      (rev ((timestamp . "2025-01-01T00:00:00Z")) "content")))))
+  ;; Create mock page structure (JSON alist)
+  (let ((mock-page '((title . "Test Page")
+                     (edittoken . "test-token")
+                     (starttimestamp . "2025-01-01T00:00:00Z")
+                     (revisions . (((timestamp . "2025-01-01T00:00:00Z")
+                                    (slots . ((main . ((content . "content")))))))))))
 
     ;; Test metadata saving in a buffer
     (with-temp-buffer

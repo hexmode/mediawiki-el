@@ -99,8 +99,8 @@
              (lambda (site type) "test-token"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               ;; Mock successful login response
-               '(login ((result . "Success") (lgusername . "testuser")))))
+               ;; Mock successful login response (JSON alist)
+               '((login . ((result . "Success") (lgusername . "testuser"))))))
             ((symbol-function 'read-string)
              (lambda (prompt) "testuser"))
             ((symbol-function 'read-passwd)
@@ -148,12 +148,12 @@
                (lambda (site action args)
                  (setq call-count (1+ call-count))
                  (cond
-                  ;; First call returns NeedToken
+                  ;; First call returns NeedToken (JSON alist)
                   ((= call-count 1)
-                   '(login ((result . "NeedToken") (token . "new-token"))))
-                  ;; Second call returns Success
+                   '((login . ((result . "NeedToken") (token . "new-token")))))
+                  ;; Second call returns Success (JSON alist)
                   ((= call-count 2)
-                   '(login ((result . "Success") (lgusername . "testuser"))))))))
+                   '((login . ((result . "Success") (lgusername . "testuser")))))))))
 
       ;; Test login that requires token
       (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
@@ -179,7 +179,7 @@
                ;; Verify domain is included in args
                (should (assoc "lgdomain" args))
                (should (string= "TESTDOMAIN" (cdr (assoc "lgdomain" args))))
-               '(login ((result . "Success") (lgusername . "testuser"))))))
+               '((login . ((result . "Success") (lgusername . "testuser")))))))
 
     ;; Test login with domain
     (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
@@ -200,9 +200,9 @@
              (lambda (site type) "login-token"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               ;; Mock failed login response
-               '(login ((result . "Failed")
-                       (reason . "The bot password for bot name \"simple\" of user \"MarkAHershberger\" must be reset."))))))
+               ;; Mock failed login response (JSON alist)
+               '((login . ((result . "Failed")
+                           (reason . "The bot password for bot name \"simple\" of user \"MarkAHershberger\" must be reset.")))))))
 
     ;; Test that failed login raises an error with the reason
     (should-error
