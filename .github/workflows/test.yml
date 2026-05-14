@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs-version:
+          - '28.2'
+          - '29.4'
+          - '30.1'
+
+    name: Emacs ${{ matrix.emacs-version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
+
+      - name: Generate autoloads
+        run: make autoloads-only
+
+      - name: Run test suite
+        run: make ci-test

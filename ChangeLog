@@ -1,5 +1,16 @@
 2026-05-13  Mark A. Hershberger  <mah@everybody.org>
 
+	* .github/workflows/test.yml: New CI workflow running ERT test
+	suite on Emacs 28.2, 29.4, and 30.1 for every push and pull
+	request.
+
+	* Makefile (ci-test): New target that runs all test suites,
+	reports all failures, and exits non-zero if any failed.
+
+	* mediawiki.el: Bump version to 2.4.16.
+
+2026-05-13  Mark A. Hershberger  <mah@everybody.org>
+
 	* tests/test-mediawiki-api-xml.el: New file with 11 XML-format
 	integration tests covering the full HTTP mock → parse → extract
 	chain.  Serves as regression harness for the planned XML→JSON

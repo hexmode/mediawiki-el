@@ -20,13 +20,27 @@ CONTINUE_ON_TEST_FAILURE ?= true
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
 
-.PHONY: test clean autoloads
+.PHONY: test ci-test clean autoloads
 
 # Add test target if there are any
 ifneq ($(TEST_FILES),)
 ERT_TESTS := $(shell grep -l ert-deftest $(TEST_FILES))
 
 test: $(patsubst tests/%.el,%,$(ERT_TESTS))
+
+# CI test target: run all suites, report all failures, exit non-zero if any failed
+ci-test: autoloads-only
+	@failed=0; \
+	for f in $(ERT_TESTS); do \
+		name=$$(basename $$f .el); \
+		echo "Running $$name"; \
+		$(BATCH) -L $(PWD) -l $(AUTOLOADS) -l $$f \
+			-f ert-run-tests-batch-and-exit 2>&1 || failed=$$((failed + 1)); \
+	done; \
+	if [ $$failed -gt 0 ]; then \
+		echo "$$failed test suite(s) failed"; \
+		exit 1; \
+	fi
 
 # Pattern rule to run each test file
 define TEST_RULES
@@ -75,6 +89,7 @@ help:
 	@echo "Available targets:"
 ifneq ($(TEST_FILES),)
 	@echo "  test           - Run all tests"
+	@echo "  ci-test        - Run all tests (fail-fast off, exit non-zero on any failure)"
 endif
 	@echo "  autoloads      - Build autoloader"
 	@echo "  check-file     - Check the file given by FILE for un-balanced parethesis"
