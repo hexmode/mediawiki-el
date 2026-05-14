@@ -77,7 +77,9 @@ Store cookies for future authentication."
                    (read-string "LDAP Domain: ")
                    dom-loaded)))
           (sitename sitename)
-          (token (mediawiki-site-get-token sitename "login"))
+          (token (condition-case nil
+                   (mediawiki-site-get-token sitename "login")
+                   (error nil)))           ; pre-1.27 wikis lack the token API
           (args (list (cons "lgname" user)
                   (cons "lgpassword" pass)
                   (when token

@@ -1,5 +1,13 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
+        * mediawiki-auth.el (mediawiki-do-login): Fall back gracefully
+        when mediawiki-site-get-token errors on pre-1.27 wikis that
+        lack the token API.  Addresses PR #29.
+
+        * mediawiki.el: Bump version to 2.4.20.
+
+2026-05-14  Mark A. Hershberger  <mah@everybody.org>
+
         * tests/test-mediawiki-http.el (test-url-bit-for-url): Accept
         nil as a valid result.  On Emacs 28 the native url-bit-for-url
         uses a different auth-source calling convention, so the mock
