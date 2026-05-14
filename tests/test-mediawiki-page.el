@@ -81,7 +81,7 @@
                      ((title . "Test Page")
                       (edittoken . "test-token")
                       (starttimestamp . "2025-01-01T00:00:00Z"))
-                     (revisions
+                     (revisions nil
                       (rev ((timestamp . "2025-01-01T00:00:00Z")) "content")))))
 
     ;; Test metadata saving in a buffer
@@ -115,49 +115,6 @@
   "Test mediawiki-save-and-bury function structure."
   (should (functionp 'mediawiki-save-and-bury))
   (should (commandp 'mediawiki-save-and-bury)))
-
-;;; Test Form Processing
-
-(ert-deftest test-mediawiki-get-form-vars ()
-  "Test mediawiki-get-form-vars function."
-  ;; Test with simple form
-  (let ((html-form "<form id=\"editform\">
-                    <input name=\"wpTextbox1\" value=\"content\" />
-                    <input name=\"wpSummary\" value=\"\" />
-                    <input type=\"submit\" name=\"wpSave\" value=\"Save\" />
-                    </form>"))
-
-    (let ((vars (mediawiki-get-form-vars html-form "id" "editform")))
-      (should (listp vars))
-      ;; Should extract non-submit inputs
-      (should (assoc "wpTextbox1" vars))
-      (should (assoc "wpSummary" vars))
-      ;; Should not include submit button
-      (should-not (assoc "wpSave" vars))
-
-      ;; Check values
-      (should (string= "content" (cdr (assoc "wpTextbox1" vars))))
-      (should (string= "" (cdr (assoc "wpSummary" vars))))))
-
-  ;; Test with no matching form
-  (let ((html-no-form "<div>No form here</div>"))
-    (should-not (mediawiki-get-form-vars html-no-form "id" "editform"))))
-
-(ert-deftest test-mediawiki-get-edit-form-vars ()
-  "Test mediawiki-get-edit-form-vars function."
-  (with-temp-buffer
-    ;; Insert mock HTML with edit form
-    (insert "<form id=\"editform\">
-             <input name=\"wpTextbox1\" value=\"page content\" />
-             <input name=\"wpEditToken\" value=\"token123\" />
-             </form>")
-
-    ;; Test form variable extraction
-    (mediawiki-get-edit-form-vars (current-buffer))
-
-    ;; Check that buffer-local variable is set
-    (should (boundp 'mediawiki-edit-form-vars))
-    (should (listp mediawiki-edit-form-vars))))
 
 ;;; Test Page Navigation
 

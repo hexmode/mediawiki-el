@@ -37,8 +37,8 @@
         (cl-letf (((symbol-function 'auth-source-user-or-password)
                    (lambda (type host protocol) "test-result")))
           (should (stringp (url-bit-for-url 'url-user "login" "http://example.com"))))
-      ;; If auth-source is not available, just test that function exists
-      (should (functionp 'url-bit-for-url)))))
+      ;; If auth-source is not available, just test that function is bound
+      (should (fboundp 'url-bit-for-url)))))
 
 (ert-deftest test-url-user-for-url ()
   "Test url-user-for-url function."

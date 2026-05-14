@@ -180,13 +180,11 @@
 (ert-deftest test-mediawiki-browse-structure ()
   "Test mediawiki-browse function structure."
   (should (functionp 'mediawiki-browse))
-  (should (get 'mediawiki-browse 'autoload))
   (should (commandp 'mediawiki-browse)))
 
 (ert-deftest test-mediawiki-site-function-structure ()
   "Test mediawiki-site function structure."
   (should (functionp 'mediawiki-site))
-  (should (get 'mediawiki-site 'autoload))
   (should (commandp 'mediawiki-site)))
 
 ;;; Test Customization

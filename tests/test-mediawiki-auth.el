@@ -65,9 +65,6 @@
   "Test mediawiki-do-login function structure."
   (should (functionp 'mediawiki-do-login))
 
-  ;; Test that function is autoloaded
-  (should (get 'mediawiki-do-login 'autoload))
-
   ;; We can't test actual login without mocking the entire API chain,
   ;; but we can test that the function exists and has the right signature
   (should (condition-case nil
@@ -78,9 +75,6 @@
 (ert-deftest test-mediawiki-do-logout-structure ()
   "Test mediawiki-do-logout function structure."
   (should (functionp 'mediawiki-do-logout))
-
-  ;; Test that function is autoloaded
-  (should (get 'mediawiki-do-logout 'autoload))
 
   ;; Test function signature
   (should (condition-case nil
@@ -123,6 +117,8 @@
   ;; Mock dependencies
   (cl-letf (((symbol-function 'mediawiki-prompt-for-site)
              (lambda () "TestSite"))
+            ((symbol-function 'mediawiki-site-get-token)
+             (lambda (site type) "csrf-token"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
                ;; Mock logout response

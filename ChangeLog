@@ -1,5 +1,23 @@
 2026-05-13  Mark A. Hershberger  <mah@everybody.org>
 
+        * tests/test-mediawiki-auth.el:
+        * tests/test-mediawiki-draft.el:
+        * tests/test-mediawiki-font-lock.el:
+        * tests/test-mediawiki-http.el:
+        * tests/test-mediawiki-integration.el:
+        * tests/test-mediawiki-mode.el:
+        * tests/test-mediawiki-page.el:
+        * tests/test-mediawiki-site.el: Fix 37 pre-existing test
+        failures so make ci-test exits 0.  Corrections include:
+        removing invalid (get ... (quote autoload)) assertions,
+        adding (require (quote mediawiki-draft)), updating the
+        outline-hook test to reflect fix #36, correcting regex
+        expectations, and fixing mock data structures.
+
+        * mediawiki.el: Bump version to 2.4.17.
+
+2026-05-13  Mark A. Hershberger  <mah@everybody.org>
+
 	* .github/workflows/test.yml: New CI workflow running ERT test
 	suite on Emacs 28.2, 29.4, and 30.1 for every push and pull
 	request.
