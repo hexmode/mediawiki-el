@@ -34,6 +34,9 @@
 (require 'url-cookie)
 (require 'url-parse)
 
+(declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
+(declare-function mediawiki-oauth-get-access-token "mediawiki-oauth")
+
 ;;; Authentication Constants
 
 (defvar mediawiki-login-success "pt-logout"
@@ -121,9 +124,15 @@ refreshed as needed."
         ((string= "Failed" (alist-get 'result result))
           (error "Login failed: %s" (alist-get 'reason result)))
         (t
-          (error "Login returned unexpected result: %s (%s)"
-            (alist-get 'result result)
-            (or (alist-get 'reason result) "see documentation at https://www.mediawiki.org/wiki/API:Login#Error_types")))))))
+          (let ((result-str (alist-get 'result result))
+                (reason (alist-get 'reason result)))
+            (if (and (string= "Aborted" result-str)
+                     (string-match-p "user interaction" reason))
+                (error "Login aborted: %s\n\nThis site no longer supports direct password login for this account.\nConfigure OAuth 2.0 authentication with M-x mediawiki-oauth-setup-site,\nor add :oauth-access-token to the site configuration in mediawiki-site-alist.\nSee OAUTH-SETUP.org for details."
+                  reason)
+              (error "Login returned unexpected result: %s (%s)"
+                result-str
+                (or reason "see documentation at https://www.mediawiki.org/wiki/API:Login#Error_types")))))))))
 
 ;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)
