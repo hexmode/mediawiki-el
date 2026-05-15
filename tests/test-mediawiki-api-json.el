@@ -21,8 +21,8 @@
 JSON: {\"curtimestamp\":\"2024-01-01\",\"query\":{\"tokens\":{\"csrftoken\":\"def456+\\\\\",\"logintoken\":\"abc123+\\\\\"}}}
 Parsed: ((curtimestamp . \"2024-01-01\") (query . ((tokens . ((csrftoken . \"def456+\\\\\") (logintoken . \"abc123+\\\\\"))))))"
   (cl-letf (((symbol-function 'url-http-post)
-             (lambda (url args)
-               "{\"curtimestamp\":\"2024-01-01\",\"query\":{\"tokens\":{\"csrftoken\":\"def456+\\\\\",\"logintoken\":\"abc123+\\\\\"}}}"))
+             (lambda (url args &optional _multipart _headers)
+                "{\"curtimestamp\":\"2024-01-01\",\"query\":{\"tokens\":{\"csrftoken\":\"def456+\\\\\",\"logintoken\":\"abc123+\\\\\"}}}"))
             ((symbol-function 'mediawiki-make-api-url)
              (lambda (&optional site) "https://example.com/w/api.php"))
             ((symbol-function 'mediawiki-debug-line) #'ignore))
@@ -57,7 +57,7 @@ mediawiki-site-get-token uses alist-get on query.tokens to extract token by type
 JSON: {\"error\":{\"code\":\"readapidenied\",\"info\":\"You need read permission.\"}}
 mediawiki-api-call checks for 'error key and calls (error ...) with code/info."
   (cl-letf (((symbol-function 'url-http-post)
-             (lambda (url args)
+             (lambda (url args &optional _multipart _headers)
                "{\"error\":{\"code\":\"readapidenied\",\"info\":\"You need read permission.\"}}"))
             ((symbol-function 'mediawiki-make-api-url)
              (lambda (&optional site) "https://example.com/w/api.php"))
@@ -78,7 +78,7 @@ JSON: {\"warnings\":{\"revisions\":{\"warnings\":\"rvslots not specified\"}},
 mediawiki-api-call calls (message ...) for warnings, not (error ...)."
   (let (messages-logged)
     (cl-letf (((symbol-function 'url-http-post)
-               (lambda (url args)
+               (lambda (url args &optional _multipart _headers)
                  "{\"warnings\":{\"revisions\":{\"warnings\":\"rvslots not specified\"}},\"query\":{\"pages\":{\"1\":{\"pageid\":1,\"ns\":0,\"title\":\"Test Page\"}}}}"))
               ((symbol-function 'mediawiki-make-api-url)
                (lambda (&optional site) "https://example.com/w/api.php"))
@@ -160,7 +160,7 @@ JSON: {\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{
     \"revid\":100,\"user\":\"Admin\",\"timestamp\":\"2024-01-01T00:00:00Z\",
     \"slots\":{\"main\":{\"contentmodel\":\"wikitext\",\"*\":\"Wiki page content here\"}}}]}}}}"
   (cl-letf (((symbol-function 'url-http-post)
-             (lambda (url args)
+             (lambda (url args &optional _multipart _headers)
                "{\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{\"pageid\":1,\"ns\":0,\"title\":\"Test Page\",\"revisions\":[{\"revid\":100,\"user\":\"Admin\",\"timestamp\":\"2024-01-01T00:00:00Z\",\"slots\":{\"main\":{\"contentmodel\":\"wikitext\",\"*\":\"Wiki page content here\"}}}]}}}}"))
             ((symbol-function 'mediawiki-make-api-url)
              (lambda (&optional site) "https://example.com/w/api.php"))

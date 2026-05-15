@@ -73,18 +73,33 @@ Where:
   DOMAIN is the LDAP domain (can be empty string)
   PROPERTIES is a plist of additional properties like:
     :description - Human readable description
-    :first-page - Default page to open when selecting this site"
+    :first-page - Default page to open when selecting this site
+    :oauth-client-id - OAuth 2.0 consumer client ID
+    :oauth-client-secret - OAuth 2.0 consumer client secret
+    :oauth-access-token - Pre-obtained OAuth 2.0 access token
+    :oauth-refresh-token - OAuth 2.0 refresh token for token renewal
+    :oauth-token-url - Custom OAuth 2.0 token endpoint URL"
   :group 'mediawiki
   :type '(repeat (list (string :tag "Site name")
                    (string :tag "URL")
                    (string :tag "Username")
                    (string :tag "Password")
                    (string :tag "Domain")
-                   (plist :tag "Properties"
-                     :options ((:description string
-                                 :description "Description of this site")
-                                (:first-page string
-                                  :description "First page to open when `mediawiki-site' is called for this site"))))))
+                    (plist :tag "Properties"
+                      :options ((:description string
+                                  :description "Description of this site")
+                                 (:first-page string
+                                   :description "First page to open when `mediawiki-site' is called for this site")
+                                 (:oauth-client-id string
+                                   :description "OAuth 2.0 client ID (for client-credentials flow)")
+                                 (:oauth-client-secret string
+                                   :description "OAuth 2.0 client secret (for client-credentials flow)")
+                                 (:oauth-access-token string
+                                   :description "OAuth 2.0 access token (for owner-only consumers)")
+                                 (:oauth-refresh-token string
+                                   :description "OAuth 2.0 refresh token")
+                                 (:oauth-token-url string
+                                   :description "Custom OAuth 2.0 token endpoint URL"))))))
 
 ;;; Site Extraction Functions
 
@@ -97,6 +112,8 @@ Where:
         bit)
       ((and (listp bit) (> (length bit) 0))
         (car bit))
+      ((symbolp bit)
+        bit)
       (nil))))
 
 ;;;###autoload
@@ -133,7 +150,7 @@ Interactively, prompt for a SITE."
   "Fetch the user or pass if provided, or use authinfo if not."
   `(let* ((arg (mediawiki-site-extract ,sitename ,index))
            (auth (funcall ,method (mediawiki-site-url ,sitename))))
-     (if (and arg (> (string-width arg) 0))
+     (if (and (stringp arg) (> (string-width arg) 0))
        arg
        auth)))
 
@@ -148,7 +165,7 @@ Interactively, prompt for a SITE."
 (defun mediawiki-site-domain (sitename)
   "Get the LDAP domain for a given SITENAME."
   (let ((domain (mediawiki-site-extract sitename 4)))
-    (when (and domain (not (string= "" domain)))
+    (when (and (stringp domain) (not (string= "" domain)))
       domain)))
 
 (defun mediawiki-site-first-page (sitename)
@@ -185,13 +202,20 @@ positional format where the 6th element (index 5) is the first page."
   "Get the description for a given SITENAME."
   (let ((site (assoc sitename mediawiki-site-alist)))
     (when site
-      (plist-get (nthcdr 5 site) :description))))
+      (let ((props (nthcdr 5 site)))
+        (when (keywordp (car props))
+          (plist-get props :description))))))
 
 (defun mediawiki-site-property (sitename property)
-  "Get a PROPERTY for a given SITENAME."
+  "Get a PROPERTY for a given SITENAME.
+Site entries can be in legacy format (5 or 6 positional elements)
+or modern format (5 positional elements followed by a plist).
+This function safely handles both formats."
   (let ((site (assoc sitename mediawiki-site-alist)))
     (when site
-      (plist-get (nthcdr 5 site) property))))
+      (let ((props (nthcdr 5 site)))
+        (when (keywordp (car props))
+          (plist-get props property))))))
 
 (defun mediawiki-site-valid-p (sitename)
   "Return t if SITENAME is a valid configured site."

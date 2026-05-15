@@ -134,6 +134,7 @@
 (require 'mediawiki-font-lock)
 (require 'mediawiki-api)
 (require 'mediawiki-auth)
+(require 'mediawiki-oauth)
 (require 'mediawiki-site)
 (require 'mediawiki-page)
 (require 'mediawiki-draft)

@@ -1,8 +1,36 @@
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
-        * mediawiki.el: Bump version to 3.0.1.
+	* mediawiki.el: Bump version to 3.1.0.
 
-        * mediawiki-api.el (mediawiki-page-get-revision): Fix content
+	* mediawiki-oauth.el: New module providing OAuth 2.0
+	authentication support.  Adds client-credentials and access-token
+	flows, automatic Bearer header injection, token refresh, and
+	interactive setup via `mediawiki-oauth-setup-site'.  Closes #57.
+
+	* mediawiki-api.el (mediawiki-api-call): Add Authorization: Bearer
+	header when OAuth is configured for the site.
+
+	* mediawiki-auth.el (mediawiki-do-login): Use OAuth when
+	configured, falling back to traditional username/password login.
+	Improve error message for "Aborted" login results to suggest
+	OAuth configuration.
+
+	* mediawiki-site.el (mediawiki-site-property)
+	(mediawiki-site-description): Handle legacy site entries without
+	plists.  (mediawiki-site-user-pass, mediawiki-site-domain): Guard
+	against keyword symbols in legacy configuration.
+
+	* OAUTH-SETUP.org: New file documenting OAuth 2.0 setup on
+	Wikimedia and other MediaWiki installations.
+
+	* tests/test-mediawiki-oauth.el: New test suite for OAuth
+	functionality.
+
+2026-05-14  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el: Bump version to 3.0.1.
+
+	* mediawiki-api.el (mediawiki-page-get-revision): Fix content
         key extraction from JSON.  MediaWiki API uses "*" as the key
         for page content in slots, not "content".  Changed from
         (alist-get 'content ...) to (alist-get '* ...).

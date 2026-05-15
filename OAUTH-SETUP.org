@@ -1,0 +1,256 @@
+#+TITLE: OAuth 2.0 Setup Guide for mediawiki.el
+#+AUTHOR: MediaWiki.el contributors
+#+DATE: 2025-05-14
+
+* Overview
+
+MediaWiki sites are deprecating bot passwords in favor of OAuth 2.0
+owner-only consumers.  mediawiki.el now supports OAuth 2.0
+authentication via the =mediawiki-oauth.el= module, while maintaining
+full backward compatibility with the existing username/password login
+flow.
+
+This document describes how to configure and use OAuth 2.0
+authentication with mediawiki.el on Wikimedia sites and other
+MediaWiki installations.
+
+* Prerequisites
+
+Before you can use OAuth, you must register an OAuth consumer on the
+central wiki of the wiki farm you want to access.  For Wikimedia
+projects, this is Meta-Wiki.
+
+** Registering an OAuth 2.0 owner-only consumer on Wikimedia
+
+1. Log in to your Meta-Wiki account at
+   https://meta.wikimedia.org/wiki/Special:UserLogin.
+2. Visit the OAuth 2.0 consumer registration page at
+   https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2.
+   (Note the =/oauth2= suffix — the plain =/propose= page is for
+   OAuth 1.0a.)
+3. Fill in the registration form:
+   - *Application name* — a short name for your consumer (e.g.
+     =mediawiki.el (my username)=).
+   - *Description* — a brief description of what the application does.
+   - *This consumer is for use only by* — check the box for owner-only
+     use.  Owner-only consumers do not require review or
+     authorisation; they are usable only by your own account.
+   - *Applicable project* — choose the wiki(s) you want to use this on.
+     For example, select "en.wikipedia.org" for English Wikipedia, or
+     leave at the default for all Wikimedia projects.
+   - *Types of grants* / *Applicable grants* — select the permissions
+     your application needs.  Be conservative; the actual
+     permissions are the intersection of these grants and your user
+     rights.
+   - *Callback URL* — irrelevant for owner-only consumers.
+4. Submit the form.  After successful submission, the page will display
+   your *access token*.
+5. Copy and save the access token immediately.  It is shown only once
+   at registration time.
+
+** Important notes about the registration process
+
+- The registration page is only available on the /central wiki/ of a
+  wiki farm.  For Wikimedia, this is Meta-Wiki
+  (=meta.wikimedia.org=).  Even if you only edit Wikipedia or
+  Wikimedia Commons, you must register the consumer on Meta.
+- You must be logged in to a /named/ Meta-Wiki account to register.
+- Owner-only consumers are approved immediately — no manual review is
+  needed because they can only be used by your own account.
+- If you lose your access token, you can generate a new one from
+  =Special:OAuthConsumerRegistration/manage=.
+
+** Non-Wikimedia wikis
+
+If your wiki is not part of the Wikimedia farm, the registration URL
+will be on your wiki's own domain (e.g.
+=Special:OAuthConsumerRegistration/propose=).  Consult your wiki
+administrator for the exact URL and whether OAuth 2.0 is supported.
+
+* Configuration
+
+** Method 1: Store the access token in =mediawiki-site-alist=
+
+For Wikimedia OAuth 2.0 owner-only consumers, the simplest approach is
+to store the access token directly.  Edit your Emacs init file and add
+the =:oauth-access-token= property:
+
+#+BEGIN_SRC emacs-lisp
+(setq mediawiki-site-alist
+      '(("Wikipedia"
+         "https://en.wikipedia.org/w/"
+         ""    ; username (not used with OAuth)
+         ""    ; password (not used with OAuth)
+         ""    ; domain
+         :description "English Wikipedia"
+         :first-page "Main Page"
+         :oauth-access-token "your-access-token-from-meta")))
+#+END_SRC
+
+When =:oauth-access-token= is present, mediawiki.el will
+automatically add an =Authorization: Bearer <token>= header to every
+API request.  No username, password, client ID, or client secret is
+needed for this flow.
+
+** Method 2: Interactive setup
+
+If you prefer not to edit your init file manually, run:
+
+#+BEGIN_SRC
+M-x mediawiki-oauth-setup-site RET Wikipedia RET your-client-id RET your-client-secret RET your-access-token RET
+#+END_SRC
+
+The interactive command stores the credentials in the site's
+properties.  If you already have an access token, you can leave the
+client ID and client secret empty.
+
+** Method 3: Client-credentials flow (non-Wikimedia wikis)
+
+Some MediaWiki installations support the OAuth 2.0 client-credentials
+grant, which allows mediawiki.el to request an access token
+automatically using a client ID and client secret.  If your wiki
+supports this flow, configure it as follows:
+
+#+BEGIN_SRC emacs-lisp
+(setq mediawiki-site-alist
+      '(("MyWiki"
+         "https://wiki.example.org/w/"
+         "" "" ""
+         :description "My Wiki"
+         :first-page "Main Page"
+         :oauth-client-id "your-client-id"
+         :oauth-client-secret "your-client-secret")))
+#+END_SRC
+
+With this configuration, mediawiki.el will request a fresh access token
+from the wiki's token endpoint on first use, and will reuse it until it
+expires.  You can override the default token endpoint URL with:
+
+#+BEGIN_SRC emacs-lisp
+         :oauth-token-url "https://wiki.example.org/w/rest.php/oauth2/access_token"
+#+END_SRC
+
+* How it works
+
+When you log in (=M-x mediawiki-site= or =M-x mediawiki-do-login=),
+mediawiki.el detects whether OAuth is configured and chooses the
+appropriate authentication method:
+
+1. If an =:oauth-access-token= is stored, it is used directly in an
+   =Authorization: Bearer <token>= header for every API call.
+2. If only a client ID and client secret are configured (and no stored
+   access token), mediawiki.el requests a new token via the
+   client-credentials flow, stores it, and uses it.
+3. If the stored access token has expired and a refresh token is
+   available, the token is refreshed automatically.
+4. If no OAuth configuration is present, the traditional
+   username/password login flow is used.
+
+The entire process is transparent to the user — once configured, you
+simply use =M-x mediawiki-open= and =C-x C-s= as usual.
+
+* Token management
+
+** Checking the current token status
+
+You can inspect the site's OAuth properties directly:
+
+#+BEGIN_SRC emacs-lisp
+(mediawiki-site-property "Wikipedia" :oauth-access-token)
+(mediawiki-site-property "Wikipedia" :oauth-token-expiry)
+#+END_SRC
+
+** Clearing tokens
+
+To remove stored tokens (for example, after rotating credentials or
+suspecting a leak), run:
+
+#+BEGIN_SRC
+M-x mediawiki-oauth-clear-tokens RET Wikipedia RET
+#+END_SRC
+
+This removes the access token, refresh token, and expiry information
+from the site's configuration, but preserves the client ID and secret.
+The next login will request a fresh token (if using client
+credentials) or prompt you to provide a new access token.
+
+* Backward compatibility
+
+OAuth is used /only/ when explicitly configured for a site.  Sites
+that still use username and password continue to work exactly as
+before.  You can mix OAuth-enabled sites and password-based sites in
+the same =mediawiki-site-alist=.
+
+When a site has both an =:oauth-access-token= and a
+username/password, the access token takes precedence.
+
+* Security notes
+
+- **Do not commit access tokens or client secrets to version control.**
+  Store them in your private Emacs configuration or use the
+  auth-source library to retrieve secrets at runtime.
+- Access tokens are stored in memory as part of
+  =mediawiki-site-alist=.  They are not written to disk unless you
+  explicitly persist the variable (e.g. via =customize= or by saving
+  your init file).
+- For Wikimedia owner-only consumers, the access token shown at
+  registration is tied to your user account and carries the
+  permissions you selected during registration.  Keep it secret.
+- The module sends credentials over HTTPS only (the standard Emacs
+  =url= library handles TLS).  Ensure your wiki URL uses =https://=.
+- If you use Emacs's =customize= interface to save
+  =mediawiki-site-alist=, secrets will be written to your custom
+  file in plain text.  Consider using =auth-source= to retrieve tokens
+  from an encrypted store instead of storing them in the site alist.
+
+* Troubleshooting
+
+** "OAuth client ID and secret not configured"
+
+You attempted to use the client-credentials flow for a site that does
+not have =:oauth-client-id= and =:oauth-client-secret= set.  Either:
+- Store a pre-obtained access token with =:oauth-access-token= (the
+  recommended approach for Wikimedia), or
+- Add client ID and secret for wikis that support client credentials.
+
+** "OAuth token request failed: invalid_client"
+
+The wiki rejected the client credentials.  Verify that:
+- The client ID and secret are correct and have not been revoked.
+- The wiki's OAuth extension supports the client-credentials grant.
+- The token endpoint URL is correct (use =:oauth-token-url= if
+  non-standard).
+
+** "No refresh token available"
+
+The token server did not return a refresh token during the initial
+request.  This is normal for many OAuth 2.0 configurations (including
+owner-only consumers).  In this case, when the access token expires, a
+completely new token request will be made using the client credentials
+flow, or you will need to re-register and obtain a new access token.
+
+** API calls still use cookies instead of Bearer tokens
+
+Verify that OAuth is actually configured for the site:
+
+#+BEGIN_SRC emacs-lisp
+(mediawiki-oauth-configured-p "Wikipedia")
+#+END_SRC
+
+If this returns =nil=, the OAuth properties are missing or malformed.
+
+** I cannot access the registration page
+
+The Wikimedia OAuth consumer registration page requires a logged-in,
+named Meta-Wiki account.  Anonymous users and accounts without
+confirmed email addresses will be redirected to the login page.  Make
+sure you are logged in at https://meta.wikimedia.org before visiting
+https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2.
+
+* References
+
+- [[https://www.mediawiki.org/wiki/OAuth][MediaWiki OAuth extension documentation]]
+- [[https://www.mediawiki.org/wiki/OAuth/Owner-only_consumers][MediaWiki OAuth: Owner-only consumers]]
+- [[https://www.mediawiki.org/wiki/OAuth/For_Developers][MediaWiki OAuth: For Developers]]
+- [[https://www.mediawiki.org/wiki/API:Login][MediaWiki API:Login]] (legacy password-based login)
+- Issue #57 in the mediawiki-el repository: "Add OAuth authentication support (bot passwords deprecated)"
