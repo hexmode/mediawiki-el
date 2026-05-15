@@ -73,7 +73,12 @@ Where:
   DOMAIN is the LDAP domain (can be empty string)
   PROPERTIES is a plist of additional properties like:
     :description - Human readable description
-    :first-page - Default page to open when selecting this site"
+    :first-page - Default page to open when selecting this site
+    :oauth-client-id - OAuth 2.0 consumer client ID
+    :oauth-client-secret - OAuth 2.0 consumer client secret
+    :oauth-access-token - Pre-obtained OAuth 2.0 access token
+    :oauth-refresh-token - OAuth 2.0 refresh token for token renewal
+    :oauth-token-url - Custom OAuth 2.0 token endpoint URL"
   :group 'mediawiki
   :type '(repeat (list (string :tag "Site name")
                    (string :tag "URL")

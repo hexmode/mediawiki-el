@@ -60,15 +60,24 @@ This function is kept for backward compatibility and does nothing."
 (defun mediawiki-api-call (sitename action &optional args)
   "Wrapper for making an API call to SITENAME.
 ACTION is the API action.  ARGS is a list of arguments.
-Returns the full parsed JSON response as an alist."
+Returns the full parsed JSON response as an alist.
+
+If OAuth 2.0 is configured for SITENAME (via `mediawiki-oauth-configured-p'),
+an Authorization: Bearer header is automatically added to the request."
   (when (null sitename)
     (error "No sitename given!"))
   (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
                           (mm-url-encode-multipart-form-data
                             (delq nil args) "==")))
-  (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
+  (let* ((headers
+           (when (and (fboundp 'mediawiki-oauth-configured-p)
+                     (mediawiki-oauth-configured-p sitename))
+             (list (mediawiki-oauth-make-auth-header
+                    (mediawiki-oauth-get-access-token sitename)))))
+          (raw (url-http-post (mediawiki-make-api-url sitename)
                 (append args (list (cons "format" "json")
-                               (cons "action" action)))))
+                               (cons "action" action)))
+                nil headers))
           (result (condition-case _err
                     (json-parse-string raw
                       :object-type 'alist
