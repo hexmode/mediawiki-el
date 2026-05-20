@@ -102,22 +102,45 @@ If the token has expired, return nil."
   "Return the OAuth client secret for SITENAME, or nil."
   (mediawiki-site-property sitename :oauth-client-secret))
 
+(defun mediawiki-oauth--update-site-properties (sitename new-props)
+  "Replace the plist tail of SITENAME's site entry with NEW-PROPS.
+This mutates `mediawiki-site-alist' in place so the change persists."
+  (let ((site (assoc sitename mediawiki-site-alist)))
+    (unless site
+      (error "Site %s not found in mediawiki-site-alist" sitename))
+    (setcdr (nthcdr 4 site) new-props)))
+
 (defun mediawiki-oauth-set-tokens (sitename access-token &optional refresh-token expiry-seconds)
   "Store OAuth tokens for SITENAME.
 ACCESS-TOKEN is the new access token.  REFRESH-TOKEN is the optional
 refresh token.  EXPIRY-SECONDS is the optional token lifetime in seconds.
 The tokens are stored as properties in `mediawiki-site-alist'."
-  (let ((site (assoc sitename mediawiki-site-alist)))
-    (unless site
-      (error "Site %s not found in mediawiki-site-alist" sitename))
-    (let ((props (nthcdr 5 site)))
-      (plist-put props :oauth-access-token access-token)
-      (when refresh-token
-        (plist-put props :oauth-refresh-token refresh-token))
-      (if expiry-seconds
-          (plist-put props :oauth-token-expiry
-            (time-add (current-time) expiry-seconds))
-        (plist-put props :oauth-token-expiry nil)))))
+  (let* ((site (assoc sitename mediawiki-site-alist))
+         (tail (nthcdr 5 site))
+         (new-props
+          (if (keywordp (car tail))
+              ;; Already a plist — copy and update.
+              (let ((p (copy-sequence tail)))
+                (setq p (plist-put p :oauth-access-token access-token))
+                (setq p (plist-put p :oauth-refresh-token refresh-token))
+                (setq p (plist-put p :oauth-token-expiry
+                                   (if expiry-seconds
+                                       (time-add (current-time) expiry-seconds)
+                                     nil)))
+                p)
+            ;; Legacy format — build a plist, preserving first-page.
+            (let ((p nil))
+              (when (and (stringp (car tail))
+                         (not (string= "" (car tail))))
+                (setq p (plist-put p :first-page (car tail))))
+              (setq p (plist-put p :oauth-access-token access-token))
+              (setq p (plist-put p :oauth-refresh-token refresh-token))
+              (setq p (plist-put p :oauth-token-expiry
+                                 (if expiry-seconds
+                                     (time-add (current-time) expiry-seconds)
+                                   nil)))
+              p))))
+    (mediawiki-oauth--update-site-properties sitename new-props)))
 
 ;;; HTTP Utilities
 
@@ -249,7 +272,11 @@ CLIENT-ID is the OAuth consumer client ID.
 CLIENT-SECRET is the OAuth consumer client secret.
 Optional ACCESS-TOKEN is a pre-obtained access token.  If not
 provided, the client credentials flow will be used to obtain one
-automatically when needed."
+automatically when needed.
+
+This mutates the site entry in `mediawiki-site-alist' in place so
+the configuration persists across the Emacs session.  To save it
+permanently, use `customize-save-variable' or persist your init file."
   (interactive
    (let* ((site (mediawiki-prompt-for-site))
           (id (read-string (format "OAuth client ID for %s: " site)))
@@ -258,16 +285,30 @@ automatically when needed."
                   (format "Access token for %s (leave empty to use client credentials): " site)
                   nil nil "")))
      (list site id secret (if (string= token "") nil token))))
-  (let ((site (assoc sitename mediawiki-site-alist)))
-    (unless site
-      (error "Site %s not found in mediawiki-site-alist" sitename))
-    (let ((props (nthcdr 5 site)))
-      (plist-put props :oauth-client-id client-id)
-      (plist-put props :oauth-client-secret client-secret)
-      (when access-token
-        (plist-put props :oauth-access-token access-token))
-      (plist-put props :oauth-refresh-token nil)
-      (plist-put props :oauth-token-expiry nil)))
+  (let* ((site (assoc sitename mediawiki-site-alist))
+         (tail (nthcdr 5 site))
+         (new-props
+          (if (keywordp (car tail))
+              ;; Already a plist — copy and update.
+              (let ((p (copy-sequence tail)))
+                (setq p (plist-put p :oauth-client-id client-id))
+                (setq p (plist-put p :oauth-client-secret client-secret))
+                (setq p (plist-put p :oauth-access-token access-token))
+                (setq p (plist-put p :oauth-refresh-token nil))
+                (setq p (plist-put p :oauth-token-expiry nil))
+                p)
+            ;; Legacy format — build a plist, preserving first-page.
+            (let ((p nil))
+              (when (and (stringp (car tail))
+                         (not (string= "" (car tail))))
+                (setq p (plist-put p :first-page (car tail))))
+              (setq p (plist-put p :oauth-client-id client-id))
+              (setq p (plist-put p :oauth-client-secret client-secret))
+              (setq p (plist-put p :oauth-access-token access-token))
+              (setq p (plist-put p :oauth-refresh-token nil))
+              (setq p (plist-put p :oauth-token-expiry nil))
+              p))))
+    (mediawiki-oauth--update-site-properties sitename new-props))
   (message "OAuth configured for %s" sitename))
 
 ;;;###autoload
@@ -276,13 +317,26 @@ automatically when needed."
 This removes the access token, refresh token, and expiry information
 from the site's configuration, but preserves the client ID and secret."
   (interactive (list (mediawiki-prompt-for-site)))
-  (let ((site (assoc sitename mediawiki-site-alist)))
-    (unless site
-      (error "Site %s not found in mediawiki-site-alist" sitename))
-    (let ((props (nthcdr 5 site)))
-      (plist-put props :oauth-access-token nil)
-      (plist-put props :oauth-refresh-token nil)
-      (plist-put props :oauth-token-expiry nil)))
+  (let* ((site (assoc sitename mediawiki-site-alist))
+         (tail (nthcdr 5 site))
+         (new-props
+          (if (keywordp (car tail))
+              ;; Already a plist — copy and update.
+              (let ((p (copy-sequence tail)))
+                (setq p (plist-put p :oauth-access-token nil))
+                (setq p (plist-put p :oauth-refresh-token nil))
+                (setq p (plist-put p :oauth-token-expiry nil))
+                p)
+            ;; Legacy format — build a plist, preserving first-page.
+            (let ((p nil))
+              (when (and (stringp (car tail))
+                         (not (string= "" (car tail))))
+                (setq p (plist-put p :first-page (car tail))))
+              (setq p (plist-put p :oauth-access-token nil))
+              (setq p (plist-put p :oauth-refresh-token nil))
+              (setq p (plist-put p :oauth-token-expiry nil))
+              p))))
+    (mediawiki-oauth--update-site-properties sitename new-props))
   (message "OAuth tokens cleared for %s" sitename))
 
 (provide 'mediawiki-oauth)

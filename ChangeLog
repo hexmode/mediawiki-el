@@ -1,3 +1,27 @@
+2026-05-19  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki-oauth.el (mediawiki-oauth--update-site-properties):
+	New helper using `setcdr' to replace the plist tail of a site
+	entry, actually mutating `mediawiki-site-alist' in place.
+	(mediawiki-oauth-set-tokens, mediawiki-oauth-setup-site)
+	(mediawiki-oauth-clear-tokens): Use the new helper instead of
+	`plist-put' on `(nthcdr 5 site)', whose return value was being
+	discarded and the OAuth configuration silently lost.  Handle
+	legacy site entries that have no existing plist by building one
+	from scratch and preserving the positional first-page value.
+
+	* mediawiki-site.el (mediawiki-site-user-pass)
+	(mediawiki-site-domain): Add `stringp' guards so that keyword
+	symbols in legacy site entries do not leak into API calls (e.g.
+	`lgdomain=:first-page').
+
+	* tests/test-mediawiki-oauth.el
+	(test-mediawiki-oauth-setup-site-mutates-alist): New regression
+	test verifying `mediawiki-oauth-setup-site' writes to
+	`mediawiki-site-alist'.
+	(test-mediawiki-oauth-setup-site-mutates-legacy-entry): New test
+	verifying correct conversion of legacy positional site entries.
+
 2026-05-14  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el: Bump version to 3.1.0.

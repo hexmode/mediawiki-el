@@ -354,6 +354,49 @@ The site is cleaned up after evaluation."
     (should-error (mediawiki-oauth-setup-site "MissingSite" "id" "secret")
                   :type 'error)))
 
+;;; Test that setup-site mutates mediawiki-site-alist in place
+
+(ert-deftest test-mediawiki-oauth-setup-site-mutates-alist ()
+  "Test that mediawiki-oauth-setup-site actually mutates mediawiki-site-alist.
+This guards against a bug where plist-put on (nthcdr 5 site) returns
+a new list that is discarded, leaving the site entry unchanged."
+  (let ((mediawiki-site-alist
+         (list (list "TestSite"
+                     "https://test.example.org/w/"
+                     "" "" ""
+                     :description "Test Site"))))
+    ;; Sanity: no OAuth properties before
+    (should-not (mediawiki-oauth-configured-p "TestSite"))
+    (mediawiki-oauth-setup-site "TestSite" "my-id" "my-secret" "my-token")
+    ;; Verify properties are now in the actual alist
+    (should (mediawiki-oauth-configured-p "TestSite"))
+    (let ((site (assoc "TestSite" mediawiki-site-alist)))
+      (should (equal
+               (plist-get (nthcdr 5 site) :oauth-client-id)
+               "my-id"))
+      (should (equal
+               (plist-get (nthcdr 5 site) :oauth-client-secret)
+               "my-secret"))
+      (should (equal
+               (plist-get (nthcdr 5 site) :oauth-access-token)
+               "my-token")))))
+
+(ert-deftest test-mediawiki-oauth-setup-site-mutates-legacy-entry ()
+  "Test setup-site works on legacy site entries without an existing plist."
+  (let ((mediawiki-site-alist
+         (list (list "TestSite"
+                     "https://test.example.org/w/"
+                     "testuser" "testpass" ""
+                     "Main Page"))))
+    ;; Sanity: no plist, just a positional first-page
+    (mediawiki-oauth-setup-site "TestSite" "my-id" "my-secret" "my-token")
+    ;; Verify the plist was created and first-page preserved
+    (let ((site (assoc "TestSite" mediawiki-site-alist)))
+      (should (keywordp (nth 5 site)))
+      (should (equal (plist-get (nthcdr 5 site) :first-page) "Main Page"))
+      (should (equal (plist-get (nthcdr 5 site) :oauth-client-id) "my-id"))
+      (should (equal (plist-get (nthcdr 5 site) :oauth-access-token) "my-token")))))
+
 (provide 'test-mediawiki-oauth)
 
 ;;; test-mediawiki-oauth.el ends here
