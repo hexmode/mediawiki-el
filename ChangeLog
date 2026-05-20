@@ -1,5 +1,7 @@
 2026-05-19  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki.el: Bump version to 3.1.1.
+
 	* mediawiki-oauth.el (mediawiki-oauth--update-site-properties):
 	New helper using `setcdr' to replace the plist tail of a site
 	entry, actually mutating `mediawiki-site-alist' in place.
