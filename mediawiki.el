@@ -139,6 +139,12 @@
 (require 'mediawiki-page)
 (require 'mediawiki-draft)
 (require 'mediawiki-mode)
+(require 'mediawiki-cache)
+(require 'mediawiki-diff)
+(require 'mediawiki-history)
+(require 'mediawiki-watchlist)
+(require 'mediawiki-completion)
+(require 'mediawiki-user)
 
 (provide 'mediawiki)
 

@@ -203,6 +203,220 @@ If BIT is nil, return the whole revision alist."
         result))
     (t nil)))
 
+;;; Page History
+
+(defun mediawiki-api-get-page-history (sitename title &optional limit)
+  "Fetch revision history for TITLE on SITENAME.
+LIMIT is max revisions (default 50). Returns list of alists."
+  (let* ((result (mediawiki-api-call sitename "query"
+                    (list (cons "titles" title)
+                          (cons "prop" "revisions")
+                          (cons "rvprop" "ids|timestamp|user|comment|size|flags")
+                          (cons "rvslots" "main")
+                          (cons "rvlimit" (number-to-string (or limit 50))))))
+         (pages (alist-get 'pages (alist-get 'query result)))
+         (page (cdar pages))
+         (revisions (alist-get 'revisions page)))
+    (mapcar (lambda (rev)
+              (list (cons 'revid (alist-get 'revid rev))
+                    (cons 'parentid (alist-get 'parentid rev))
+                    (cons 'timestamp (alist-get 'timestamp rev))
+                    (cons 'user (alist-get 'user rev))
+                    (cons 'comment (alist-get 'comment rev))
+                    (cons 'size (alist-get 'size rev))
+                    (cons 'minor (alist-get 'minor rev))))
+            revisions)))
+
+;;; Revision Content
+
+(defun mediawiki-api-get-revision-content (sitename title revid)
+  "Fetch wikitext content of TITLE at revision REVID on SITENAME.
+Returns the content string, or nil if not found."
+  (let* ((result (mediawiki-api-call sitename "query"
+                    (list (cons "titles" title)
+                          (cons "prop" "revisions")
+                          (cons "rvprop" "content")
+                          (cons "rvslots" "main")
+                          (cons "rvstartid" revid)
+                          (cons "rvendid" revid))))
+         (pages (alist-get 'pages (alist-get 'query result)))
+         (page (cdar pages))
+         (revisions (alist-get 'revisions page))
+         (rev (car revisions)))
+    (when rev
+      (alist-get '*
+        (alist-get 'main
+          (alist-get 'slots rev))))))
+
+(defun mediawiki-api-get-latest-revision-content (sitename title)
+  "Fetch latest revision content and ID for TITLE on SITENAME.
+Returns a cons cell (REVID . CONTENT), or nil if page doesn't exist."
+  (let* ((result (mediawiki-api-call sitename "query"
+                    (list (cons "titles" title)
+                          (cons "prop" "revisions")
+                          (cons "rvprop" "ids|content")
+                          (cons "rvslots" "main")
+                          (cons "rvlimit" 1))))
+         (pages (alist-get 'pages (alist-get 'query result)))
+         (page (cdar pages))
+         (revisions (alist-get 'revisions page))
+         (rev (car revisions)))
+    (when rev
+      (cons (alist-get 'revid rev)
+            (alist-get '*
+              (alist-get 'main
+                (alist-get 'slots rev)))))))
+
+;;; Revision Comparison
+
+(defun mediawiki-api-compare-revisions (sitename from-rev to-rev)
+  "Get diff HTML between FROM-REV and TO-REV on SITENAME.
+Returns the diff body HTML as a string."
+  (let* ((result (mediawiki-api-call sitename "compare"
+                    (list (cons "fromrev" from-rev)
+                          (cons "torev" to-rev))))
+         (body (alist-get 'body (alist-get 'compare result))))
+    (alist-get '* body)))
+
+;;; Watchlist
+
+(defun mediawiki-api-get-watchlist (sitename &optional limit days)
+  "Fetch watchlist entries for SITENAME.
+LIMIT is max entries (default 50). DAYS is how many days back (default 30).
+Returns list of entry alists."
+  (let* ((wlend (format-time-string "%Y-%m-%dT%H:%M:%SZ"
+                  (seconds-to-time (- (float-time) (* (or days 30) 86400))) t))
+         (result (mediawiki-api-call sitename "query"
+                    (list (cons "list" "watchlist")
+                          (cons "wlprop" "ids|title|timestamp|user|comment|sizes")
+                          (cons "wlallrev" "1")
+                          (cons "wlshow" "unread")
+                          (cons "wltype" "edit|new")
+                          (cons "wllimit" (number-to-string (or limit 50)))
+                          (cons "wlend" wlend))))
+         (entries (alist-get 'watchlist (alist-get 'query result))))
+    entries))
+
+(defun mediawiki-api-set-watch (sitename title unwatch)
+  "Add or remove TITLE from watchlist on SITENAME.
+When UNWATCH is non-nil, remove; otherwise add.
+Returns t on success."
+  (let* ((token (or (mediawiki-site-get-token sitename "watch")
+                    (mediawiki-site-get-token sitename "csrf")))
+         (result (mediawiki-api-call sitename "watch"
+                    (append (list (cons "titles" title)
+                                  (cons "token" token))
+                            (when unwatch
+                              (list (cons "unwatch" "1")))))))
+    (alist-get 'watch result)))
+
+(defun mediawiki-api-mark-page-seen (sitename title)
+  "Mark TITLE as seen on watchlist on SITENAME.
+Returns t on success."
+  (let* ((token (mediawiki-site-get-token sitename "csrf"))
+         (result (mediawiki-api-call sitename "setnotificationtimestamp"
+                    (list (cons "titles" title)
+                          (cons "token" token)))))
+    (alist-get 'setnotificationtimestamp result)))
+
+;;; User Contributions
+
+(defun mediawiki-api-get-user-contributions (sitename username &optional limit)
+  "Fetch contributions for USERNAME on SITENAME.
+LIMIT is max contributions (default 50).
+Returns list of contribution alists."
+  (let* ((result (mediawiki-api-call sitename "query"
+                    (list (cons "list" "usercontribs")
+                          (cons "ucuser" username)
+                          (cons "ucprop" "ids|title|timestamp|comment|sizediff|flags")
+                          (cons "uclimit" (number-to-string (or limit 50)))))
+         (contribs (alist-get 'usercontribs (alist-get 'query result)))))
+    contribs))
+
+;;; Thank
+
+(defun mediawiki-api-thank-revision (sitename revid)
+  "Send thank notification for revision REVID on SITENAME.
+Returns t on success."
+  (let* ((token (mediawiki-site-get-token sitename "csrf"))
+         (result (mediawiki-api-call sitename "thank"
+                    (list (cons "rev" revid)
+                          (cons "token" token)))))
+    (when (alist-get 'result result)
+      t)))
+
+;;; Preview
+
+(defun mediawiki-api-preview (sitename title wikitext)
+  "Preview WIKITEXT as content of TITLE on SITENAME.
+Returns parsed HTML as a string."
+  (let* ((result (mediawiki-api-call sitename "parse"
+                    (list (cons "title" title)
+                          (cons "text" wikitext)
+                          (cons "prop" "text")
+                          (cons "disableeditsection" "1")
+                          (cons "preview" "1"))))
+         (text (alist-get 'text (alist-get 'parse result))))
+    (alist-get '* text)))
+
+;;; Edit Actions
+
+(defun mediawiki-api-undo-revision (sitename title revid &optional summary)
+  "Undo revision REVID on page TITLE on SITENAME.
+Uses MediaWiki undo mechanism (server-side three-way merge).
+SUMMARY is optional edit summary. Returns t on success."
+  (let* ((token (mediawiki-site-get-token sitename "csrf"))
+         (result (mediawiki-api-call sitename "edit"
+                    (append (list (cons "title" title)
+                                  (cons "undo" revid)
+                                  (cons "token" token))
+                            (when summary
+                              (list (cons "summary" summary)))))))
+    (when (alist-get 'edit result)
+      t)))
+
+(defun mediawiki-api-restore-revision (sitename title revid &optional summary)
+  "Restore page TITLE to revision REVID on SITENAME.
+Fetches the content at REVID and submits it as a new edit.
+SUMMARY is optional edit summary. Returns t on success."
+  (let* ((content (mediawiki-api-get-revision-content sitename title revid))
+         (summary (or summary (format "Restored revision %d" revid)))
+         (token (mediawiki-site-get-token sitename "csrf"))
+         (result (when content
+                   (mediawiki-api-call sitename "edit"
+                     (list (cons "title" title)
+                           (cons "text" content)
+                           (cons "summary" summary)
+                           (cons "token" token))))))
+    (when (and content (alist-get 'edit result))
+      t)))
+
+;;; Async API Call
+
+(defvar url-request-method)
+(defvar url-request-extra-headers)
+(defvar url-request-data)
+
+(defun mediawiki-api-call-async (sitename action params callback)
+  "Make async API call to SITENAME with ACTION and PARAMS.
+CALLBACK is called with (success) where success is non-nil on success.
+Returns nil."
+  (let* ((url (mediawiki-make-api-url sitename))
+         (all-params (append params
+                             (list (cons "format" "json")
+                                   (cons "action" action))))
+         (data (mm-url-encode-www-form-urlencoded all-params)))
+    (let ((url-request-method "POST")
+          (url-request-extra-headers
+           '(("Content-Type" . "application/x-www-form-urlencoded")))
+          (url-request-data data))
+      (url-retrieve url
+        (lambda (status)
+          (let ((success (not (plist-get status :error))))
+            (kill-buffer (current-buffer))
+            (funcall callback success)))
+        nil nil t))))
+
 (provide 'mediawiki-api)
 
 ;;; mediawiki-api.el ends here
