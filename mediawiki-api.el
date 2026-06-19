@@ -96,12 +96,12 @@ an Authorization: Bearer header is automatically added to the request."
                      (error "There was an error parsing the result of the API call")))))
     ;; result is nil for empty {} responses (e.g. action=logout) — valid, not an error
     ;; Handle errors
-    (when-let ((err (alist-get 'error result)))
+    (when-let* ((err (alist-get 'error result)))
       (error "(%s) %s"
         (alist-get 'code err)
         (alist-get 'info err)))
     ;; Handle warnings (log via message, do not error)
-    (when-let ((warnings (alist-get 'warnings result)))
+    (when-let* ((warnings (alist-get 'warnings result)))
       (dolist (w warnings)
         (let* ((label (car w))
                (info (alist-get 'warnings (cdr w))))
