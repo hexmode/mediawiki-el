@@ -275,16 +275,16 @@
 
 (ert-deftest test-mediawiki-mode-hooks ()
   "Test that mode hooks are properly configured.
-As of fix #36, outline keys are in mediawiki-mode-map directly
-rather than being added via the global outline-minor-mode-hook."
+As of fix #36, outline keys are no longer in mediawiki-mode-map
+to avoid overriding standard Emacs navigation keys."
   (require 'outline)
   ;; The global hook must NOT contain mediawiki's function (fix #36)
   (should-not (member 'mediawiki-outline-magic-keys outline-minor-mode-hook))
-  ;; Outline navigation keys must be bound in the mode map instead
-  (should (lookup-key mediawiki-mode-map [(meta left)]))
-  (should (lookup-key mediawiki-mode-map [(meta right)]))
-  (should (lookup-key mediawiki-mode-map [(control left)]))
-  (should (lookup-key mediawiki-mode-map [(control right)])))
+  ;; Outline navigation keys must NOT be bound in the mode map (fix #36)
+  (should-not (lookup-key mediawiki-mode-map [(meta left)]))
+  (should-not (lookup-key mediawiki-mode-map [(meta right)]))
+  (should-not (lookup-key mediawiki-mode-map [(control left)]))
+  (should-not (lookup-key mediawiki-mode-map [(control right)])))
 
 ;;; Test Utility Functions
 

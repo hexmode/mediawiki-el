@@ -25,6 +25,11 @@
 ;; This file contains the major mode definition for MediaWiki editing,
 ;; including the mode definition, keymap, menu definitions, and interactive
 ;; commands for user interface operations.
+;;
+;; Outline navigation commands (promote, demote, move subtree, cycle) are
+;; available via the interactive command
+;; `mediawiki-outline-magic-keys'.  Call that in any MediaWiki buffer to
+;; set up outline keybindings.
 
 ;;; Code:
 
@@ -126,17 +131,11 @@
   (define-key mediawiki-mode-map "\M-n"      'mediawiki-goto-next-page)
    (define-key mediawiki-mode-map [(control return)]
      'mediawiki-open-page-at-point)
-  ;; Outline navigation/restructuring (scoped to mediawiki buffers only;
-  ;; replaces the old global outline-minor-mode-hook approach from issue #36).
-  ;; outline-regexp is already set buffer-locally in mediawiki-mode, so
-  ;; these functions work without outline-minor-mode being active.
-  (define-key mediawiki-mode-map [(meta left)]    'outline-promote)
-  (define-key mediawiki-mode-map [(meta right)]   'outline-demote)
-  (define-key mediawiki-mode-map [(control left)]  'mediawiki-simple-outline-promote)
-  (define-key mediawiki-mode-map [(control right)] 'mediawiki-simple-outline-demote)
-  (define-key mediawiki-mode-map [(control up)]    'outline-move-subtree-up)
-  (define-key mediawiki-mode-map [(control down)]  'outline-move-subtree-down))
-
+  ;; Outline navigation is available via the interactive command
+  ;; `mediawiki-outline-magic-keys' instead of in the mode map, so that
+  ;; standard Emacs navigation keys (C-left, C-right, C-up, C-down,
+  ;; M-left, M-right) are not overridden.  See issue #36.
+  )
 ;;; Interactive Commands
 
 ;;;###autoload
