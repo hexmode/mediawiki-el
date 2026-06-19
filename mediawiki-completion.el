@@ -71,18 +71,19 @@ or nil otherwise."
             (lambda (str pred action)
               (if (eq action 'metadata)
                   '(metadata (category . mediawiki-page))
-                (let* ((result (mediawiki-api-call
-                                sitename "query"
-                                (list (cons "list" "prefixsearch")
-                                      (cons "pssearch" str)
-                                      (cons "pslimit"
-                                            (int-to-string
-                                             mediawiki-completion-limit)))))
-                       (candidates (alist-get 'prefixsearch
-                                              (alist-get 'query result)))
-                       (titles (mapcar (lambda (c) (alist-get 'title c))
-                                       candidates)))
-                  (complete-with-action action titles str pred))))
+                (when (not (string-empty-p str))
+                  (let* ((result (mediawiki-api-call
+                                  sitename "query"
+                                  (list (cons "list" "prefixsearch")
+                                        (cons "pssearch" str)
+                                        (cons "pslimit"
+                                              (int-to-string
+                                               mediawiki-completion-limit)))))
+                         (candidates (alist-get 'prefixsearch
+                                                (alist-get 'query result)))
+                         (titles (mapcar (lambda (c) (alist-get 'title c))
+                                         candidates)))
+                    (complete-with-action action titles str pred)))))
             :exclusive 'no))))
 
 ;;; Completion Registration

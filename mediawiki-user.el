@@ -88,13 +88,10 @@ Interactively, prompt for USERNAME and use the current site."
   "Major mode for browsing user contributions.
 \\{mediawiki-user-contributions-mode-map}"
   (setq tabulated-list-format
-        (vector (list "Rev"   10 (if (boundp 'tabulated-list-gui-sort-by-<)
-                                     tabulated-list-gui-sort-by-<
-                                   nil)
-                      :right-align t)
-                (list "Page"  40 nil)
-                (list "Date"  20 nil)
-                (list "Change" 8 nil :right-align t)
+        (vector (list "Rev"   10 t :right-align t)
+                (list "Page"  40 t)
+                (list "Date"  20 t)
+                (list "Change" 8 t :right-align t)
                 (list "Summary" 0 nil)))
   (setq tabulated-list-sort-key (cons "Date" t))
   (add-hook 'tabulated-list-revert-hook

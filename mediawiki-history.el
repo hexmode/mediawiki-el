@@ -184,7 +184,8 @@ Interactively, prompt for TITLE and use the current site."
       (mediawiki-history-mode)
       (setq mediawiki-history--page-title title
             mediawiki-history--sitename site
-            mediawiki-history--revisions annotated)
+            mediawiki-history--revisions annotated
+            mediawiki-site site)
       (mediawiki-history--refresh-table)
       (display-buffer (current-buffer)))))
 
@@ -220,7 +221,7 @@ Opens a read-only buffer showing the revision content."
   (let* ((rev (mediawiki-history--revision-at-point))
          (revid (alist-get 'revid rev))
          (title (mediawiki-history--title))
-         (latest (caar mediawiki-history--revisions)))
+         (latest (alist-get 'revid (car mediawiki-history--revisions))))
     (unless rev
       (user-error "No revision at point"))
     (unless latest

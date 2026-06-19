@@ -147,6 +147,113 @@
   (should (get 'mediawiki-debug 'custom-type))
   (should (eq 'boolean (get 'mediawiki-debug 'custom-type))))
 
+;;; Test Timestamp Formatting
+
+(ert-deftest test-mediawiki-format-timestamp-just-now ()
+  "Test `mediawiki-format-timestamp' returns \"just now\" for <60s."
+  (let* ((ts (format-time-string
+              "%Y-%m-%dT%TZ"
+              (time-subtract (current-time) 30) t)))
+    (should (string= "just now" (mediawiki-format-timestamp ts)))))
+
+(ert-deftest test-mediawiki-format-timestamp-minutes ()
+  "Test `mediawiki-format-timestamp' returns proper minute strings."
+  (let* ((ts (format-time-string
+              "%Y-%m-%dT%TZ"
+              (time-subtract (current-time) 120) t)))
+    (should (string= "2 minutes ago" (mediawiki-format-timestamp ts)))))
+
+(ert-deftest test-mediawiki-format-timestamp-hours ()
+  "Test `mediawiki-format-timestamp' returns proper hour strings."
+  (let* ((ts (format-time-string
+              "%Y-%m-%dT%TZ"
+              (time-subtract (current-time) 8000) t)))
+    (should (string= "2 hours ago" (mediawiki-format-timestamp ts)))))
+
+(ert-deftest test-mediawiki-format-timestamp-days ()
+  "Test `mediawiki-format-timestamp' returns proper day strings."
+  (let* ((ts (format-time-string
+              "%Y-%m-%dT%TZ"
+              (time-subtract (current-time) 345600) t)))
+    (should (string= "4 days ago" (mediawiki-format-timestamp ts)))))
+
+;;; Test Size Change Formatting
+
+(ert-deftest test-mediawiki-format-size-change-positive ()
+  "Test `mediawiki-format-size-change' with positive numbers."
+  (let ((result (mediawiki-format-size-change 42)))
+    (should (string= "+42" result))
+    (should (eq 'font-lock-type-face
+                (get-text-property 0 'face result)))))
+
+(ert-deftest test-mediawiki-format-size-change-negative ()
+  "Test `mediawiki-format-size-change' with negative numbers."
+  (let ((result (mediawiki-format-size-change -15)))
+    (should (string= "-15" result))
+    (should (eq 'font-lock-warning-face
+                (get-text-property 0 'face result)))))
+
+(ert-deftest test-mediawiki-format-size-change-zero ()
+  "Test `mediawiki-format-size-change' returns \" 0\" for zero."
+  (let ((result (mediawiki-format-size-change 0)))
+    (should (string= " 0" result))
+    (should-not (get-text-property 0 'face result))))
+
+(ert-deftest test-mediawiki-format-size-change-nil ()
+  "Test `mediawiki-format-size-change' returns \" 0\" for nil."
+  (let ((result (mediawiki-format-size-change nil)))
+    (should (string= " 0" result))
+    (should-not (get-text-property 0 'face result))))
+
+;;; Test URL Builders
+
+(ert-deftest test-mediawiki-make-page-url ()
+  "Test `mediawiki-make-page-url' returns proper URL."
+  (cl-letf (((symbol-function 'mediawiki-site-url)
+             (lambda (_site) "https://en.wikipedia.org/w/")))
+    (let ((result (mediawiki-make-page-url "enwiki" "Main Page")))
+      (should (string-match-p
+               "^https://en\\.wikipedia\\.org/w/index\\.php\\?title="
+               result))
+      (should (string-match-p "Main" result))
+      (should (string-match-p "Page" result)))))
+
+(ert-deftest test-mediawiki-make-revision-url ()
+  "Test `mediawiki-make-revision-url' includes &oldid=N."
+  (cl-letf (((symbol-function 'mediawiki-site-url)
+             (lambda (_site) "https://en.wikipedia.org/w/")))
+    (let ((result (mediawiki-make-revision-url "enwiki" "Test" 12345)))
+      (should (string-match-p "&oldid=12345" result))
+      (should (string-match-p "title=Test" result)))))
+
+(ert-deftest test-mediawiki-make-user-page-url ()
+  "Test `mediawiki-make-user-page-url' includes User: prefix."
+  (cl-letf (((symbol-function 'mediawiki-site-url)
+             (lambda (_site) "https://en.wikipedia.org/w/")))
+    (let ((result (mediawiki-make-user-page-url "enwiki" "JohnDoe")))
+      (should (string-match-p "User" result))
+      (should (string-match-p "JohnDoe" result)))))
+
+;;; Test URL Title Extraction
+
+(ert-deftest test-mediawiki-extract-title-from-url-query ()
+  "Test `mediawiki-extract-title-from-url' with ?title= pattern.
+MediaWiki URLs use underscores for spaces."
+  (should (string= "Main_Page"
+                   (mediawiki-extract-title-from-url
+                    "https://en.wikipedia.org/w/index.php?title=Main_Page"))))
+
+(ert-deftest test-mediawiki-extract-title-from-url-ampersand ()
+  "Test `mediawiki-extract-title-from-url' with &title= pattern."
+  (should (string= "Foo"
+                   (mediawiki-extract-title-from-url
+                    "https://en.wikipedia.org/w/index.php?title=Foo&oldid=123"))))
+
+(ert-deftest test-mediawiki-extract-title-from-url-no-title ()
+  "Test `mediawiki-extract-title-from-url' returns nil for no title."
+  (should (null (mediawiki-extract-title-from-url
+                 "https://en.wikipedia.org/wiki/Main_Page"))))
+
 (provide 'test-mediawiki-utils)
 
 ;;; test-mediawiki-utils.el ends here

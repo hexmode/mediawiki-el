@@ -74,9 +74,17 @@ an Authorization: Bearer header is automatically added to the request."
                      (mediawiki-oauth-configured-p sitename))
              (list (mediawiki-oauth-make-auth-header
                     (mediawiki-oauth-get-access-token sitename)))))
+          ;; Stringify all param values — url-http-post passes them through
+          ;; mm-url-form-encode-xwfu which expects strings, not integers.
+          (string-args (mapcar (lambda (p)
+                                 (cons (car p)
+                                       (if (stringp (cdr p))
+                                           (cdr p)
+                                         (format "%s" (cdr p)))))
+                               (delq nil args)))
           (raw (url-http-post (mediawiki-make-api-url sitename)
-                (append args (list (cons "format" "json")
-                               (cons "action" action)))
+                (append string-args (list (cons "format" "json")
+                                      (cons "action" action)))
                 nil headers))
           (result (condition-case _err
                     (json-parse-string raw
@@ -329,8 +337,8 @@ Returns list of contribution alists."
                     (list (cons "list" "usercontribs")
                           (cons "ucuser" username)
                           (cons "ucprop" "ids|title|timestamp|comment|sizediff|flags")
-                          (cons "uclimit" (number-to-string (or limit 50)))))
-         (contribs (alist-get 'usercontribs (alist-get 'query result)))))
+                          (cons "uclimit" (number-to-string (or limit 50))))))
+         (contribs (alist-get 'usercontribs (alist-get 'query result))))
     contribs))
 
 ;;; Thank
