@@ -132,7 +132,8 @@ Prompt for a SUMMARY if one isn't given."
       mediawiki-site
       mediawiki-page-title
       summary
-      (buffer-substring-no-properties (point-min) (point-max)))
+      (without-restriction
+        (buffer-substring-no-properties (point-min) (point-max))))
     (error "Error: %s is not a mediawiki document" (buffer-name))))
 
 ;;;###autoload
