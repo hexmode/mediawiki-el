@@ -6,7 +6,14 @@ The package has been reorganized into a modular structure for better maintainabi
 
 === Installation ===
 
-If you use [http://melpa.org/#/mediawiki MELPA], you can install via the M-x package-list-packages interface. This is preferrable as you will have access to updates automatically.
+If you use [http://melpa.org/#/mediawiki MELPA], you can install via the M-x package-list-packages interface. This is preferable as you will have access to updates automatically.
+
+Alternatively, if you have emacs 30+ you can use:
+
+<syntaxhighlight lang="Emacs Lisp">
+(use-package mediawiki
+  :vc (:url "https://github.com/hexmode/mediawiki-el" :rev :latest))
+</syntaxhighlight>
 
 Otherwise, just make sure this file is in your load-path (usually ~/.emacs.d is included) and put (require 'mediawiki) in your ~/.emacs or ~/.emacs.d/init.el file.
 
