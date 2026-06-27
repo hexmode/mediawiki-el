@@ -54,6 +54,53 @@ The mediawiki.el package is now organized into the following modular components:
 
 This modular structure improves code organization and maintainability while preserving all existing functionality and maintaining full backward compatibility.
 
+=== OAuth 2.0 Setup ===
+
+OAuth 2.0 is the preferred way to authenticate with MediaWiki sites. Password-based login (bot passwords) is deprecated on Wikimedia wikis and may not be available on others.
+
+==== Registering an OAuth consumer ====
+
+To use OAuth with a Wikimedia wiki, you need to register a consumer application:
+
+# Visit https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2
+# Fill in the fields:
+#* '''Application name:''' <code>mediawiki.el</code>
+#* '''Consumer version:''' <code>1.0</code>
+#* '''Application description:''' A short description of your use
+#* Check '''This consumer is only for use by USERNAME''' (replace USERNAME with your wiki username) to create an owner-only consumer — this is the simplest option
+# Scroll down to '''Applicable grants''' and select the permissions you need (e.g., Edit existing pages, Edit protected pages, Edit your user CSS/JSON/JavaScript, Edit the MediaWiki namespace and sitewide/user JSON)
+# Read and accept the terms, then click '''Propose consumer'''
+# On the next page you will see your '''Client application key''', '''Client application secret''', and '''Access token'''
+
+==== Storing OAuth credentials ====
+
+Once you have your OAuth consumer credentials, configure mediawiki.el to use them.  You can either:
+
+* Use the interactive command: <kbd>M-x mediawiki-oauth-setup-site</kbd>
+* Or add the properties directly to <code>mediawiki-site-alist</code> in your Emacs init file:
+
+<syntaxhighlight lang="Emacs Lisp">
+(add-to-list 'mediawiki-site-alist
+             '("Wikipedia"
+               "https://en.wikipedia.org/w/"
+               "username"              ;; Falls back to auth-source if empty
+               ""                      ;; Leave password empty when using OAuth
+               ""
+               :description "English Wikipedia"
+               :oauth-client-id "YOUR_CLIENT_APPLICATION_KEY"
+               :oauth-client-secret "YOUR_CLIENT_APPLICATION_SECRET"
+               :oauth-access-token "YOUR_ACCESS_TOKEN"))
+</syntaxhighlight>
+
+To avoid storing secrets in plain text, you can omit <code>:oauth-client-secret</code> and <code>:oauth-access-token</code> from your config and store them in [https://www.gnu.org/software/emacs/manual/html_mono/auth.html auth-source] instead (e.g., in <code>~/.authinfo.gpg</code>):
+
+<syntaxhighlight lang="text">
+machine en.wikipedia.org login YOUR_CLIENT_APPLICATION_KEY password YOUR_CLIENT_APPLICATION_SECRET port mediawiki-client-secret
+machine en.wikipedia.org login YOUR_CLIENT_APPLICATION_KEY password YOUR_ACCESS_TOKEN port mediawiki-access-token
+</syntaxhighlight>
+
+With the client credentials and access token configured, mediawiki.el will automatically use OAuth 2.0 Bearer token authentication for all API requests to this site.
+
 === TODO ===
 
 * Change customization to explicitly tell mediawiki.el to use the auth-source library.

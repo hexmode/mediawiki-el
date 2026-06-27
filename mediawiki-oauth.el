@@ -49,16 +49,32 @@
 (require 'mediawiki-core)
 (require 'mediawiki-site)
 (require 'json)
+(require 'auth-source)
+(require 'url-parse)
 
 ;;; OAuth Site Properties
 
+(defun mediawiki-oauth--auth-source-secret (sitename port)
+  "Look up a secret from auth-source for SITENAME identified by PORT.
+Uses the client ID as the :user field in auth-source.
+Returns the secret string or nil if not found."
+  (when-let* ((client-id (mediawiki-site-property sitename :oauth-client-id))
+              (url (url-generic-parse-url (mediawiki-site-url sitename)))
+              (host (url-host url))
+              (found (auth-source-search :host host :user client-id
+                                         :port port :max 1
+                                         :require '(:user :secret))))
+    (let ((secret (plist-get (car found) :secret)))
+      (if (functionp secret) (funcall secret) secret))))
+
 (defun mediawiki-oauth-configured-p (sitename)
   "Return t if OAuth authentication is configured for SITENAME.
-OAuth is considered configured if either an access token is stored,
-or if both a client ID and client secret are available."
-  (or (mediawiki-site-property sitename :oauth-access-token)
+OAuth is considered configured if either an access token is stored
+(or available from auth-source), or if a client ID and client secret
+are available (either in the site properties or from auth-source)."
+  (or (mediawiki-oauth-access-token sitename)
       (and (mediawiki-site-property sitename :oauth-client-id)
-           (mediawiki-site-property sitename :oauth-client-secret))))
+           (mediawiki-oauth-client-secret sitename))))
 
 (defun mediawiki-oauth-token-endpoint (sitename)
   "Return the OAuth 2.0 token endpoint URL for SITENAME.
@@ -83,12 +99,15 @@ that is used.  Otherwise, the endpoint is derived from the site URL."
 
 (defun mediawiki-oauth-access-token (sitename)
   "Return the stored OAuth access token for SITENAME, or nil.
-If the token has expired, return nil."
+If the token has expired, return nil.
+If not stored in `mediawiki-site-alist', falls back to auth-source
+using port \"mediawiki-access-token\"."
   (let ((token (mediawiki-site-property sitename :oauth-access-token))
         (expiry (mediawiki-site-property sitename :oauth-token-expiry)))
     (if (and token expiry (time-less-p expiry (current-time)))
         nil
-      token)))
+      (or token
+          (mediawiki-oauth--auth-source-secret sitename "mediawiki-access-token")))))
 
 (defun mediawiki-oauth-refresh-token (sitename)
   "Return the stored OAuth refresh token for SITENAME, or nil."
@@ -99,8 +118,11 @@ If the token has expired, return nil."
   (mediawiki-site-property sitename :oauth-client-id))
 
 (defun mediawiki-oauth-client-secret (sitename)
-  "Return the OAuth client secret for SITENAME, or nil."
-  (mediawiki-site-property sitename :oauth-client-secret))
+  "Return the OAuth client secret for SITENAME, or nil.
+If not stored in `mediawiki-site-alist', falls back to auth-source
+using port \"mediawiki-client-secret\"."
+  (or (mediawiki-site-property sitename :oauth-client-secret)
+      (mediawiki-oauth--auth-source-secret sitename "mediawiki-client-secret")))
 
 (defun mediawiki-oauth--update-site-properties (sitename new-props)
   "Replace the plist tail of SITENAME's site entry with NEW-PROPS.
@@ -309,7 +331,10 @@ permanently, use `customize-save-variable' or persist your init file."
               (setq p (plist-put p :oauth-token-expiry nil))
               p))))
     (mediawiki-oauth--update-site-properties sitename new-props))
-  (message "OAuth configured for %s" sitename))
+  (message "OAuth configured for %s" sitename)
+  (when (y-or-n-p (format "Save OAuth configuration for %s to Customize? " sitename))
+    (customize-save-variable 'mediawiki-site-alist mediawiki-site-alist)
+    (message "OAuth configuration for %s saved" sitename)))
 
 ;;;###autoload
 (defun mediawiki-oauth-clear-tokens (sitename)
