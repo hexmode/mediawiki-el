@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "mediawiki_el",
+  "project_id": "db566d99-17b7-4be4-801b-61eec8b6f0c6"
+}
