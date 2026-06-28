@@ -133,6 +133,9 @@ string like \"--~~~~\" or a raw wikitext sig if preferred."
 (defvar-local mediawiki-discussion-tools--view-index nil
   "Index of the current thread in the thread list.")
 
+(defvar-local mediawiki-discussion-tools--list-buffer nil
+  "The list buffer associated with this view buffer.")
+
 ;;; Thread Parsing
 
 (defun mediawiki-discussion-tools--parse-threads (json)
@@ -332,12 +335,15 @@ then stale."
 (defun mediawiki-discussion-tools--show-thread (delta)
   "Show a thread in the reusable view buffer, split below the list.
 DELTA: 0 for current thread, +1 for next, -1 for previous.
-Reads `mediawiki-discussion-tools--view-index' from the list buffer;
-updates it after navigation.  Moves point in the list buffer to the
-viewed thread and ensures it is visible."
-  (let* ((list-buf (current-buffer))
-         (threads mediawiki-discussion-tools--threads)
-         (index (or mediawiki-discussion-tools--view-index 0))
+Always reads state from the list buffer — works when called from
+either the list or view buffer."
+  (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                       (current-buffer)))
+         (threads (buffer-local-value 'mediawiki-discussion-tools--threads list-buf))
+         (sitename (buffer-local-value 'mediawiki-discussion-tools--sitename list-buf))
+         (page (buffer-local-value 'mediawiki-discussion-tools--page list-buf))
+         (index (or (buffer-local-value 'mediawiki-discussion-tools--view-index list-buf)
+                    0))
          (new-index (+ index delta))
          (max (1- (length threads))))
     (when (or (< new-index 0) (> new-index max))
@@ -345,16 +351,18 @@ viewed thread and ensures it is visible."
     (let ((thread (nth new-index threads)))
       ;; Re-fetch with full reply tree if we only have the heading
       (when (not (alist-get 'replies thread))
-        (let* ((site mediawiki-discussion-tools--sitename)
-               (page mediawiki-discussion-tools--page)
-               (fresh (mediawiki-discussion-tools--fetch-threads site page t)))
+        (let* ((fresh (mediawiki-discussion-tools--fetch-threads
+                       sitename page t)))
           (setq threads fresh
-                mediawiki-discussion-tools--threads fresh
-                thread (nth new-index fresh))))
-      (setq mediawiki-discussion-tools--view-index new-index)
+                thread (nth new-index fresh))
+          (with-current-buffer list-buf
+            (setq mediawiki-discussion-tools--threads fresh))))
+      (with-current-buffer list-buf
+        (setq mediawiki-discussion-tools--view-index new-index))
       (with-current-buffer (get-buffer-create
                             mediawiki-discussion-tools--view-buffer-name)
         (mediawiki-discussion-tools-view-mode)
+        (setq mediawiki-discussion-tools--list-buffer list-buf)
         (mediawiki-discussion-tools--render-thread thread)
         (goto-char (point-min)))
       (display-buffer mediawiki-discussion-tools--view-buffer-name
@@ -369,8 +377,11 @@ viewed thread and ensures it is visible."
 (defun mediawiki-discussion-tools--move-to-row (row-index)
   "Move point to ROW-INDEX in the current tabulated-list buffer
 and ensure it is visible.  Row 0 is the first data row.
-The header is in `header-line-format', not in the buffer."
+Skips any leading empty line inserted by tabulated-list-print-entry."
   (goto-char (point-min))
+  ;; tabulated-list-print-entry may insert a leading newline
+  (when (looking-at "^$")
+    (forward-line 1))
   (forward-line row-index)
   (recenter))
 
@@ -444,10 +455,12 @@ The header is in `header-line-format', not in the buffer."
 (defun mediawiki-discussion-tools-view-refresh ()
   "Re-fetch and re-render the current thread."
   (interactive)
-  (let* ((site mediawiki-discussion-tools--sitename)
-         (page mediawiki-discussion-tools--page))
-    (setq mediawiki-discussion-tools--threads
-          (mediawiki-discussion-tools--fetch-threads site page t))
+  (let ((list-buf (or mediawiki-discussion-tools--list-buffer (current-buffer))))
+    (with-current-buffer list-buf
+      (let ((site mediawiki-discussion-tools--sitename)
+            (page mediawiki-discussion-tools--page))
+        (setq mediawiki-discussion-tools--threads
+              (mediawiki-discussion-tools--fetch-threads site page t))))
     (mediawiki-discussion-tools--show-thread 0)))
 
 ;;; Stub Commands (implemented in later phases)
