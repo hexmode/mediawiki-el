@@ -398,9 +398,7 @@ Skips any leading empty line inserted by tabulated-list-print-entry."
 (defun mediawiki-discussion-tools--follow-point ()
   "If point moved to a different thread row, update the view buffer.
 Intended for `post-command-hook'."
-  (when-let* ((win (get-buffer-window
-                    mediawiki-discussion-tools--view-buffer-name))
-              (pair (mediawiki-discussion-tools--thread-at-point))
+  (when-let* ((pair (mediawiki-discussion-tools--thread-at-point))
               (id (alist-get 'id (cdr pair))))
     (unless (equal id mediawiki-discussion-tools--last-viewed-id)
       (setq mediawiki-discussion-tools--last-viewed-id id)
