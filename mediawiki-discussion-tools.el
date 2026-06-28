@@ -58,6 +58,7 @@
 (require 'cl-lib)
 
 (declare-function mediawiki-prompt-for-site "mediawiki-site")
+(declare-function hl-line-highlight-now "hl-line")
 
 ;;; Customization
 
