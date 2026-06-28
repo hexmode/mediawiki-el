@@ -14,3 +14,7 @@ mediawiki-autoloads.el
 .dolt/
 *.db
 .beads-credential-key
+emacs.d/auto-save-list
+emacs.d/projects.eld
+emacs.d/elpa
+emacs.d/eln-cache
