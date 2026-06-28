@@ -247,6 +247,138 @@
          '(("TestWiki" "http://test.example.com/w/" "user" "pass" ""))))
     (should (string= "Main Page" (mediawiki-site-first-page "TestWiki")))))
 
+;;; Tests for optional positional fields (username/password/domain)
+
+(ert-deftest test-mediawiki-site-no-positional-fields ()
+  "Site entry with no username/password/domain — only URL + plist."
+  (let ((mediawiki-site-alist
+         '(("NoUP" "https://test.example.org/w/"
+            :description "No positional fields"
+            :first-page "Custom Page"
+            :oauth-client-id "abc123"))))
+    (should (string= "https://test.example.org/w/"
+                     (mediawiki-site-url "NoUP")))
+    (should (string= "Custom Page"
+                     (mediawiki-site-first-page "NoUP")))
+    (should (string= "No positional fields"
+                     (mediawiki-site-property "NoUP" :description)))
+    (should (string= "abc123"
+                     (mediawiki-site-property "NoUP" :oauth-client-id)))
+    (should-not (mediawiki-site-property "NoUP" :nonexistent))))
+
+(ert-deftest test-mediawiki-site-no-positional-username-fallback ()
+  "Username extracts to nil when absent; caller uses auth-source."
+  (let ((mediawiki-site-alist
+         '(("NoUP" "https://test.example.org/w/"
+            :description "No username"))))
+    (should-not (mediawiki-site-extract "NoUP" 2))))
+
+(ert-deftest test-mediawiki-site-no-positional-password-fallback ()
+  "Password extracts to nil when absent; caller uses auth-source."
+  (let ((mediawiki-site-alist
+         '(("NoUP" "https://test.example.org/w/"
+            :description "No password"))))
+    (should-not (mediawiki-site-extract "NoUP" 3))))
+
+(ert-deftest test-mediawiki-site-no-positional-domain-fallback ()
+  "Domain extracts to nil when absent."
+  (let ((mediawiki-site-alist
+         '(("NoUP" "https://test.example.org/w/"
+            :description "No domain"))))
+    (should-not (mediawiki-site-domain "NoUP"))))
+
+(ert-deftest test-mediawiki-site-partial-positional-username-only ()
+  "Site entry with username only — plist starts after it."
+  (let ((mediawiki-site-alist
+         '(("Partial" "https://test.example.org/w/" "myuser"
+            :first-page "Partial Page"
+            :description "Username only"))))
+    (should (string= "myuser" (mediawiki-site-extract "Partial" 2)))
+    (should-not (mediawiki-site-extract "Partial" 3))
+    (should-not (mediawiki-site-extract "Partial" 4))
+    (should (string= "Partial Page"
+                     (mediawiki-site-first-page "Partial")))
+    (should (string= "Username only"
+                     (mediawiki-site-property "Partial" :description)))))
+
+(ert-deftest test-mediawiki-site-partial-positional-user-pass ()
+  "Site entry with username and password only — plist starts after password."
+  (let ((mediawiki-site-alist
+         '(("Partial2" "https://test.example.org/w/" "myuser" "mypass"
+            :first-page "Partial2 Page"))))
+    (should (string= "myuser" (mediawiki-site-extract "Partial2" 2)))
+    (should (string= "mypass" (mediawiki-site-extract "Partial2" 3)))
+    (should-not (mediawiki-site-extract "Partial2" 4))
+    (should (string= "Partial2 Page"
+                     (mediawiki-site-first-page "Partial2")))))
+
+(ert-deftest test-mediawiki-site-full-legacy-format ()
+  "Full legacy format — all 5 positional fields + optional first-page string."
+  (let ((mediawiki-site-alist
+         '(("Legacy" "https://test.example.org/w/" "leguser" "legpass"
+            "LEGDOMAIN" "LegacyPage"))))
+    (should (string= "leguser" (mediawiki-site-extract "Legacy" 2)))
+    (should (string= "legpass" (mediawiki-site-extract "Legacy" 3)))
+    (should (string= "LEGDOMAIN" (mediawiki-site-domain "Legacy")))
+    (should (string= "LegacyPage" (mediawiki-site-first-page "Legacy")))))
+
+(ert-deftest test-mediawiki-site-full-legacy-with-plist ()
+  "Full legacy 5 fields + keyword plist (mixed old and new style)."
+  (let ((mediawiki-site-alist
+         '(("Mixed" "https://test.example.org/w/" "muser" "mpass" ""
+            :first-page "Mixed Page"
+            :description "Full legacy with plist"))))
+    (should (string= "muser" (mediawiki-site-extract "Mixed" 2)))
+    (should (string= "mpass" (mediawiki-site-extract "Mixed" 3)))
+    (should-not (mediawiki-site-domain "Mixed"))
+    (should (string= "Mixed Page" (mediawiki-site-first-page "Mixed")))
+    (should (string= "Full legacy with plist"
+                     (mediawiki-site-property "Mixed" :description)))))
+
+(ert-deftest test-mediawiki-site-mixed-forms-in-alist ()
+  "All forms can coexist in the same mediawiki-site-alist."
+  (let ((mediawiki-site-alist
+         '(("NoUP"    "https://test.example.org/w/"
+            :description "No user-pass")
+           ("Partial" "https://test.example.org/w/" "partialuser"
+            :description "Just username")
+           ("Legacy"  "https://test.example.org/w/" "leguser" "legpass"
+            "LEG" "OldPage")
+           ("Full"    "https://test.example.org/w/" "fulluser" "fullpass"
+            ""
+            :first-page "Full Page"
+            :description "Full with plist"))))
+    ;; NoUP: no positional
+    (should-not (mediawiki-site-extract "NoUP" 2))
+    (should (string= "No user-pass"
+                     (mediawiki-site-property "NoUP" :description)))
+    ;; Partial: username only
+    (should (string= "partialuser" (mediawiki-site-extract "Partial" 2)))
+    (should-not (mediawiki-site-extract "Partial" 3))
+    (should (string= "Just username"
+                     (mediawiki-site-property "Partial" :description)))
+    ;; Legacy: all positional
+    (should (string= "leguser" (mediawiki-site-extract "Legacy" 2)))
+    (should (string= "legpass" (mediawiki-site-extract "Legacy" 3)))
+    (should (string= "LEG" (mediawiki-site-domain "Legacy")))
+    (should (string= "OldPage" (mediawiki-site-first-page "Legacy")))
+    ;; Full: all positional + plist
+    (should (string= "fulluser" (mediawiki-site-extract "Full" 2)))
+    (should (string= "Full Page" (mediawiki-site-first-page "Full")))
+    (should (string= "Full with plist"
+                     (mediawiki-site-property "Full" :description)))))
+
+(ert-deftest test-mediawiki-site-only-url-and-keyword ()
+  "Minimal form: just sitename + URL + keyword plist (just 2 positional)."
+  (let ((mediawiki-site-alist
+         '(("Min" "https://test.example.org/w/"
+            :first-page "Minimal"))))
+    (should (string= "https://test.example.org/w/" (mediawiki-site-url "Min")))
+    (should-not (mediawiki-site-extract "Min" 2))
+    (should-not (mediawiki-site-extract "Min" 3))
+    (should-not (mediawiki-site-extract "Min" 4))
+    (should (string= "Minimal" (mediawiki-site-first-page "Min")))))
+
 (provide 'test-mediawiki-site)
 
 ;;; test-mediawiki-site.el ends here

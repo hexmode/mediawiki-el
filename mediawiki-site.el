@@ -103,13 +103,43 @@ Where:
 
 ;;; Site Extraction Functions
 
+(defun mediawiki-site--plist-start (site)
+  "Return the position of the first keyword in SITE entry after the URL.
+Site entries have the form (SITENAME URL . REST) where REST contains
+optional positional fields (USERNAME PASSWORD DOMAIN) followed by a
+keyword plist.  This function finds where the plist begins.
+If no keyword is found, returns 5 (legacy position) for entries with
+5+ elements, or the list length otherwise."
+  (let ((i 2)
+        (len (length site)))
+    (while (and (< i len) (not (keywordp (nth i site))))
+      (setq i (1+ i)))
+    (if (< i len)
+        ;; Found a keyword at position i
+        i
+      ;; No keyword found — legacy format
+      (if (>= len 5) 5 len))))
+
 (defun mediawiki-site-extract (sitename index)
-  "Using `mediawiki-site-alist' and SITENAME, find the nth item using INDEX."
+  "Using `mediawiki-site-alist' and SITENAME, find the nth item using INDEX.
+For indices 2-4 (USERNAME, PASSWORD, DOMAIN), if any earlier element
+is a keyword the plist has started and those positional fields are
+absent — returns nil (caller should fall back to auth-source)."
   (let* ((site (assoc sitename mediawiki-site-alist))
-          (bit (nth index site)))
+         (plist-start (mediawiki-site--plist-start site))
+         (bit (nth index site)))
     (cond
+      ((keywordp bit)
+        ;; Keyword in a positional slot means that field is absent
+        nil)
       ((stringp bit)
-        bit)
+        ;; If we're at or past the plist start at indices 2-4, the string
+        ;; is a plist value, not a positional field.  Use strict < because
+        ;; strings at the plist-start index (e.g., legacy first-page at
+        ;; position 5) are legitimate positional values.
+        (if (and (> index 1) (< plist-start index))
+            nil
+          bit))
       ((and (listp bit) (> (length bit) 0))
         (car bit))
       ((symbolp bit)
@@ -200,22 +230,18 @@ positional format where the 6th element (index 5) is the first page."
 
 (defun mediawiki-site-description (sitename)
   "Get the description for a given SITENAME."
-  (let ((site (assoc sitename mediawiki-site-alist)))
-    (when site
-      (let ((props (nthcdr 5 site)))
-        (when (keywordp (car props))
-          (plist-get props :description))))))
+  (mediawiki-site-property sitename :description))
 
 (defun mediawiki-site-property (sitename property)
   "Get a PROPERTY for a given SITENAME.
-Site entries can be in legacy format (5 or 6 positional elements)
-or modern format (5 positional elements followed by a plist).
-This function safely handles both formats."
+Site entries can be in legacy format (5 or 6 positional elements
+with an optional plist) or modern format (2 positional elements
+followed by a keyword plist).  The username, password, and domain
+fields are optional — omit them to fall back to auth-source."
   (let ((site (assoc sitename mediawiki-site-alist)))
     (when site
-      (let ((props (nthcdr 5 site)))
-        (when (keywordp (car props))
-          (plist-get props property))))))
+      (let ((props (nthcdr (mediawiki-site--plist-start site) site)))
+        (plist-get props property)))))
 
 (defun mediawiki-site-valid-p (sitename)
   "Return t if SITENAME is a valid configured site."

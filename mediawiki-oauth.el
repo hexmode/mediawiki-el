@@ -130,7 +130,8 @@ This mutates `mediawiki-site-alist' in place so the change persists."
   (let ((site (assoc sitename mediawiki-site-alist)))
     (unless site
       (error "Site %s not found in mediawiki-site-alist" sitename))
-    (setcdr (nthcdr 4 site) new-props)))
+    (let ((plist-pos (mediawiki-site--plist-start site)))
+      (setcdr (nthcdr (1- plist-pos) site) new-props))))
 
 (defun mediawiki-oauth-set-tokens (sitename access-token &optional refresh-token expiry-seconds)
   "Store OAuth tokens for SITENAME.
@@ -138,7 +139,8 @@ ACCESS-TOKEN is the new access token.  REFRESH-TOKEN is the optional
 refresh token.  EXPIRY-SECONDS is the optional token lifetime in seconds.
 The tokens are stored as properties in `mediawiki-site-alist'."
   (let* ((site (assoc sitename mediawiki-site-alist))
-         (tail (nthcdr 5 site))
+         (plist-start (mediawiki-site--plist-start site))
+         (tail (nthcdr plist-start site))
          (new-props
           (if (keywordp (car tail))
               ;; Already a plist — copy and update.
@@ -308,7 +310,8 @@ permanently, use `customize-save-variable' or persist your init file."
                   nil nil "")))
      (list site id secret (if (string= token "") nil token))))
   (let* ((site (assoc sitename mediawiki-site-alist))
-         (tail (nthcdr 5 site))
+         (plist-start (mediawiki-site--plist-start site))
+         (tail (nthcdr plist-start site))
          (new-props
           (if (keywordp (car tail))
               ;; Already a plist — copy and update.
@@ -344,7 +347,8 @@ This removes the access token, refresh token, and expiry information
 from the site's configuration, but preserves the client ID and secret."
   (interactive (list (mediawiki-prompt-for-site)))
   (let* ((site (assoc sitename mediawiki-site-alist))
-         (tail (nthcdr 5 site))
+         (plist-start (mediawiki-site--plist-start site))
+         (tail (nthcdr plist-start site))
          (new-props
           (if (keywordp (car tail))
               ;; Already a plist — copy and update.
