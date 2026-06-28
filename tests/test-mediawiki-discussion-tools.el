@@ -47,8 +47,7 @@
                       :oauth-client-id "client-id"
                       :oauth-client-secret "client-secret"
                       :oauth-access-token "access-token"))))
-     (unwind-protect
-         (progn ,@body))))
+     ,@body))
 
 ;;; Fixtures
 

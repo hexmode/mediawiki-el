@@ -30,19 +30,15 @@
 ;;; Test Fixtures
 
 (defmacro test-mediawiki-oauth-with-site (site-name &rest body)
-  "Bind a test site configuration and evaluate BODY.
-The site is cleaned up after evaluation."
-   `(let ((mediawiki-site-alist
+  "Bind a test site configuration and evaluate BODY."
+  `(let ((mediawiki-site-alist
           (list (append (list ,site-name
                               "https://test.example.org/w/"
                               "testuser"
                               "testpass"
                               "")
                         (list :description "Test Site")))))
-     (unwind-protect
-         (progn ,@body)
-       ;; Cleanup is automatic since we bound mediawiki-site-alist locally
-       )))
+     ,@body))
 
 ;;; Test OAuth Configuration Detection
 

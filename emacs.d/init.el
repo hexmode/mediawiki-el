@@ -5,6 +5,12 @@
 ;;
 ;; Requires Emacs 30+ for the :vc keyword.
 
+;; Suppress native compilation of mediawiki test files — they
+;; intentionally produce warnings (mock lambdas with unused args,
+;; setting internal variables, etc.).
+(add-to-list 'native-comp-jit-compilation-deny-list
+             (expand-file-name "mediawiki/tests" package-user-dir))
+
 (require 'use-package)
 
 (use-package mediawiki
@@ -20,3 +26,17 @@
       :oauth-client-id "ee568ec9d0e5251c4aba251e1baf8fe8"))))
 
 ;;; init.el ends here
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages nil)
+ '(package-vc-selected-packages
+   '((mediawiki :url "https://github.com/hexmode/mediawiki-el"))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
