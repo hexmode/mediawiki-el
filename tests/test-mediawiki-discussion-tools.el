@@ -312,6 +312,111 @@
   (should-not mediawiki-discussion-tools-max-threads)
   (should (string= mediawiki-discussion-tools-signature "~~~~")))
 
+;;; Phase 2 — Thread Viewing Tests
+
+(defun test-mdt--mock-reply (author timestamp html &optional children)
+  "Build a mock reply alist."
+  (nconc (list (cons 'author author)
+               (cons 'timestamp timestamp)
+               (cons 'html html))
+         (when children
+           (list (cons 'replies children)))))
+
+(defun test-mdt--mock-thread (id title &optional replies)
+  "Build a mock thread alist with optional REPLIES (a list)."
+  (list (cons 'id id)
+        (cons 'title title)
+        (cons 'reply-count (if replies (1+ (length replies)) 1))
+        (cons 'author-count 2)
+        (cons 'timestamp "2026-06-28T10:00:00Z")
+        (cons 'replies (or replies (list)))))
+
+(ert-deftest test-mdt-format-timestamp-valid ()
+  (should (string= "2026-06-28 10:00"
+                   (mediawiki-discussion-tools--format-timestamp
+                    "2026-06-28T10:00:00Z"))))
+
+(ert-deftest test-mdt-format-timestamp-invalid ()
+  (should (string= "bad-date"
+                   (mediawiki-discussion-tools--format-timestamp "bad-date"))))
+
+(ert-deftest test-mdt-render-replies-single-level ()
+  "Test rendering a single-level reply tree."
+  (let ((replies (list
+                  (test-mdt--mock-reply
+                   "Alice" "2026-06-28T10:00:00Z"
+                   "<p>First reply</p>"))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (let ((content (buffer-string)))
+        (should (string-match "Alice" content))
+        (should (string-match "First reply" content))
+        (should (string-match "2026-06-28" content))))))
+
+(ert-deftest test-mdt-render-replies-nested ()
+  "Test rendering nested replies with indentation."
+  (let ((replies (list
+                  (test-mdt--mock-reply
+                   "Alice" "2026-06-28T10:00:00Z"
+                   "<p>OP text</p>"
+                   (list
+                    (test-mdt--mock-reply
+                     "Bob" "2026-06-28T11:00:00Z"
+                     "<p>Reply</p>"))))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (let ((content (buffer-string)))
+        (should (string-match "Alice" content))
+        (should (string-match "Bob" content))
+        ;; Bob's reply should be indented (2 spaces for depth 1)
+        (should (string-match "  Bob" content))))))
+
+(ert-deftest test-mdt-render-replies-empty ()
+  "Test rendering an empty reply list."
+  (with-temp-buffer
+    (mediawiki-discussion-tools--render-replies (list) 0)
+    (should (string-empty-p (buffer-string)))))
+
+(ert-deftest test-mdt-render-thread ()
+  "Test full thread rendering with title separator."
+  (let ((thread (test-mdt--mock-thread
+                 "h-test" "Test Thread"
+                 (list (test-mdt--mock-reply
+                        "Carol" "2026-06-28T09:00:00Z"
+                        "<p>Question body</p>")))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-thread thread)
+      (let ((content (buffer-string)))
+        (should (string-match "Test Thread" content))
+        (should (string-match "Carol" content))
+        (should (string-match "Question body" content))))))
+
+(ert-deftest test-mdt-render-thread-no-replies ()
+  "Test rendering a thread with no replies."
+  (let ((thread (test-mdt--mock-thread "h-test" "Empty Thread")))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-thread thread)
+      (let ((content (buffer-string)))
+        (should (string-match "Empty Thread" content))))))
+
+(ert-deftest test-mdt-strip-tags-multiline ()
+  "Test stripping HTML from multi-line reply text."
+  (with-temp-buffer
+    (let ((replies (list
+                    (test-mdt--mock-reply
+                     "Dave" "2026-06-28T12:00:00Z"
+                     "<p>line one</p>\n<p>line two</p>"))))
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (let ((content (buffer-string)))
+        (should (string-match "line one" content))
+        (should (string-match "line two" content))))))
+
+(ert-deftest test-mdt-thread-at-point ()
+  "Test that --thread-at-point returns nil with no entries."
+  (with-temp-buffer
+    (mediawiki-discussion-tools-list-mode)
+    (should-not (mediawiki-discussion-tools--thread-at-point))))
+
 (provide 'test-mediawiki-discussion-tools)
 
 ;;; test-mediawiki-discussion-tools.el ends here
