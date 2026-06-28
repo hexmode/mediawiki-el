@@ -92,7 +92,9 @@ string like \"--~~~~\" or a raw wikitext sig if preferred."
     (set-keymap-parent map tabulated-list-mode-map)
     (define-key map (kbd "g")   #'mediawiki-discussion-tools-refresh)
     (define-key map (kbd "RET") #'mediawiki-discussion-tools-view-thread-at-point)
-    (define-key map (kbd "n")   #'mediawiki-discussion-tools-new-thread)
+    (define-key map (kbd "n")   #'mediawiki-discussion-tools-view-next)
+    (define-key map (kbd "p")   #'mediawiki-discussion-tools-view-prev)
+    (define-key map (kbd "N")   #'mediawiki-discussion-tools-new-thread)
     (define-key map (kbd "r")   #'mediawiki-discussion-tools-reply)
     (define-key map (kbd "d")   #'mediawiki-discussion-tools-resolve)
     map)
@@ -101,14 +103,18 @@ string like \"--~~~~\" or a raw wikitext sig if preferred."
 (defvar mediawiki-discussion-tools-view-mode-map
   (let ((map (make-sparse-keymap)))
     (suppress-keymap map)
-    (define-key map (kbd "q")   #'quit-window)
+    (define-key map (kbd "q")   #'mediawiki-discussion-tools-view-close)
     (define-key map (kbd "g")   #'mediawiki-discussion-tools-view-refresh)
+    (define-key map (kbd "RET") #'mediawiki-discussion-tools-view-close)
     (define-key map (kbd "r")   #'mediawiki-discussion-tools-reply)
     (define-key map (kbd "d")   #'mediawiki-discussion-tools-resolve)
     (define-key map (kbd "n")   #'mediawiki-discussion-tools-view-next)
     (define-key map (kbd "p")   #'mediawiki-discussion-tools-view-prev)
     map)
   "Keymap for `mediawiki-discussion-tools-view-mode'.")
+
+(defconst mediawiki-discussion-tools--view-buffer-name "*MW Thread View*"
+  "Name of the reusable thread view buffer.")
 
 ;;; Internal Variables
 
@@ -321,45 +327,64 @@ then stale."
       (cl-loop for thread in mediawiki-discussion-tools--threads
                for i from 0
                when (string= (alist-get 'id thread) id)
-               return (cons i thread)))))
+                return (cons i thread)))))
+
+(defun mediawiki-discussion-tools--show-thread (delta)
+  "Show a thread in the reusable view buffer, split below the list.
+DELTA: 0 for current thread, +1 for next, -1 for previous.
+Reads `mediawiki-discussion-tools--view-index' from the list buffer;
+updates it after navigation."
+  (let* ((threads mediawiki-discussion-tools--threads)
+         (index (or mediawiki-discussion-tools--view-index 0))
+         (new-index (+ index delta))
+         (max (1- (length threads))))
+    (when (or (< new-index 0) (> new-index max))
+      (user-error (if (< new-index 0) "First thread" "Last thread")))
+    (let ((thread (nth new-index threads)))
+      ;; Re-fetch with full reply tree if we only have the heading
+      (when (not (alist-get 'replies thread))
+        (let* ((site mediawiki-discussion-tools--sitename)
+               (page mediawiki-discussion-tools--page)
+               (fresh (mediawiki-discussion-tools--fetch-threads site page t)))
+          (setq threads fresh
+                mediawiki-discussion-tools--threads fresh
+                thread (nth new-index fresh))))
+      (setq mediawiki-discussion-tools--view-index new-index)
+      (with-current-buffer (get-buffer-create
+                            mediawiki-discussion-tools--view-buffer-name)
+        (mediawiki-discussion-tools-view-mode)
+        (mediawiki-discussion-tools--render-thread thread)
+        (goto-char (point-min)))
+      (display-buffer mediawiki-discussion-tools--view-buffer-name
+                      '((display-buffer-reuse-window
+                         display-buffer-below-selected)
+                        (window-height . 0.4))))))
 
 (defun mediawiki-discussion-tools-view-thread-at-point ()
-  "View the full thread at point in a dedicated buffer.
-Fetches the full reply tree if not already cached."
+  "View the full thread at point in a dedicated buffer, split below."
   (interactive)
   (let ((pair (mediawiki-discussion-tools--thread-at-point)))
     (unless pair
       (user-error "No thread at point"))
-    (let* ((index (car pair))
-           (thread (cdr pair))
-           (id (alist-get 'id thread))
-           (replies (alist-get 'replies thread)))
-      ;; Re-fetch with full reply tree if we only have the heading
-      (when (and (not replies) (> (alist-get 'reply-count thread) 0))
-        (let* ((site mediawiki-discussion-tools--sitename)
-               (page mediawiki-discussion-tools--page)
-               (fresh (mediawiki-discussion-tools--fetch-threads site page t)))
-          (setq mediawiki-discussion-tools--threads fresh
-                thread (cl-find id fresh :key (lambda (x) (alist-get 'id x)) :test #'string=)
-                replies (alist-get 'replies thread)
-                ;; Recalculate index from the fresh (re-sorted) list
-                index (cl-position thread fresh :test #'equal))))
-      (let ((buf-name (format "*MW Thread: %s*"
-                              (alist-get 'title thread))))
-        ;; Save list-buffer state to propagate to view buffer
-        (let ((all-threads mediawiki-discussion-tools--threads)
-              (site mediawiki-discussion-tools--sitename)
-              (page mediawiki-discussion-tools--page))
-          (with-current-buffer (get-buffer-create buf-name)
-            (mediawiki-discussion-tools-view-mode)
-            (setq mediawiki-discussion-tools--view-thread thread
-                  mediawiki-discussion-tools--view-index index
-                  mediawiki-discussion-tools--threads all-threads
-                  mediawiki-discussion-tools--sitename site
-                  mediawiki-discussion-tools--page page)
-            (mediawiki-discussion-tools--render-thread thread)
-            (goto-char (point-min))))
-        (pop-to-buffer buf-name)))))
+    (setq mediawiki-discussion-tools--view-index (car pair))
+    (mediawiki-discussion-tools--show-thread 0)))
+
+(defun mediawiki-discussion-tools-view-next ()
+  "View the next thread."
+  (interactive)
+  (mediawiki-discussion-tools--show-thread 1))
+
+(defun mediawiki-discussion-tools-view-prev ()
+  "View the previous thread."
+  (interactive)
+  (mediawiki-discussion-tools--show-thread -1))
+
+(defun mediawiki-discussion-tools-view-close ()
+  "Close the thread view window and return to the list."
+  (interactive)
+  (let ((win (get-buffer-window mediawiki-discussion-tools--view-buffer-name)))
+    (when win
+      (quit-window nil win))))
 
 (defun mediawiki-discussion-tools--render-thread (thread)
   "Render THREAD content into the current buffer."
@@ -405,59 +430,11 @@ Fetches the full reply tree if not already cached."
 (defun mediawiki-discussion-tools-view-refresh ()
   "Re-fetch and re-render the current thread."
   (interactive)
-  (when-let* ((thread mediawiki-discussion-tools--view-thread)
-             (site mediawiki-discussion-tools--sitename)
-             (page mediawiki-discussion-tools--page))
-    (let* ((fresh (mediawiki-discussion-tools--fetch-threads site page t))
-           (id (alist-get 'id thread))
-           (updated (cl-find id fresh :key (lambda (x) (alist-get 'id x)) :test #'string=)))
-      (when updated
-        (setq mediawiki-discussion-tools--view-thread updated)
-        (mediawiki-discussion-tools--render-thread updated)
-        (message "Thread refreshed")))))
-
-(defun mediawiki-discussion-tools-view-next ()
-  "View the next thread in the list."
-  (interactive)
-  (mediawiki-discussion-tools--view-adjacent 1))
-
-(defun mediawiki-discussion-tools-view-prev ()
-  "View the previous thread in the list."
-  (interactive)
-  (mediawiki-discussion-tools--view-adjacent -1))
-
-(defun mediawiki-discussion-tools--view-adjacent (delta)
-  "View the thread at offset DELTA from the current thread."
-  (let* ((index mediawiki-discussion-tools--view-index)
-         (threads mediawiki-discussion-tools--threads)
-         (max (1- (length threads)))
-         (new-index (+ index delta)))
-    (when (or (< new-index 0) (> new-index max))
-      (user-error (if (< new-index 0) "First thread" "Last thread")))
-    (let ((thread (nth new-index threads))
-          (buf-name (format "*MW Thread: %s*"
-                            (alist-get 'title (nth new-index threads)))))
-      ;; Re-fetch full reply tree if needed
-      (when (not (alist-get 'replies thread))
-        (let* ((site mediawiki-discussion-tools--sitename)
-               (page mediawiki-discussion-tools--page)
-               (fresh (mediawiki-discussion-tools--fetch-threads site page t)))
-          (setq threads fresh
-                mediawiki-discussion-tools--threads fresh
-                thread (nth new-index fresh))))
-      (let ((all-threads threads)
-            (site mediawiki-discussion-tools--sitename)
-            (page mediawiki-discussion-tools--page))
-        (with-current-buffer (get-buffer-create buf-name)
-          (mediawiki-discussion-tools-view-mode)
-          (setq mediawiki-discussion-tools--view-thread thread
-                mediawiki-discussion-tools--view-index new-index
-                mediawiki-discussion-tools--threads all-threads
-                mediawiki-discussion-tools--sitename site
-                mediawiki-discussion-tools--page page)
-          (mediawiki-discussion-tools--render-thread thread)
-          (goto-char (point-min)))
-        (pop-to-buffer buf-name)))))
+  (let* ((site mediawiki-discussion-tools--sitename)
+         (page mediawiki-discussion-tools--page))
+    (setq mediawiki-discussion-tools--threads
+          (mediawiki-discussion-tools--fetch-threads site page t))
+    (mediawiki-discussion-tools--show-thread 0)))
 
 ;;; Stub Commands (implemented in later phases)
 

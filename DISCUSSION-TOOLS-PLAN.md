@@ -209,17 +209,24 @@ Derived from `tabulated-list-mode`.
 | Key | Command |
 |---|---|
 | `g` | `mediawiki-discussion-tools-refresh` — re-fetch thread list |
-| `RET` | `mediawiki-discussion-tools-view-thread-at-point` — open view mode |
+| `RET` | `mediawiki-discussion-tools-view-thread-at-point` — open view mode split below |
+| `n` / `p` | `mediawiki-discussion-tools-view-next` / `-view-prev` — navigate threads, updating the view buffer |
+| `N` | `mediawiki-discussion-tools-new-thread` — create new thread |
 | `r` | `mediawiki-discussion-tools-reply` — reply to thread at point |
 | `d` | `mediawiki-discussion-tools-resolve` — mark resolved |
-| `n` | `mediawiki-discussion-tools-new-thread` — create new thread |
 | `s` | `mediawiki-discussion-tools-search` — search threads |
 | `S` | Sort prompt (by title, author, date, replies) |
 | `q` | Quit list mode |
 
+**Window layout:** `RET` splits the frame and shows the thread view buffer
+in the lower portion.  The view buffer is named `*MW Thread View*` and is
+reused across all thread navigation — `n` and `p` (from either the list
+or view buffer) replace its content with the next or previous thread.
+
 ### `mediawiki-discussion-tools-view-mode`
 
-Read-only mode for viewing a single thread.
+Read-only mode for viewing a single thread.  Uses a single reusable
+buffer so `n`/`p` navigation is instant and doesn't create new windows.
 
 **Display:** Each comment rendered with:
 - Author + timestamp header line
@@ -233,8 +240,8 @@ Read-only mode for viewing a single thread.
 | `r` | Reply to this thread |
 | `d` | Mark this thread as resolved |
 | `g` | Refresh thread content |
-| `n` / `p` | Next / previous thread (without returning to list) |
-| `q` | Return to list mode |
+| `n` / `p` | Next / previous thread (reuses `*MW Thread View*` buffer) |
+| `RET` / `q` | Close the view window, return to list |
 
 ## Core Functions
 
@@ -320,11 +327,13 @@ appends {{Resolved|~~~~}} with no additional text.")
 - [x] Implement priority sorting (without "needs attention" / "watching" — that requires the user's username in Phase 4)
 - [x] Implement `mediawiki-support-desk` wrapper
 
-### Phase 2 — Thread viewing
+### Phase 2 — Thread viewing (done)
 
-- Implement `mediawiki-discussion-tools-view-mode`
-- Render thread from cached `discussiontoolspageinfo` data
-- Navigate between threads with `n` / `p`
+- [x] Implement `mediawiki-discussion-tools-view-mode` with reusable `*MW Thread View*` buffer
+- [x] Render thread from cached or re-fetched `discussiontoolspageinfo` data
+- [x] Split-window layout: list on top, thread view below via `display-buffer-below-selected`
+- [x] Navigate between threads with `n` / `p` from either list or view buffer
+- [x] Close view with `RET` or `q` in view buffer
 
 ### Phase 3 — Posting
 
@@ -480,9 +489,11 @@ These are manual tests performed against live wikis to verify real-world behavio
 3. Open `M-x mediawiki-discussion-tools` and enter a discussion page — verify thread list populates
 
 **Viewing**
-4. Press `RET` on a multi-reply thread — verify all comments render with correct indentation
+4. Press `RET` on a multi-reply thread — verify thread renders in a split window below
 5. Press `RET` on a thread with zero replies — verify the opening post renders
-6. Press `n` / `p` to navigate threads — verify boundary behaviour
+6. Press `n` / `p` from the list buffer — verify view buffer updates without new windows
+7. Press `n` / `p` from the view buffer — verify same behaviour, smooth navigation
+8. Press `q` or `RET` in view buffer — verify view window closes, focus returns to list
 
 **Posting**
 7. Press `n` to create a new thread — type a title and body — verify it appears on the page
