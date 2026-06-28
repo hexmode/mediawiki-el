@@ -417,6 +417,42 @@
     (mediawiki-discussion-tools-list-mode)
     (should-not (mediawiki-discussion-tools--thread-at-point))))
 
+(ert-deftest test-mdt-refresh-table-preserves-sort-order ()
+  "Tabulated-list entries and --threads share the same order."
+  (let ((threads (list (test-mdt--mock-thread "h-unanswered" "Unanswered")
+                       (test-mdt--mock-thread "h-active" "Active")
+                       (test-mdt--mock-thread "h-stale" "Stale"))))
+    (setf (alist-get 'status (nth 0 threads)) 'unanswered)
+    (setf (alist-get 'status (nth 1 threads)) 'active)
+    (setf (alist-get 'status (nth 2 threads)) 'stale)
+    (sort threads (lambda (a b)
+                    (< (mediawiki-discussion-tools--thread-priority a)
+                       (mediawiki-discussion-tools--thread-priority b))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools-list-mode)
+      (setq mediawiki-discussion-tools--threads threads)
+      (mediawiki-discussion-tools--refresh-table)
+      (let ((entry-ids (mapcar #'car tabulated-list-entries))
+            (thread-ids (mapcar (lambda (t) (alist-get 'id t)) threads)))
+        (should (equal entry-ids thread-ids))))))
+
+(ert-deftest test-mdt-refresh-table-no-column-sort ()
+  "A nil tabulated-list-sort-key does not reorder entries."
+  (let ((threads (list (test-mdt--mock-thread "h-A" "A")
+                       (test-mdt--mock-thread "h-B" "B"))))
+    (setf (alist-get 'status (nth 0 threads)) 'active)
+    (setf (alist-get 'status (nth 1 threads)) 'unanswered)
+    (sort threads (lambda (a b)
+                    (< (mediawiki-discussion-tools--thread-priority a)
+                       (mediawiki-discussion-tools--thread-priority b))))
+    (should (string= "h-B" (alist-get 'id (car threads))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools-list-mode)
+      (should (null tabulated-list-sort-key))
+      (setq mediawiki-discussion-tools--threads threads)
+      (mediawiki-discussion-tools--refresh-table)
+      (should (string= "h-B" (car (car tabulated-list-entries)))))))
+
 (provide 'test-mediawiki-discussion-tools)
 
 ;;; test-mediawiki-discussion-tools.el ends here
