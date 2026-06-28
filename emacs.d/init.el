@@ -6,16 +6,6 @@
 ;; Requires Emacs 30+ for the :vc keyword.
 
 ;;; Code:
-
-;; `package-vc-install' (used by `:vc') compiles every .el file it
-;; finds, including tests.  The test directory intentionally triggers
-;; compilation warnings (mock lambdas with unused args, setting internal
-;; variables).  Suppress native compilation of test files to avoid ~200
-;; warnings on startup.
-(defvar native-comp-jit-compilation-deny-list)
-(add-to-list 'native-comp-jit-compilation-deny-list
-             (expand-file-name "mediawiki/tests" package-user-dir))
-
 (require 'use-package)
 
 (use-package mediawiki
