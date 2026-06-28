@@ -389,12 +389,14 @@ Skips any leading empty line inserted by tabulated-list-print-entry."
   (when (looking-at "^$")
     (forward-line 1))
   (forward-line row-index)
-  ;; hl-line-highlight-now ties its overlay to (selected-window);
-  ;; select the list window first so the overlay appears there.
-  (when-let* ((win (get-buffer-window (current-buffer))))
-    (with-selected-window win
-      (hl-line-highlight-now)
-      (set-window-point win (point)))))
+  ;; hl-line-highlight-now uses (selected-window).  Select the list
+  ;; window so the overlay lands there, then force redisplay.
+  (let ((win (get-buffer-window (current-buffer))))
+    (when win
+      (set-window-point win (point))
+      (with-selected-window win
+        (hl-line-highlight-now))
+      (force-window-update win)))
 
 (defun mediawiki-discussion-tools--follow-point ()
   "If point moved to a different thread row, update the view buffer.
