@@ -339,7 +339,7 @@ Fetches the full reply tree if not already cached."
         (let* ((site mediawiki-discussion-tools--sitename)
                (page mediawiki-discussion-tools--page)
                (fresh (mediawiki-discussion-tools--fetch-threads site page t)))
-          (setq thread (cl-find id fresh :key (lambda (t) (alist-get 'id t)) :test #'string=)
+          (setq thread (cl-find id fresh :key (lambda (x) (alist-get 'id x)) :test #'string=)
                 mediawiki-discussion-tools--threads fresh
                 replies (alist-get 'replies thread))))
       (let ((buf-name (format "*MW Thread: %s*"
@@ -405,7 +405,7 @@ Fetches the full reply tree if not already cached."
              (page mediawiki-discussion-tools--page))
     (let* ((fresh (mediawiki-discussion-tools--fetch-threads site page t))
            (id (alist-get 'id thread))
-           (updated (cl-find id fresh :key (lambda (t) (alist-get 'id t)) :test #'string=)))
+           (updated (cl-find id fresh :key (lambda (x) (alist-get 'id x)) :test #'string=)))
       (when updated
         (setq mediawiki-discussion-tools--view-thread updated)
         (mediawiki-discussion-tools--render-thread updated)
