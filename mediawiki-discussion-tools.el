@@ -506,7 +506,7 @@ extracted from the DiscussionTools API.
          ("#"       5 t :right-align t)
          ("Last"   20 t)])
   (setq tabulated-list-padding 1)
-  (setq tabulated-list-sort-key (cons "Last" nil))
+  (setq tabulated-list-sort-key nil)   ; preserve our priority sort order
   (add-hook 'tabulated-list-revert-hook #'mediawiki-discussion-tools-refresh nil t)
   (tabulated-list-init-header)
   (hl-line-mode 1))
