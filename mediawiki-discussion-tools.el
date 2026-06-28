@@ -368,11 +368,9 @@ viewed thread and ensures it is visible."
 
 (defun mediawiki-discussion-tools--move-to-row (row-index)
   "Move point to ROW-INDEX in the current tabulated-list buffer
-and ensure it is visible.  Row 0 is the first data row."
+and ensure it is visible.  Row 0 is the first data row.
+The header is in `header-line-format', not in the buffer."
   (goto-char (point-min))
-  (forward-line)                    ; skip header
-  (when (looking-at "^[[:space:]-]+$")
-    (forward-line))                  ; skip separator if present
   (forward-line row-index)
   (recenter))
 
