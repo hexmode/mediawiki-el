@@ -333,8 +333,10 @@ then stale."
   "Show a thread in the reusable view buffer, split below the list.
 DELTA: 0 for current thread, +1 for next, -1 for previous.
 Reads `mediawiki-discussion-tools--view-index' from the list buffer;
-updates it after navigation."
-  (let* ((threads mediawiki-discussion-tools--threads)
+updates it after navigation.  Moves point in the list buffer to the
+viewed thread and ensures it is visible."
+  (let* ((list-buf (current-buffer))
+         (threads mediawiki-discussion-tools--threads)
          (index (or mediawiki-discussion-tools--view-index 0))
          (new-index (+ index delta))
          (max (1- (length threads))))
@@ -358,7 +360,21 @@ updates it after navigation."
       (display-buffer mediawiki-discussion-tools--view-buffer-name
                       '((display-buffer-reuse-window
                          display-buffer-below-selected)
-                        (window-height . 0.4))))))
+                        (window-height . 0.4)))
+      ;; Move point in the list buffer to the current thread row
+      (when (buffer-live-p list-buf)
+        (with-current-buffer list-buf
+          (mediawiki-discussion-tools--move-to-row new-index))))))
+
+(defun mediawiki-discussion-tools--move-to-row (row-index)
+  "Move point to ROW-INDEX in the current tabulated-list buffer
+and ensure it is visible.  Row 0 is the first data row."
+  (goto-char (point-min))
+  (forward-line)                    ; skip header
+  (when (looking-at "^[[:space:]-]+$")
+    (forward-line))                  ; skip separator if present
+  (forward-line row-index)
+  (recenter))
 
 (defun mediawiki-discussion-tools-view-thread-at-point ()
   "View the full thread at point in a dedicated buffer, split below."
@@ -481,7 +497,8 @@ extracted from the DiscussionTools API.
   (setq tabulated-list-padding 1)
   (setq tabulated-list-sort-key (cons "Last" nil))
   (add-hook 'tabulated-list-revert-hook #'mediawiki-discussion-tools-refresh nil t)
-  (tabulated-list-init-header))
+  (tabulated-list-init-header)
+  (hl-line-mode 1))
 
 (define-derived-mode mediawiki-discussion-tools-view-mode special-mode
   "Thread"
