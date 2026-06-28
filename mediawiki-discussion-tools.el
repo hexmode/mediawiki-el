@@ -136,6 +136,9 @@ string like \"--~~~~\" or a raw wikitext sig if preferred."
 (defvar-local mediawiki-discussion-tools--list-buffer nil
   "The list buffer associated with this view buffer.")
 
+(defvar-local mediawiki-discussion-tools--last-viewed-id nil
+  "Thread ID last shown in the view buffer, to avoid redundant updates.")
+
 ;;; Thread Parsing
 
 (defun mediawiki-discussion-tools--parse-threads (json)
@@ -358,7 +361,9 @@ either the list or view buffer."
           (with-current-buffer list-buf
             (setq mediawiki-discussion-tools--threads fresh))))
       (with-current-buffer list-buf
-        (setq mediawiki-discussion-tools--view-index new-index))
+        (setq mediawiki-discussion-tools--view-index new-index
+              mediawiki-discussion-tools--last-viewed-id
+                (alist-get 'id thread)))
       (with-current-buffer (get-buffer-create
                             mediawiki-discussion-tools--view-buffer-name)
         (mediawiki-discussion-tools-view-mode)
@@ -384,6 +389,18 @@ Skips any leading empty line inserted by tabulated-list-print-entry."
     (forward-line 1))
   (forward-line row-index)
   (recenter))
+
+(defun mediawiki-discussion-tools--follow-point ()
+  "If point moved to a different thread row, update the view buffer.
+Intended for `post-command-hook'."
+  (when-let* ((win (get-buffer-window
+                    mediawiki-discussion-tools--view-buffer-name))
+              (pair (mediawiki-discussion-tools--thread-at-point))
+              (id (alist-get 'id (cdr pair))))
+    (unless (equal id mediawiki-discussion-tools--last-viewed-id)
+      (setq mediawiki-discussion-tools--last-viewed-id id)
+      (setq mediawiki-discussion-tools--view-index (car pair))
+      (mediawiki-discussion-tools--show-thread 0))))
 
 (defun mediawiki-discussion-tools-view-thread-at-point ()
   "View the full thread at point in a dedicated buffer, split below."
@@ -509,7 +526,8 @@ extracted from the DiscussionTools API.
   (setq tabulated-list-sort-key nil)   ; preserve our priority sort order
   (add-hook 'tabulated-list-revert-hook #'mediawiki-discussion-tools-refresh nil t)
   (tabulated-list-init-header)
-  (hl-line-mode 1))
+  (hl-line-mode 1)
+  (add-hook 'post-command-hook #'mediawiki-discussion-tools--follow-point nil t))
 
 (define-derived-mode mediawiki-discussion-tools-view-mode special-mode
   "Thread"
