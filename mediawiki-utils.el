@@ -31,6 +31,9 @@
 (require 'mediawiki-core)
 (require 'iso8601)
 
+(declare-function mediawiki-site-url "mediawiki-site")
+(declare-function url-filename "url-parse")
+
 ;;; Debug Variables and Functions
 
 (defcustom mediawiki-debug nil

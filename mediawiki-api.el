@@ -36,6 +36,10 @@
 (require 'mm-url)
 (require 'mediawiki-site)
 
+(declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
+(declare-function mediawiki-oauth-make-auth-header "mediawiki-oauth")
+(declare-function mediawiki-oauth-get-access-token "mediawiki-oauth")
+
 ;;; API URL Construction
 
 (defun mediawiki-make-api-url (&optional sitename)
