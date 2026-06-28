@@ -41,7 +41,16 @@
   (defvar url-http-extra-headers)
   (defvar url-http-target-url)
   (defvar url-http-proxy)
-  (defvar url-http-connection-opened))
+  (defvar url-http-connection-opened)
+  (defvar url-http-method)
+  (defvar url-http-data)
+  (defvar url-http-end-of-headers)
+  (defvar url-http-version)
+  (defvar url-http-attempt-keepalives)
+  (defvar url-extensions-header)
+  (defvar url-mime-charset-string)
+  (defvar url-http-referer)
+  (defvar url-request-coding-system))
 
 ;;; URL Compatibility Functions
 
@@ -73,8 +82,8 @@
 (when (and (fboundp 'url-http-create-request) (boundp 'url-http-extra-headers))
   (if (string= "GET / HTTP/1.0\r\nMIME-Version: 1.0\r\nConnection: close\r\nHost: example.com\r\nAccept: */*\r\nUser-Agent: URL/Emacs\r\nContent-length: 4\r\n\r\ntest"
 	(let ((url-http-target-url (url-generic-parse-url "http://example.com/"))
-	       (url-http-data "test") (url-http-version "1.0") (url-http-referer "test")
-	       url-http-method url-http-attempt-keepalives url-extensions-header
+	       (url-http-data "test") (_url-http-version "1.0") (_url-http-referer "test")
+	       _url-http-method _url-http-attempt-keepalives _url-extensions-header
 	       url-http-extra-headers url-http-proxy url-mime-charset-string)
 	  (url-http-create-request)))
     (defun url-http-create-request (&optional ref-url)
@@ -247,7 +256,7 @@
                     (cond
                       ((consp (car data))
                         (let ((fieldname (cadar data))
-                               (filename  (caadar data))
+                               (_filename  (caadar data))
                                (mimetype  (car (caadar data)))
                                (content   (caar (caadar data))))
 

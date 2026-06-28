@@ -340,16 +340,17 @@ does not work very well will longlines-mode."
 
 (defun mediawiki-insert (pre post)
   "Wrap the current region with PRE and POST."
-  (if (and mark-active (region-beginning) (region-end) (not (= (region-beginning) (region-end))))
-    (let ((beg (region-beginning))
-           (end (region-end)))
-      (save-excursion
-        (goto-char beg)
-        (insert pre)
-        (goto-char (+ end (string-width pre)))
-        (insert post)))
+  (if (and mark-active
+           (not (equal (region-beginning) (region-end))))
+      (let ((beg (region-beginning))
+            (end (region-end)))
+        (save-excursion
+          (goto-char beg)
+          (insert pre)
+          (goto-char (+ end (string-width pre)))
+          (insert post)))
     (insert (concat pre " " post))
-    (backward-char (+ 1 (string-width post)))))
+    (backward-char (+ 1 (string-width post))))))
 
 ;;;###autoload
 (defun mediawiki-insert-strong-emphasis ()

@@ -57,6 +57,7 @@
 (defun mediawiki-raise (result type notif)
   "Deprecated.  Error and warning handling is now done in `mediawiki-api-call'.
 This function is kept for backward compatibility and does nothing."
+  (ignore result type notif)
   nil)
 
 ;;; Core API Call Function
@@ -172,7 +173,7 @@ fetch.  LIMIT is the upper bound on the number of results to give."
 
 (defun mediawiki-page-get-revision (page revision &optional bit)
   "Given a PAGE alist, extract a REVISION.
-If BIT is 'content, return the content string.
+If BIT is \\='content, return the content string.
 If BIT is another symbol, return that field from the revision alist.
 If BIT is nil, return the whole revision alist."
   (let ((rev (nth revision (alist-get 'revisions page))))
