@@ -490,26 +490,28 @@ These are manual tests performed against live wikis to verify real-world behavio
 
 **Viewing**
 4. Press `RET` on a multi-reply thread — verify thread renders in a split window below
-5. Press `RET` on a thread with zero replies — verify the opening post renders
-6. Press `n` / `p` from the list buffer — verify view buffer updates without new windows
-7. Press `n` / `p` from the view buffer — verify same behaviour, smooth navigation
-8. Press `q` or `RET` in view buffer — verify view window closes, focus returns to list
+5. Verify the viewed thread's row is highlighted (`hl-line-mode`) in the list buffer
+6. Press `RET` on a thread with zero replies — verify the opening post renders and highlight moves
+7. Press `n` from the list buffer — verify view buffer shows next thread, highlight moves, row scrolled into view
+8. Press `p` from the view buffer — verify same behaviour, smooth navigation, highlight follows
+9. Press `n` at the last thread — verify minibuffer shows "Last thread", no change
+10. Press `q` or `RET` in view buffer — verify view window closes, focus returns to list
 
 **Posting**
-7. Press `n` to create a new thread — type a title and body — verify it appears on the page
-8. Press `r` on an existing thread — type a reply — verify it appears with correct indentation
-9. Press `g` to refresh — verify the new content appears
+11. Press `N` to create a new thread — type a title and body — verify it appears on the page
+12. Press `r` on an existing thread — type a reply — verify it appears with correct indentation
+13. Press `g` to refresh — verify the new content appears
 
 **Resolving**
-10. Press `d` on a thread — enter a summary — verify `{{Resolved|summary|~~~~}}` appears
-11. Press `d` on a thread — leave summary empty — verify `{{Resolved|~~~~}}` appears
-12. Refresh — verify status icon changes to `✓`
+14. Press `d` on a thread — enter a summary — verify `{{Resolved|summary|~~~~}}` appears
+15. Press `d` on a thread — leave summary empty — verify `{{Resolved|~~~~}}` appears
+16. Refresh — verify status icon changes to `✓`
 
 **Edge cases**
-13. Interrupted network mid-fetch — verify graceful error, not a hang
-14. Thread archived between list and view — verify "thread not found"
-15. Very long thread titles — verify table column truncation
-16. Unicode authors and titles — verify display without mojibake
+17. Interrupted network mid-fetch — verify graceful error, not a hang
+18. Thread archived between list and view — verify "thread not found"
+19. Very long thread titles — verify table column truncation
+20. Unicode authors and titles — verify display without mojibake
 
 #### Support desk wrapper
 
