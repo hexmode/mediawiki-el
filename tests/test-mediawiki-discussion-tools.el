@@ -453,6 +453,56 @@
       (mediawiki-discussion-tools--refresh-table)
       (should (string= "h-B" (car (car tabulated-list-entries)))))))
 
+(ert-deftest test-mdt-follow-point-updates-view ()
+  "Moving point in the list buffer updates --last-viewed-id and the view."
+  (let ((t1 (test-mdt--mock-thread "h-A" "Thread A"))
+        (t2 (test-mdt--mock-thread "h-B" "Thread B")))
+    (setf (alist-get 'status t1) 'active)
+    (setf (alist-get 'status t2) 'unanswered)
+    (let ((threads (list t1 t2)))
+      (with-temp-buffer
+        (mediawiki-discussion-tools-list-mode)
+        (setq mediawiki-discussion-tools--threads threads)
+        (mediawiki-discussion-tools--refresh-table)
+        ;; Point at row 0
+        (goto-char (point-min))
+        (let ((pair (mediawiki-discussion-tools--thread-at-point)))
+          (should pair)
+          (should (string= "h-A" (alist-get 'id (cdr pair))))
+          (should (= (car pair) 0)))
+        ;; Move to row 1
+        (forward-line 1)
+        (let ((pair (mediawiki-discussion-tools--thread-at-point)))
+          (should pair)
+          (should (string= "h-B" (alist-get 'id (cdr pair))))
+          (should (= (car pair) 1)))))))
+
+(ert-deftest test-mdt-follow-point-sets-last-viewed-id ()
+  "--follow-point updates --last-viewed-id when point moves to a new thread."
+  (let ((t1 (test-mdt--mock-thread "h-A" "Thread A"))
+        (t2 (test-mdt--mock-thread "h-B" "Thread B")))
+    (setf (alist-get 'status t1) 'active)
+    (setf (alist-get 'status t2) 'unanswered)
+    (let ((threads (list t1 t2)))
+      (with-temp-buffer
+        (mediawiki-discussion-tools-list-mode)
+        (setq mediawiki-discussion-tools--threads threads
+              mediawiki-discussion-tools--last-viewed-id "h-A")
+        (mediawiki-discussion-tools--refresh-table)
+        ;; Point on row 0: --last-viewed-id already h-A, no change
+        (goto-char (point-min))
+        (let ((before mediawiki-discussion-tools--last-viewed-id))
+          (mediawiki-discussion-tools--follow-point)
+          (should (equal before mediawiki-discussion-tools--last-viewed-id)))
+        ;; Move to row 1: should update --last-viewed-id to h-B
+        ;; Mock --show-thread since it would try an API call
+        (cl-letf (((symbol-function 'mediawiki-discussion-tools--show-thread)
+                   (lambda (_delta) t)))
+          (forward-line 1)
+          (mediawiki-discussion-tools--follow-point)
+          (should (string= "h-B" mediawiki-discussion-tools--last-viewed-id))
+          (should (= mediawiki-discussion-tools--view-index 1)))))))
+
 (provide 'test-mediawiki-discussion-tools)
 
 ;;; test-mediawiki-discussion-tools.el ends here

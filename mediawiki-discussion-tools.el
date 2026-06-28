@@ -403,7 +403,7 @@ Intended for `post-command-hook'."
     (unless (equal id mediawiki-discussion-tools--last-viewed-id)
       (setq mediawiki-discussion-tools--last-viewed-id id)
       (setq mediawiki-discussion-tools--view-index (car pair))
-      (mediawiki-discussion-tools--show-thread 0))))
+      (ignore-errors (mediawiki-discussion-tools--show-thread 0)))))
 
 (defun mediawiki-discussion-tools-view-thread-at-point ()
   "View the full thread at point in a dedicated buffer, split below."
