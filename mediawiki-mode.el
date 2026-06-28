@@ -350,7 +350,7 @@ does not work very well will longlines-mode."
           (goto-char (+ end (string-width pre)))
           (insert post)))
     (insert (concat pre " " post))
-    (backward-char (+ 1 (string-width post))))))
+    (backward-char (+ 1 (string-width post)))))
 
 ;;;###autoload
 (defun mediawiki-insert-strong-emphasis ()
