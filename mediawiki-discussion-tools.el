@@ -388,7 +388,11 @@ Skips any leading empty line inserted by tabulated-list-print-entry."
   (when (looking-at "^$")
     (forward-line 1))
   (forward-line row-index)
-  (recenter))
+  ;; Force hl-line to update by re-highlighting, and recenter the list
+  ;; window (not the selected window, which might be the view buffer).
+  (hl-line-highlight-now)
+  (when-let* ((win (get-buffer-window (current-buffer))))
+    (set-window-point win (point)))))
 
 (defun mediawiki-discussion-tools--follow-point ()
   "If point moved to a different thread row, update the view buffer.
