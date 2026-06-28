@@ -168,9 +168,9 @@
 		    "Host: %s:%d\r\n" host (url-port url-http-target-url))
 		  (format "Host: %s\r\n" host))
 		;; Who its from
-		(if url-personal-mail-address
+		(if user-mail-address
 		  (concat
-		    "From: " url-personal-mail-address "\r\n"))
+		    "From: " user-mail-address "\r\n"))
 		;; Encodings we understand
 		(if url-mime-encoding-string
 		  (concat

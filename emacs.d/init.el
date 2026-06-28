@@ -8,8 +8,12 @@
 ;; Suppress native compilation of mediawiki test files — they
 ;; intentionally produce warnings (mock lambdas with unused args,
 ;; setting internal variables, etc.).
+
+;;; Code:
+(defvar native-comp-jit-compilation-deny-list)
+(setq native-comp-jit-compilation-deny-list '())
 (add-to-list 'native-comp-jit-compilation-deny-list
-             (expand-file-name "mediawiki/tests" package-user-dir))
+  (expand-file-name "mediawiki/tests" package-user-dir))
 
 (require 'use-package)
 
