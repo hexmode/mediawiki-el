@@ -332,7 +332,8 @@ permanently, use `customize-save-variable' or persist your init file."
               p))))
     (mediawiki-oauth--update-site-properties sitename new-props))
   (message "OAuth configured for %s" sitename)
-  (when (y-or-n-p (format "Save OAuth configuration for %s to Customize? " sitename))
+  (when (and (called-interactively-p 'any)
+             (y-or-n-p (format "Save OAuth configuration for %s to Customize? " sitename)))
     (customize-save-variable 'mediawiki-site-alist mediawiki-site-alist)
     (message "OAuth configuration for %s saved" sitename)))
 
