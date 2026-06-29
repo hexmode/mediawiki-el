@@ -488,19 +488,84 @@ Intended for `post-command-hook'."
               (mediawiki-discussion-tools--fetch-threads site page t))))
     (mediawiki-discussion-tools--show-thread 0)))
 
-;;; Stub Commands (implemented in later phases)
+;;; Posting
 
-(defun mediawiki-discussion-tools-new-thread ()
-  "Create a new discussion thread.
-Not yet implemented."
-  (interactive)
-  (user-error "New thread: not yet implemented (Phase 3)"))
+(defun mediawiki-discussion-tools--section-numbers (sitename page)
+  "Return a list of section numbers for discussion threads on PAGE.
+Calls action=parse&prop=tocdata and filters out non-discussion
+sections (those with empty index).  The resulting list maps 1:1
+with the thread list order."
+  (let* ((result (mediawiki-api-call sitename "parse"
+                   `(("page" . ,page)
+                     ("prop" . "tocdata")
+                     ("formatversion" . "2"))))
+         (sections (alist-get 'sections (alist-get 'parse result))))
+    (cl-loop for s in sections
+             for idx = (alist-get 'index s)
+             for num = (alist-get 'number s)
+             when (and idx (not (string= "" idx)))
+             collect (string-to-number num))))
+
+(defun mediawiki-discussion-tools--reply-section-number ()
+  "Return the section number for the currently viewed thread."
+  (let* ((site mediawiki-discussion-tools--sitename)
+         (page mediawiki-discussion-tools--page)
+         (index mediawiki-discussion-tools--view-index)
+         (nums (mediawiki-discussion-tools--section-numbers site page)))
+    (when (and nums (< index (length nums)))
+      (nth index nums))))
 
 (defun mediawiki-discussion-tools-reply ()
-  "Reply to the thread at point.
-Not yet implemented."
+  "Reply to the currently viewed thread."
   (interactive)
-  (user-error "Reply: not yet implemented (Phase 3)"))
+  (let* ((text (read-string "Reply: "))
+         (site mediawiki-discussion-tools--sitename)
+         (page mediawiki-discussion-tools--page)
+         (section (or (mediawiki-discussion-tools--reply-section-number)
+                      (error "Cannot determine section number")))
+         (summary (format "/* %s */ Reply"
+                          (alist-get 'title
+                                     (nth mediawiki-discussion-tools--view-index
+                                          mediawiki-discussion-tools--threads))))
+         (reply-text (format ": %s %s\n" text mediawiki-discussion-tools-signature))
+         (token (mediawiki-site-get-token site "csrf")))
+    (unless token
+      (error "No CSRF token — authenticate first"))
+    (let ((result (mediawiki-api-call site "edit"
+                    `(("title" . ,page)
+                      ("section" . ,section)
+                      ("appendtext" . ,reply-text)
+                      ("summary" . ,summary)
+                      ("token" . ,token)
+                      ("formatversion" . "2")))))
+      (when (alist-get 'edit result)
+        (message "Reply posted")
+        (mediawiki-discussion-tools-view-refresh)))))
+
+(defun mediawiki-discussion-tools-new-thread ()
+  "Create a new discussion thread on the current page."
+  (interactive)
+  (let* ((title (read-string "Thread title: "))
+         (body (read-string "Body: "))
+         (site mediawiki-discussion-tools--sitename)
+         (page mediawiki-discussion-tools--page)
+         (text (format "%s %s\n" body mediawiki-discussion-tools-signature))
+         (token (mediawiki-site-get-token site "csrf")))
+    (unless token
+      (error "No CSRF token — authenticate first"))
+    (let ((result (mediawiki-api-call site "edit"
+                    `(("title" . ,page)
+                      ("section" . "new")
+                      ("sectiontitle" . ,title)
+                      ("text" . ,text)
+                      ("summary" . ,(format "/* %s */ new thread" title))
+                      ("token" . ,token)
+                      ("formatversion" . "2")))))
+      (when (alist-get 'edit result)
+        (message "Thread created")
+        (mediawiki-discussion-tools-refresh)))))
+
+;;; Stub (Phase 4)
 
 (defun mediawiki-discussion-tools-resolve ()
   "Mark the thread at point as resolved.
