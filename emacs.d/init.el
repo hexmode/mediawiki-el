@@ -10,11 +10,13 @@
 
 (use-package mediawiki
   :vc (:url "https://github.com/hexmode/mediawiki-el" :rev :latest)
-  :init
-  ;; Always pull latest on startup
+  :config
+  ;; Pull latest on startup
   (when-let* ((pkg (cadr (assq 'mediawiki package-alist))))
     (ignore-errors (package-vc-upgrade pkg)))
   :bind (([(control c) ?m] . mediawiki-site))
+  :bind (:map mediawiki-mode-map
+          ([(control c) ?s] . mediawiki-support-desk))
   :custom
   (mediawiki-debug t)
   (mediawiki-site-default "MediaWiki")
@@ -26,17 +28,3 @@
 
 (provide 'init)
 ;;; init.el ends here
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages '(mediawiki))
- '(package-vc-selected-packages
-   '((mediawiki :url "https://github.com/hexmode/mediawiki-el"))))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
