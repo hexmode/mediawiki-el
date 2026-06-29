@@ -85,6 +85,13 @@ string like \"--~~~~\" or a raw wikitext sig if preferred."
   :type 'string
   :group 'mediawiki-discussion-tools)
 
+(defcustom mediawiki-discussion-tools-reply-separator "--- Reply below this line ---"
+  "Separator line inserted in the reply buffer.
+Everything above and including this line is discarded when posting.
+The user's reply text starts on the line after the separator."
+  :type 'string
+  :group 'mediawiki-discussion-tools)
+
 ;;; Keymap
 
 (defvar mediawiki-discussion-tools-list-mode-map
@@ -572,8 +579,9 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
       (let ((buf (get-buffer-create "*MW Reply*")))
         (with-current-buffer buf
           (erase-buffer)
-          (insert "-- Reply to: " title " --\n")
-          (insert "-- Press C-c C-c to post, C-c C-k to cancel --\n\n")
+          (insert "Reply to: " title "\n")
+          (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
+          (insert mediawiki-discussion-tools-reply-separator "\n\n")
           (mediawiki-discussion-tools-reply-mode 1)
           (setq mediawiki-discussion-tools--reply-site site
                 mediawiki-discussion-tools--reply-page page
@@ -590,10 +598,15 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
          (page mediawiki-discussion-tools--reply-page)
          (section mediawiki-discussion-tools--reply-section)
          (summary mediawiki-discussion-tools--reply-summary)
+         (sep mediawiki-discussion-tools-reply-separator)
          (body (save-excursion
                   (goto-char (point-min))
-                  (forward-line 3)  ; skip 2 header lines + 1 blank line
-                  (buffer-substring-no-properties (point) (point-max))))
+                  (if (search-forward sep nil t)
+                      (progn
+                        (forward-line 1)
+                        (skip-chars-forward "\n")
+                        (buffer-substring-no-properties (point) (point-max)))
+                    (buffer-substring-no-properties (point-min) (point-max)))))
          (reply-text (format ": %s %s\n"
                              (string-trim body)
                              mediawiki-discussion-tools-signature))

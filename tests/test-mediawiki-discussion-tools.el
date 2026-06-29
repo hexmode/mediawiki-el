@@ -696,6 +696,81 @@ as a direct lookup into the TOC-ordered section list."
         (should (= 4 (mediawiki-discussion-tools--section-for-thread
                       thread "TestSite" "TestPage")))))))
 
+;;; Reply body extraction tests
+
+(ert-deftest test-mdt-reply-body-extraction ()
+  "Reply body is everything after the separator line."
+  (with-temp-buffer
+    (insert "Reply to: Test Thread\n")
+    (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
+    (insert mediawiki-discussion-tools-reply-separator "\n\n")
+    (insert "This is my reply.\n")
+    (insert "With multiple lines.\n")
+    (let ((sep mediawiki-discussion-tools-reply-separator)
+          (body (save-excursion
+                  (goto-char (point-min))
+                  (if (search-forward sep nil t)
+                      (progn
+                        (forward-line 1)
+                        (skip-chars-forward "\n")
+                        (buffer-substring-no-properties (point) (point-max)))
+                    (buffer-substring-no-properties (point-min) (point-max))))))
+      (should (string-match "This is my reply." body))
+      (should (string-match "With multiple lines." body))
+      (should-not (string-match "Reply to:" body))
+      (should-not (string-match "Press C-c" body)))))
+
+(ert-deftest test-mdt-reply-body-extraction-no-separator ()
+  "Falls back to entire buffer if separator is missing."
+  (with-temp-buffer
+    (insert "No separator here.\nJust text.\n")
+    (let ((sep "--- This separator does not exist ---")
+          (body (save-excursion
+                  (goto-char (point-min))
+                  (if (search-forward sep nil t)
+                      (progn
+                        (forward-line 1)
+                        (skip-chars-forward "\n")
+                        (buffer-substring-no-properties (point) (point-max)))
+                    (buffer-substring-no-properties (point-min) (point-max))))))
+      (should (string-match "No separator here" body))
+      (should (string-match "Just text" body)))))
+
+(ert-deftest test-mdt-reply-body-extraction-empty ()
+  "Empty body after separator yields empty string."
+  (with-temp-buffer
+    (insert "Reply to: Test\n")
+    (insert mediawiki-discussion-tools-reply-separator "\n\n")
+    (let ((sep mediawiki-discussion-tools-reply-separator)
+          (body (save-excursion
+                  (goto-char (point-min))
+                  (if (search-forward sep nil t)
+                      (progn
+                        (forward-line 1)
+                        (skip-chars-forward "\n")
+                        (buffer-substring-no-properties (point) (point-max)))
+                    (buffer-substring-no-properties (point-min) (point-max))))))
+      (should (string= "" body))))
+
+(ert-deftest test-mdt-reply-body-extraction-custom-separator ()
+  "Custom separator string is respected."
+  (let ((mediawiki-discussion-tools-reply-separator "=== TYPE BELOW ==="))
+    (with-temp-buffer
+      (insert "Reply to: Test\n")
+      (insert mediawiki-discussion-tools-reply-separator "\n\n")
+      (insert "My reply text.\n")
+      (let ((sep mediawiki-discussion-tools-reply-separator)
+            (body (save-excursion
+                    (goto-char (point-min))
+                    (if (search-forward sep nil t)
+                        (progn
+                          (forward-line 1)
+                          (skip-chars-forward "\n")
+                          (buffer-substring-no-properties (point) (point-max)))
+                      (buffer-substring-no-properties (point-min) (point-max))))))
+        (should (string-match "My reply text" body))
+        (should-not (string-match "Reply to" body))))))
+
 (provide 'test-mediawiki-discussion-tools)
 
 ;;; test-mediawiki-discussion-tools.el ends here
