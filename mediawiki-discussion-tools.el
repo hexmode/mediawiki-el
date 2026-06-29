@@ -508,11 +508,10 @@ Intended for `post-command-hook'."
   :lighter " MW-Reply")
 
 (defun mediawiki-discussion-tools--section-numbers (sitename page)
-  "Return a list of section numbers for discussion threads on PAGE.
-Calls action=parse&prop=tocdata (the non-deprecated replacement
-for prop=sections) and filters out non-discussion sections (those
-without an index field).  The resulting list maps 1:1 with the
-thread list order."
+  "Return an alist mapping section anchors to section numbers for PAGE.
+Calls action=parse&prop=tocdata and filters out non-discussion
+sections (those without an index field).  Each entry is
+(ANCHOR . NUMBER) where ANCHOR matches the thread ID anchor."
   (let* ((result (mediawiki-api-call sitename "parse"
                    `(("page" . ,page)
                      ("prop" . "tocdata")
@@ -523,17 +522,23 @@ thread list order."
     (cl-loop for s in sections
              for idx = (alist-get 'index s)
              for num = (alist-get 'number s)
-             when (and idx (not (string= "" idx)))
-             collect (string-to-number num))))
+             for anchor = (alist-get 'anchor s)
+             when (and idx (not (string= "" idx)) anchor num)
+             collect (cons anchor (string-to-number num)))))
 
-(defun mediawiki-discussion-tools--reply-section-number ()
-  "Return the section number for the currently viewed thread."
-  (let* ((site mediawiki-discussion-tools--sitename)
-         (page mediawiki-discussion-tools--page)
-         (index mediawiki-discussion-tools--view-index)
-         (nums (mediawiki-discussion-tools--section-numbers site page)))
-    (when (and nums (< index (length nums)))
-      (nth index nums))))
+(defun mediawiki-discussion-tools--section-for-thread (thread sitename page)
+  "Return the section number for THREAD on PAGE at SITENAME.
+Matches the thread's ID to section anchors from the TOC."
+  (let* ((thread-id (alist-get 'id thread))
+         ;; Thread IDs from discussiontoolspageinfo look like
+         ;; h-Abuse_filter_on_my_bot-20260616005000
+         ;; Section anchors look like Abuse_filter_on_my_bot
+         ;; Extract the anchor from the thread ID
+         (anchor (when (string-match "^h-\\(.+\\)-[0-9]+$" thread-id)
+                   (match-string 1 thread-id)))
+         (nums (mediawiki-discussion-tools--section-numbers sitename page)))
+    (when anchor
+      (alist-get anchor nums nil nil #'string=))))
 
 (defun mediawiki-discussion-tools-reply ()
   "Open a buffer to compose a reply to the thread at point or in view.
@@ -556,16 +561,15 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
     (unless (and site page)
       (user-error "No site or page configured"))
     (let* ((title (alist-get 'title thread))
-           (nums (condition-case err
-                     (mediawiki-discussion-tools--section-numbers site page)
-                   (error
-                    (user-error "Failed to fetch section numbers: %S"
-                                (error-message-string err)))))
-           (section (when (and nums index (< index (length nums)))
-                      (nth index nums))))
+           (section (condition-case err
+                       (mediawiki-discussion-tools--section-for-thread
+                        thread site page)
+                     (error
+                      (user-error "Failed to fetch section numbers: %S"
+                                  (error-message-string err))))))
       (unless section
-        (user-error "Cannot determine section number for thread %d (got %d sections)"
-                    index (length nums)))
+        (user-error "Cannot determine section number for thread: %s"
+                    (or (alist-get 'id thread) "unknown")))
       (let ((buf (get-buffer-create "*MW Reply*")))
         (with-current-buffer buf
           (erase-buffer)

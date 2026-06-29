@@ -563,28 +563,28 @@
 (ert-deftest test-mdt-section-numbers-no-header ()
   "Section numbers for a page with no header sections."
   (let ((json (test-mdt--mock-tocdata
-               '(((number . "1") (index . "1"))
-                 ((number . "2") (index . "2"))
-                 ((number . "3") (index . "3"))))))
+               '(((number . "1") (index . "1") (anchor . "First"))
+                 ((number . "2") (index . "2") (anchor . "Second"))
+                 ((number . "3") (index . "3") (anchor . "Third"))))))
     (cl-letf (((symbol-function 'mediawiki-api-call)
                (lambda (_site _action _args) json)))
       (let ((nums (mediawiki-discussion-tools--section-numbers
                    "TestSite" "TestPage")))
-        (should (equal nums '(1 2 3)))))))
+        (should (equal nums '(("First" . 1) ("Second" . 2) ("Third" . 3))))))))
 
 (ert-deftest test-mdt-section-numbers-with-header-sections ()
   "Header sections (no index field) are filtered out."
   (let ((json (test-mdt--mock-tocdata
-               '(((number . "1"))                 ; "See also" — no index
-                 ((number . "2"))                 ; "Before you post" — no index
-                 ((number . "3"))                 ; "Post a new question" — no index
-                 ((number . "4") (index . "1"))   ; first thread
-                 ((number . "5") (index . "2")))))) ; second thread
+               '(((number . "1"))                    ; "See also" — no index
+                 ((number . "2"))                    ; "Before you post" — no index
+                 ((number . "3"))                    ; "Post a new question" — no index
+                 ((number . "4") (index . "1") (anchor . "Thread_A"))
+                 ((number . "5") (index . "2") (anchor . "Thread_B"))))))
     (cl-letf (((symbol-function 'mediawiki-api-call)
                (lambda (_site _action _args) json)))
       (let ((nums (mediawiki-discussion-tools--section-numbers
                    "TestSite" "TestPage")))
-        (should (equal nums '(4 5)))))))
+        (should (equal nums '(("Thread_A" . 4) ("Thread_B" . 5))))))))
 
 (ert-deftest test-mdt-section-numbers-empty-page ()
   "Empty page returns nil."
@@ -594,6 +594,29 @@
       (let ((nums (mediawiki-discussion-tools--section-numbers
                    "TestSite" "TestPage")))
         (should-not nums)))))
+
+(ert-deftest test-mdt-section-for-thread-match ()
+  "Section number is found by matching thread ID anchor."
+  (let ((json (test-mdt--mock-tocdata
+               '(((number . "4") (index . "1") (anchor . "Abuse_filter_on_my_bot"))
+                 ((number . "5") (index . "2") (anchor . "supported_fonts"))))))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (_site _action _args) json)))
+      (let ((thread '((id . "h-Abuse_filter_on_my_bot-20260616005000")
+                      (title . "Abuse filter on my bot"))))
+        (should (= 4 (mediawiki-discussion-tools--section-for-thread
+                      thread "TestSite" "TestPage")))))))
+
+(ert-deftest test-mdt-section-for-thread-no-match ()
+  "Returns nil when thread anchor doesn't match any section."
+  (let ((json (test-mdt--mock-tocdata
+               '(((number . "4") (index . "1") (anchor . "Abuse_filter_on_my_bot"))))))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (_site _action _args) json)))
+      (let ((thread '((id . "h-Unknown_topic-20260616005000")
+                      (title . "Unknown topic"))))
+        (should-not (mediawiki-discussion-tools--section-for-thread
+                     thread "TestSite" "TestPage"))))))
 
 (provide 'test-mediawiki-discussion-tools)
 
