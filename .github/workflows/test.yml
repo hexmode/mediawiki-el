@@ -26,6 +26,9 @@ jobs:
         uses: jcs090218/setup-emacs@master
         with:
           version: ${{ matrix.emacs-version }}
+        env:
+          # Authenticate Nix's fetchFromGitHub to avoid API rate limits
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate autoloads
         run: make autoloads-only
