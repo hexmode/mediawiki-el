@@ -22,10 +22,27 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Set up Emacs
-        uses: jcs090218/setup-emacs@master
-        with:
-          version: ${{ matrix.emacs-version }}
+      - name: Install Emacs
+        run: |
+          set -e
+          EMACS_VERSION="${{ matrix.emacs-version }}"
+          # Extract major.minor for the tarball name
+          echo "Installing Emacs $EMACS_VERSION from source..."
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential \
+            libgnutls28-dev libxml2-dev libjansson-dev \
+            libsqlite3-dev libtree-sitter-dev libgccjit-12-dev \
+            libgif-dev libxpm-dev libjpeg-dev libtiff-dev \
+            texinfo
+          cd /tmp
+          wget -q "https://ftp.gnu.org/gnu/emacs/emacs-${EMACS_VERSION}.tar.xz"
+          tar xf "emacs-${EMACS_VERSION}.tar.xz"
+          cd "emacs-${EMACS_VERSION}"
+          ./configure --with-no-popups --with-native-compilation --without-x \
+            --prefix=/usr/local CFLAGS="-O2"
+          make -j$(nproc)
+          sudo make install
+          emacs --version
 
       - name: Generate autoloads
         run: make autoloads-only
