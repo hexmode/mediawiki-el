@@ -396,7 +396,7 @@ Skips any leading empty line inserted by tabulated-list-print-entry."
       (set-window-point win (point))
       (with-selected-window win
         (hl-line-highlight-now))
-      (force-window-update win)))
+      (force-window-update win))))
 
 (defun mediawiki-discussion-tools--follow-point ()
   "If point moved to a different thread row, update the view buffer.
