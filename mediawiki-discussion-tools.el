@@ -607,8 +607,16 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
                         (skip-chars-forward "\n")
                         (buffer-substring-no-properties (point) (point-max)))
                     (buffer-substring-no-properties (point-min) (point-max)))))
-         (reply-text (format ": %s %s\n"
-                             (string-trim body)
+         (trimmed (string-trim body))
+         (lines (split-string trimmed "\n"))
+         (indented (mapconcat
+                    (lambda (line)
+                      (if (string-empty-p line)
+                          ":"
+                        (concat ": " line)))
+                    lines "\n"))
+         (reply-text (format "%s %s\n"
+                             indented
                              mediawiki-discussion-tools-signature))
          (token (mediawiki-site-get-token site "csrf")))
     (unless token

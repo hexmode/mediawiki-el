@@ -696,80 +696,55 @@ as a direct lookup into the TOC-ordered section list."
         (should (= 4 (mediawiki-discussion-tools--section-for-thread
                       thread "TestSite" "TestPage")))))))
 
-;;; Reply body extraction tests
+;;; Reply indentation tests
 
-(ert-deftest test-mdt-reply-body-extraction ()
-  "Reply body is everything after the separator line."
-  (with-temp-buffer
-    (insert "Reply to: Test Thread\n")
-    (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
-    (insert mediawiki-discussion-tools-reply-separator "\n\n")
-    (insert "This is my reply.\n")
-    (insert "With multiple lines.\n")
-    (let ((sep mediawiki-discussion-tools-reply-separator)
-          (body (save-excursion
-                  (goto-char (point-min))
-                  (if (search-forward sep nil t)
-                      (progn
-                        (forward-line 1)
-                        (skip-chars-forward "\n")
-                        (buffer-substring-no-properties (point) (point-max)))
-                    (buffer-substring-no-properties (point-min) (point-max))))))
-      (should (string-match "This is my reply." body))
-      (should (string-match "With multiple lines." body))
-      (should-not (string-match "Reply to:" body))
-      (should-not (string-match "Press C-c" body)))))
+(ert-deftest test-mdt-reply-multi-line-indentation ()
+  "Every line of a multi-line reply gets a : prefix."
+  (let* ((body "First line.\nSecond line.\nThird line.")
+         (trimmed (string-trim body))
+         (lines (split-string trimmed "\n"))
+         (indented (mapconcat
+                    (lambda (line)
+                      (if (string-empty-p line)
+                          ":"
+                        (concat ": " line)))
+                    lines "\n"))
+         (reply-text (format "%s %s\n"
+                             indented
+                             mediawiki-discussion-tools-signature)))
+    (should (string-match "^: First line." reply-text))
+    (should (string-match "^: Second line." reply-text))
+    (should (string-match "^: Third line." reply-text))
+    (should (string-match "~~~~$" reply-text))))
 
-(ert-deftest test-mdt-reply-body-extraction-no-separator ()
-  "Falls back to entire buffer if separator is missing."
-  (with-temp-buffer
-    (insert "No separator here.\nJust text.\n")
-    (let ((sep "--- This separator does not exist ---")
-          (body (save-excursion
-                  (goto-char (point-min))
-                  (if (search-forward sep nil t)
-                      (progn
-                        (forward-line 1)
-                        (skip-chars-forward "\n")
-                        (buffer-substring-no-properties (point) (point-max)))
-                    (buffer-substring-no-properties (point-min) (point-max))))))
-      (should (string-match "No separator here" body))
-      (should (string-match "Just text" body)))))
+(ert-deftest test-mdt-reply-single-line-indentation ()
+  "A single-line reply gets one : prefix."
+  (let* ((body "Just one line.")
+         (trimmed (string-trim body))
+         (lines (split-string trimmed "\n"))
+         (indented (mapconcat
+                    (lambda (line)
+                      (if (string-empty-p line)
+                          ":"
+                        (concat ": " line)))
+                    lines "\n"))
+         (reply-text (format "%s %s\n"
+                             indented
+                             mediawiki-discussion-tools-signature)))
+    (should (string= ": Just one line. ~~~~\n" reply-text))))
 
-(ert-deftest test-mdt-reply-body-extraction-empty ()
-  "Empty body after separator yields empty string."
-  (with-temp-buffer
-    (insert "Reply to: Test\n")
-    (insert mediawiki-discussion-tools-reply-separator "\n\n")
-    (let ((sep mediawiki-discussion-tools-reply-separator)
-          (body (save-excursion
-                  (goto-char (point-min))
-                  (if (search-forward sep nil t)
-                      (progn
-                        (forward-line 1)
-                        (skip-chars-forward "\n")
-                        (buffer-substring-no-properties (point) (point-max)))
-                    (buffer-substring-no-properties (point-min) (point-max))))))
-      (should (string= "" body))))
-
-(ert-deftest test-mdt-reply-body-extraction-custom-separator ()
-  "Custom separator string is respected."
-  (let ((mediawiki-discussion-tools-reply-separator "=== TYPE BELOW ==="))
-    (with-temp-buffer
-      (insert "Reply to: Test\n")
-      (insert mediawiki-discussion-tools-reply-separator "\n\n")
-      (insert "My reply text.\n")
-      (let ((sep mediawiki-discussion-tools-reply-separator)
-            (body (save-excursion
-                    (goto-char (point-min))
-                    (if (search-forward sep nil t)
-                        (progn
-                          (forward-line 1)
-                          (skip-chars-forward "\n")
-                          (buffer-substring-no-properties (point) (point-max)))
-                      (buffer-substring-no-properties (point-min) (point-max))))))
-        (should (string-match "My reply text" body))
-        (should-not (string-match "Reply to" body))))))
+(ert-deftest test-mdt-reply-empty-line-indentation ()
+  "Empty lines within the reply become just : (bare colon)."
+  (let* ((body "First.\n\nThird.")
+         (trimmed (string-trim body))
+         (lines (split-string trimmed "\n"))
+         (indented (mapconcat
+                    (lambda (line)
+                      (if (string-empty-p line)
+                          ":"
+                        (concat ": " line)))
+                    lines "\n")))
+    (should (string= ": First.\n:\n: Third." indented))))
 
 (provide 'test-mediawiki-discussion-tools)
 
