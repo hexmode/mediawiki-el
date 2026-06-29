@@ -58,7 +58,6 @@
 (require 'cl-lib)
 
 (declare-function mediawiki-prompt-for-site "mediawiki-site")
-(declare-function hl-line-highlight-now "hl-line")
 
 ;;; Customization
 
@@ -389,13 +388,11 @@ Skips any leading empty line inserted by `tabulated-list-print-entry`."
   (when (looking-at "^$")
     (forward-line 1))
   (forward-line row-index)
-  ;; hl-line-highlight-now uses (selected-window).  Select the list
-  ;; window so the overlay lands there, then force redisplay.
+  ;; hl-line-mode updates its overlay when point moves and the window
+  ;; redisplays.  set-window-point + force-window-update triggers that.
   (let ((win (get-buffer-window (current-buffer))))
     (when win
       (set-window-point win (point))
-      (with-selected-window win
-        (hl-line-highlight-now))
       (force-window-update win))))
 
 (defun mediawiki-discussion-tools--follow-point ()

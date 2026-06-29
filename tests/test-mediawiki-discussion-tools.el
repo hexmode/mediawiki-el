@@ -504,7 +504,7 @@
           (should (= mediawiki-discussion-tools--view-index 1)))))))
 
 (ert-deftest test-mdt-move-to-row-uses-list-window ()
-  "--move-to-row selects the list window before highlighting."
+  "--move-to-row calls force-window-update on the list buffer's window."
   (let ((t1 (test-mdt--mock-thread "h-A" "Thread A"))
         (t2 (test-mdt--mock-thread "h-B" "Thread B")))
     (setf (alist-get 'status t1) 'active)
@@ -514,19 +514,14 @@
         (mediawiki-discussion-tools-list-mode)
         (setq mediawiki-discussion-tools--threads threads)
         (mediawiki-discussion-tools--refresh-table)
-        (let ((selected-before (selected-window))
-              (called-window nil)
-              (dummy-win (selected-window))) ; temp buffer has no window
-          ;; Mock get-buffer-window to return a known window
+        (let ((dummy-win (selected-window))
+              (updated-window nil))
           (cl-letf (((symbol-function 'get-buffer-window)
                      (lambda (_buf) dummy-win))
-                    ((symbol-function 'hl-line-highlight-now)
-                     (lambda ()
-                       (setq called-window (selected-window)))))
+                    ((symbol-function 'force-window-update)
+                     (lambda (win) (setq updated-window win))))
             (mediawiki-discussion-tools--move-to-row 1))
-          (should (eq called-window dummy-win))
-          ;; Selected window restored after with-selected-window
-          (should (eq (selected-window) selected-before)))))))
+          (should (eq updated-window dummy-win)))))))
 
 (provide 'test-mediawiki-discussion-tools)
 
