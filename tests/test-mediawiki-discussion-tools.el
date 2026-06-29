@@ -504,7 +504,7 @@
           (should (= mediawiki-discussion-tools--view-index 1)))))))
 
 (ert-deftest test-mdt-move-to-row-updates-overlay ()
-  "--move-to-row moves hl-line-overlay to the target row."
+  "--move-to-row moves point and hl-line-overlay to the target row."
   (let ((t1 (test-mdt--mock-thread "h-A" "Thread A"))
         (t2 (test-mdt--mock-thread "h-B" "Thread B")))
     (setf (alist-get 'status t1) 'active)
@@ -517,7 +517,8 @@
         (setq hl-line-overlay (make-overlay 1 1))
         (let ((moved-beg nil)
               (moved-end nil)
-              (window-prop nil))
+              (window-prop nil)
+              (win-point nil))
           (cl-letf (((symbol-function 'get-buffer-window)
                      (lambda (_buf) (selected-window)))
                     ((symbol-function 'move-overlay)
@@ -526,10 +527,14 @@
                     ((symbol-function 'overlay-put)
                      (lambda (ov prop _val)
                        (when (eq prop 'window)
-                         (setq window-prop t)))))
+                         (setq window-prop t))))
+                    ((symbol-function 'set-window-point)
+                     (lambda (win pos)
+                       (setq win-point pos))))
             (mediawiki-discussion-tools--move-to-row 1))
           (should moved-beg)
           (should (> moved-end moved-beg))
+          (should win-point)
           (should window-prop))))))
 
 (ert-deftest test-mdt-move-to-row-moves-point ()

@@ -388,15 +388,17 @@ Skips any leading empty line inserted by `tabulated-list-print-entry`."
   (when (looking-at "^$")
     (forward-line 1))
   (forward-line row-index)
-  ;; hl-line-mode is enabled in this buffer.  Move its overlay
-  ;; directly so the highlight updates even when this window
-  ;; isn't selected.
-  (when (and (boundp 'hl-line-overlay) (overlayp hl-line-overlay))
-    (move-overlay hl-line-overlay
-                  (line-beginning-position)
-                  (line-end-position))
-    (overlay-put hl-line-overlay 'window
-                 (get-buffer-window (current-buffer)))))
+  ;; Move point in the list window and update hl-line overlay directly
+  ;; so both the cursor and highlight follow navigation even when the
+  ;; list window is not selected.
+  (let ((win (get-buffer-window (current-buffer))))
+    (when win
+      (set-window-point win (point)))
+    (when (and (boundp 'hl-line-overlay) (overlayp hl-line-overlay))
+      (move-overlay hl-line-overlay
+                    (line-beginning-position)
+                    (line-end-position))
+      (overlay-put hl-line-overlay 'window win))))
 
 (defun mediawiki-discussion-tools--follow-point ()
   "If point moved to a different thread row, update the view buffer.
