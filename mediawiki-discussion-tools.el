@@ -381,9 +381,9 @@ either the list or view buffer."
           (mediawiki-discussion-tools--move-to-row new-index))))))
 
 (defun mediawiki-discussion-tools--move-to-row (row-index)
-  "Move point to ROW-INDEX in the current tabulated-list buffer
-and ensure it is visible.  Row 0 is the first data row.
-Skips any leading empty line inserted by tabulated-list-print-entry."
+  "Move point to ROW-INDEX in the current tabulated-list buffer.
+Ensure it is visible.  Row 0 is the first data row.
+Skips any leading empty line inserted by `tabulated-list-print-entry`."
   (goto-char (point-min))
   ;; tabulated-list-print-entry may insert a leading newline
   (when (looking-at "^$")
