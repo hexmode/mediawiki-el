@@ -503,8 +503,8 @@
           (should (string= "h-B" mediawiki-discussion-tools--last-viewed-id))
           (should (= mediawiki-discussion-tools--view-index 1)))))))
 
-(ert-deftest test-mdt-move-to-row-uses-list-window ()
-  "--move-to-row calls force-window-update on the list buffer's window."
+(ert-deftest test-mdt-move-to-row-updates-overlay ()
+  "--move-to-row moves hl-line-overlay to the target row."
   (let ((t1 (test-mdt--mock-thread "h-A" "Thread A"))
         (t2 (test-mdt--mock-thread "h-B" "Thread B")))
     (setf (alist-get 'status t1) 'active)
@@ -514,14 +514,18 @@
         (mediawiki-discussion-tools-list-mode)
         (setq mediawiki-discussion-tools--threads threads)
         (mediawiki-discussion-tools--refresh-table)
-        (let ((dummy-win (selected-window))
-              (updated-window nil))
+        ;; Make hl-line-overlay a real overlay for the test
+        (setq hl-line-overlay (make-overlay 1 1))
+        (let ((moved-beg nil)
+              (moved-end nil))
           (cl-letf (((symbol-function 'get-buffer-window)
-                     (lambda (_buf) dummy-win))
-                    ((symbol-function 'force-window-update)
-                     (lambda (win) (setq updated-window win))))
+                     (lambda (_buf) (selected-window)))
+                    ((symbol-function 'move-overlay)
+                     (lambda (ov beg end)
+                       (setq moved-beg beg moved-end end))))
             (mediawiki-discussion-tools--move-to-row 1))
-          (should (eq updated-window dummy-win)))))))
+          (should moved-beg)
+          (should (> moved-end moved-beg)))))))
 
 (provide 'test-mediawiki-discussion-tools)
 
