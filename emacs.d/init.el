@@ -10,13 +10,16 @@
 
 (use-package mediawiki
   :vc (:url "https://github.com/hexmode/mediawiki-el" :rev :latest)
+  :defines mediawiki-mode-map
+  :commands mediawiki-support-desk
   :config
   ;; Pull latest on startup
   (when-let* ((pkg (cadr (assq 'mediawiki package-alist))))
     (ignore-errors (package-vc-upgrade pkg)))
+  ;; Bind C-c s in mediawiki-mode (the keymap may not exist at :bind time)
+  (with-eval-after-load 'mediawiki-mode
+    (define-key mediawiki-mode-map (kbd "C-c s") #'mediawiki-support-desk))
   :bind (([(control c) ?m] . mediawiki-site))
-  :bind (:map mediawiki-mode-map
-          ([(control c) ?s] . mediawiki-support-desk))
   :custom
   (mediawiki-debug t)
   (mediawiki-site-default "MediaWiki")

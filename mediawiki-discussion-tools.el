@@ -490,6 +490,23 @@ Intended for `post-command-hook'."
 
 ;;; Posting
 
+(defvar mediawiki-discussion-tools-reply-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") #'mediawiki-discussion-tools-reply-submit)
+    (define-key map (kbd "C-c C-k") #'mediawiki-discussion-tools-reply-cancel)
+    map)
+  "Keymap for `mediawiki-discussion-tools-reply-mode'.")
+
+(defvar-local mediawiki-discussion-tools--reply-site nil)
+(defvar-local mediawiki-discussion-tools--reply-page nil)
+(defvar-local mediawiki-discussion-tools--reply-section nil)
+(defvar-local mediawiki-discussion-tools--reply-summary nil)
+
+(define-minor-mode mediawiki-discussion-tools-reply-mode
+  "Minor mode for composing a reply.
+\\{mediawiki-discussion-tools-reply-mode-map}"
+  :lighter " MW-Reply")
+
 (defun mediawiki-discussion-tools--section-numbers (sitename page)
   "Return a list of section numbers for discussion threads on PAGE.
 Calls action=parse&prop=tocdata and filters out non-discussion
@@ -516,18 +533,57 @@ with the thread list order."
       (nth index nums))))
 
 (defun mediawiki-discussion-tools-reply ()
-  "Reply to the currently viewed thread."
+  "Open a buffer to compose a reply to the currently viewed thread.
+Use \\[mediawiki-discussion-tools-reply-submit] to post,
+\\[mediawiki-discussion-tools-reply-cancel] to abort."
   (interactive)
-  (let* ((text (read-string "Reply: "))
-         (site mediawiki-discussion-tools--sitename)
-         (page mediawiki-discussion-tools--page)
-         (section (or (mediawiki-discussion-tools--reply-section-number)
-                      (error "Cannot determine section number")))
-         (summary (format "/* %s */ Reply"
-                          (alist-get 'title
-                                     (nth mediawiki-discussion-tools--view-index
-                                          mediawiki-discussion-tools--threads))))
-         (reply-text (format ": %s %s\n" text mediawiki-discussion-tools-signature))
+  (let* ((site (buffer-local-value 'mediawiki-discussion-tools--sitename
+                                   (or mediawiki-discussion-tools--list-buffer
+                                       (current-buffer))))
+         (page (buffer-local-value 'mediawiki-discussion-tools--page
+                                   (or mediawiki-discussion-tools--list-buffer
+                                       (current-buffer))))
+         (index (buffer-local-value 'mediawiki-discussion-tools--view-index
+                                    (or mediawiki-discussion-tools--list-buffer
+                                       (current-buffer))))
+         (threads (buffer-local-value 'mediawiki-discussion-tools--threads
+                                      (or mediawiki-discussion-tools--list-buffer
+                                          (current-buffer))))
+         (thread (nth index threads))
+         (title (alist-get 'title thread))
+         (nums (mediawiki-discussion-tools--section-numbers site page))
+         (section (when (and nums (< index (length nums)))
+                    (nth index nums))))
+    (unless section
+      (error "Cannot determine section number"))
+    (let ((buf (get-buffer-create "*MW Reply*")))
+      (with-current-buffer buf
+        (erase-buffer)
+        (insert "-- Reply to: " title " --\n")
+        (insert "-- Press C-c C-c to post, C-c C-k to cancel --\n\n")
+        (mediawiki-discussion-tools-reply-mode 1)
+        (setq mediawiki-discussion-tools--reply-site site
+              mediawiki-discussion-tools--reply-page page
+              mediawiki-discussion-tools--reply-section section
+              mediawiki-discussion-tools--reply-summary
+                (format "/* %s */ Reply" title)))
+      (pop-to-buffer buf)
+      (goto-char (point-max)))))
+
+(defun mediawiki-discussion-tools-reply-submit ()
+  "Post the reply in the current reply buffer."
+  (interactive)
+  (let* ((site mediawiki-discussion-tools--reply-site)
+         (page mediawiki-discussion-tools--reply-page)
+         (section mediawiki-discussion-tools--reply-section)
+         (summary mediawiki-discussion-tools--reply-summary)
+         (body (save-excursion
+                 (goto-char (point-min))
+                 (forward-paragraph 2)  ; skip the two header lines
+                 (buffer-substring-no-properties (point) (point-max))))
+         (reply-text (format ": %s %s\n"
+                             (string-trim body)
+                             mediawiki-discussion-tools-signature))
          (token (mediawiki-site-get-token site "csrf")))
     (unless token
       (error "No CSRF token — authenticate first"))
@@ -538,9 +594,17 @@ with the thread list order."
                       ("summary" . ,summary)
                       ("token" . ,token)
                       ("formatversion" . "2")))))
-      (when (alist-get 'edit result)
-        (message "Reply posted")
-        (mediawiki-discussion-tools-view-refresh)))))
+      (if (alist-get 'edit result)
+          (progn
+            (message "Reply posted")
+            (quit-window)
+            (mediawiki-discussion-tools-view-refresh))
+        (error "Reply failed: %S" result)))))
+
+(defun mediawiki-discussion-tools-reply-cancel ()
+  "Cancel the reply and close the buffer."
+  (interactive)
+  (quit-window))
 
 (defun mediawiki-discussion-tools-new-thread ()
   "Create a new discussion thread on the current page."
