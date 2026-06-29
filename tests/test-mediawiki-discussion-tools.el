@@ -557,7 +557,7 @@
 ;;; Phase 3 — Section Number Mapping Tests
 
 (defun test-mdt--mock-tocdata (sections)
-  "Build a mock parse/tocdata API response."
+  "Build a mock parse/sections API response."
   `((parse . ((sections . ,(append sections nil))))))
 
 (ert-deftest test-mdt-section-numbers-no-header ()
@@ -588,7 +588,7 @@
 
 (ert-deftest test-mdt-section-numbers-empty-page ()
   "Empty page returns nil."
-  (let ((json '((parse . ((sections))))))
+  (let ((json '((parse . ((tocdata . ((sections))))))))
     (cl-letf (((symbol-function 'mediawiki-api-call)
                (lambda (_site _action _args) json)))
       (let ((nums (mediawiki-discussion-tools--section-numbers

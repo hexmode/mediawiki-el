@@ -509,12 +509,12 @@ Intended for `post-command-hook'."
 
 (defun mediawiki-discussion-tools--section-numbers (sitename page)
   "Return a list of section numbers for discussion threads on PAGE.
-Calls action=parse&prop=tocdata and filters out non-discussion
+Calls action=parse&prop=sections and filters out non-discussion
 sections (those with empty index).  The resulting list maps 1:1
 with the thread list order."
   (let* ((result (mediawiki-api-call sitename "parse"
                    `(("page" . ,page)
-                     ("prop" . "tocdata")
+                     ("prop" . "sections")
                      ("formatversion" . "2"))))
          (sections (alist-get 'sections (alist-get 'parse result))))
     (cl-loop for s in sections
