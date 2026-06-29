@@ -46,7 +46,9 @@ jobs:
           tar xf "emacs-${EMACS_VERSION}.tar.xz"
           cd "emacs-${EMACS_VERSION}"
           ./configure --with-no-popups --with-native-compilation --without-x \
-            --prefix=/usr/local CFLAGS="-O2"
+            --prefix=/usr/local CFLAGS="-O2" \
+            LDFLAGS="-L/usr/lib/x86_64-linux-gnu" \
+            CPPFLAGS="-I/usr/include"
           make -j$(nproc)
           sudo make install
 
