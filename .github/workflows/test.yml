@@ -22,12 +22,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Cache Emacs build
+        id: cache-emacs
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: emacs-${{ matrix.emacs-version }}-nativecomp-${{ runner.os }}
+
       - name: Install Emacs
+        if: steps.cache-emacs.outputs.cache-hit != 'true'
         run: |
           set -e
           EMACS_VERSION="${{ matrix.emacs-version }}"
-          # Extract major.minor for the tarball name
-          echo "Installing Emacs $EMACS_VERSION from source..."
+          echo "Building Emacs $EMACS_VERSION from source..."
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential \
             libgnutls28-dev libxml2-dev libjansson-dev \
@@ -42,7 +49,9 @@ jobs:
             --prefix=/usr/local CFLAGS="-O2"
           make -j$(nproc)
           sudo make install
-          emacs --version
+
+      - name: Show Emacs version
+        run: emacs --version
 
       - name: Generate autoloads
         run: make autoloads-only
