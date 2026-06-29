@@ -24,7 +24,7 @@ jobs:
 
       - name: Cache Emacs build
         id: cache-emacs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/local
           key: emacs-${{ matrix.emacs-version }}-nativecomp-${{ runner.os }}
@@ -38,7 +38,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential \
             libgnutls28-dev libxml2-dev libjansson-dev \
-            libsqlite3-dev libtree-sitter-dev libgccjit-12-dev \
+            libsqlite3-dev libtree-sitter-dev libgccjit-14-dev \
             libgif-dev libxpm-dev libjpeg-dev libtiff-dev \
             texinfo
           cd /tmp
@@ -47,8 +47,8 @@ jobs:
           cd "emacs-${EMACS_VERSION}"
           ./configure --with-no-popups --with-native-compilation --without-x \
             --prefix=/usr/local CFLAGS="-O2" \
-            LDFLAGS="-L/usr/lib/x86_64-linux-gnu" \
-            CPPFLAGS="-I/usr/include"
+            LDFLAGS="-L/usr/lib/gcc/x86_64-linux-gnu/14" \
+            CPPFLAGS="-I/usr/lib/gcc/x86_64-linux-gnu/14/include"
           make -j$(nproc)
           sudo make install
 
