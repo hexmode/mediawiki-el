@@ -554,14 +554,28 @@
         (mediawiki-discussion-tools--move-to-row 1)
         (should (string= "h-B" (tabulated-list-get-id)))))))
 
-;;; Phase 3 — Section Number Mapping Tests
+;;; Phase 3 — Section Index Mapping Tests
+;;;
+;;; The tocdata API returns two different numbers per section:
+;;;   number = TOC display number (counts ALL sections, 1-based)
+;;;   index  = edit section index (only editable sections, 1-based)
+;;;
+;;; action=edit&section= expects the INDEX, not the NUMBER.
+;;; For example, on the support desk:
+;;;   "See also"           number=1  index=MISSING  (not editable)
+;;;   "Before you post"    number=2  index=MISSING  (not editable)
+;;;   "Post a new question" number=3  index=MISSING  (not editable)
+;;;   "Abuse filter..."    number=4  index=1         (first editable)
+;;;   "supported fonts"    number=5  index=2         (second editable)
+;;;
+;;; So section=4 would fail (nosuchsection) but section=1 works.
 
 (defun test-mdt--mock-tocdata (sections)
   "Build a mock parse/tocdata API response."
   `((parse . ((tocdata . ((sections . ,(append sections nil))))))))
 
 (ert-deftest test-mdt-section-numbers-no-header ()
-  "Section numbers for a page with no header sections."
+  "Section indices for a page with no header sections."
   (let ((json (test-mdt--mock-tocdata
                '(((number . "1") (index . "1") (anchor . "First"))
                  ((number . "2") (index . "2") (anchor . "Second"))
@@ -573,7 +587,7 @@
         (should (equal nums '(("First" . 1) ("Second" . 2) ("Third" . 3))))))))
 
 (ert-deftest test-mdt-section-numbers-with-header-sections ()
-  "Header sections (no index field) are filtered out."
+  "Header sections (no index field) are filtered out.  Returns INDEX not NUMBER."
   (let ((json (test-mdt--mock-tocdata
                '(((number . "1"))                    ; "See also" — no index
                  ((number . "2"))                    ; "Before you post" — no index
@@ -584,7 +598,8 @@
                (lambda (_site _action _args) json)))
       (let ((nums (mediawiki-discussion-tools--section-numbers
                    "TestSite" "TestPage")))
-        (should (equal nums '(("Thread_A" . 4) ("Thread_B" . 5))))))))
+        ;; Should return INDEX values (1, 2), not NUMBER values (4, 5)
+        (should (equal nums '(("Thread_A" . 1) ("Thread_B" . 2))))))))
 
 (ert-deftest test-mdt-section-numbers-empty-page ()
   "Empty page returns nil."
@@ -596,7 +611,7 @@
         (should-not nums)))))
 
 (ert-deftest test-mdt-section-for-thread-match ()
-  "Section number is found by matching thread ID anchor."
+  "Section index is found by matching thread ID anchor."
   (let ((json (test-mdt--mock-tocdata
                '(((number . "4") (index . "1") (anchor . "Abuse_filter_on_my_bot"))
                  ((number . "5") (index . "2") (anchor . "supported_fonts"))))))
@@ -604,7 +619,8 @@
                (lambda (_site _action _args) json)))
       (let ((thread '((id . "h-Abuse_filter_on_my_bot-20260616005000")
                       (title . "Abuse filter on my bot"))))
-        (should (= 4 (mediawiki-discussion-tools--section-for-thread
+        ;; Should return INDEX=1, not NUMBER=4
+        (should (= 1 (mediawiki-discussion-tools--section-for-thread
                       thread "TestSite" "TestPage")))))))
 
 (ert-deftest test-mdt-section-for-thread-no-match ()
@@ -624,15 +640,15 @@
 This is a regression test for the bug where replies were posted to
 the wrong thread because the priority-sorted thread index was used
 as a direct lookup into the TOC-ordered section list."
-  ;; TOC order (wiki page order):
-  ;;   section 4: Abuse_filter_on_my_bot   (active)
-  ;;   section 5: supported_fonts           (active)
-  ;;   section 6: how_can_I_see             (unanswered — sorts FIRST in priority)
+  ;; TOC order (wiki page order), with 3 header sections (no index):
+  ;;   number=4, index=1: Abuse_filter_on_my_bot   (active)
+  ;;   number=5, index=2: supported_fonts           (active)
+  ;;   number=6, index=3: how_can_I_see             (unanswered — sorts FIRST)
   ;;
   ;; Priority-sorted thread order:
-  ;;   index 0: how_can_I_see  → should map to section 6, NOT section 4
-  ;;   index 1: Abuse_filter   → should map to section 4, NOT section 5
-  ;;   index 2: supported_fonts → should map to section 5, NOT section 6
+  ;;   index 0: how_can_I_see  → should map to edit-section 3, NOT 6
+  ;;   index 1: Abuse_filter   → should map to edit-section 1, NOT 4
+  ;;   index 2: supported_fonts → should map to edit-section 2, NOT 5
   (let ((json (test-mdt--mock-tocdata
                '(((number . "4") (index . "1") (anchor . "Abuse_filter_on_my_bot"))
                  ((number . "5") (index . "2") (anchor . "supported_fonts"))
@@ -643,40 +659,41 @@ as a direct lookup into the TOC-ordered section list."
       (let ((thread-0 '((id . "h-how_can_I_see-20260625100100")
                         (title . "how can I see")
                         (status . unanswered))))
-        (should (= 6 (mediawiki-discussion-tools--section-for-thread
+        (should (= 3 (mediawiki-discussion-tools--section-for-thread
                       thread-0 "TestSite" "TestPage")))
-        ;; The OLD bug would have returned 4 (nth 0 of the TOC list)
-        (should-not (= 4 (mediawiki-discussion-tools--section-for-thread
+        ;; The OLD bug (using NUMBER) would have returned 6
+        (should-not (= 6 (mediawiki-discussion-tools--section-for-thread
                           thread-0 "TestSite" "TestPage"))))
       ;; Thread at priority-sorted index 1 is the first active one
       (let ((thread-1 '((id . "h-Abuse_filter_on_my_bot-20260616005000")
                         (title . "Abuse filter on my bot")
                         (status . active))))
-        (should (= 4 (mediawiki-discussion-tools--section-for-thread
+        (should (= 1 (mediawiki-discussion-tools--section-for-thread
                       thread-1 "TestSite" "TestPage")))
-        ;; The OLD bug would have returned 5 (nth 1 of the TOC list)
-        (should-not (= 5 (mediawiki-discussion-tools--section-for-thread
+        ;; The OLD bug (using NUMBER) would have returned 4
+        (should-not (= 4 (mediawiki-discussion-tools--section-for-thread
                           thread-1 "TestSite" "TestPage"))))
       ;; Thread at priority-sorted index 2 is the second active one
       (let ((thread-2 '((id . "h-supported_fonts-20260619165200")
                         (title . "supported fonts")
                         (status . active))))
-        (should (= 5 (mediawiki-discussion-tools--section-for-thread
+        (should (= 2 (mediawiki-discussion-tools--section-for-thread
                       thread-2 "TestSite" "TestPage")))
-        ;; The OLD bug would have returned 6 (nth 2 of the TOC list)
-        (should-not (= 6 (mediawiki-discussion-tools--section-for-thread
+        ;; The OLD bug (using NUMBER) would have returned 5
+        (should-not (= 5 (mediawiki-discussion-tools--section-for-thread
                           thread-2 "TestSite" "TestPage")))))))
 
 (ert-deftest test-mdt-section-for-thread-special-chars-in-anchor ()
   "Thread IDs with special characters in anchors are matched correctly."
   (let ((json (test-mdt--mock-tocdata
-               '(((number . "7") (index . "1")
+               '(((number . "7") (index . "4")
                   (anchor . "Can_I_find_the_MW_version_inside_the_database.3F"))))))
     (cl-letf (((symbol-function 'mediawiki-api-call)
                (lambda (_site _action _args) json)))
       (let ((thread '((id . "h-Can_I_find_the_MW_version_inside_the_database.3F-20260616024400")
                       (title . "Can I find the MW version inside the database?"))))
-        (should (= 7 (mediawiki-discussion-tools--section-for-thread
+        ;; Should return INDEX=4, not NUMBER=7
+        (should (= 4 (mediawiki-discussion-tools--section-for-thread
                       thread "TestSite" "TestPage")))))))
 
 (provide 'test-mediawiki-discussion-tools)

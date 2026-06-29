@@ -508,10 +508,10 @@ Intended for `post-command-hook'."
   :lighter " MW-Reply")
 
 (defun mediawiki-discussion-tools--section-numbers (sitename page)
-  "Return an alist mapping section anchors to section numbers for PAGE.
+  "Return an alist mapping section anchors to section indices for PAGE.
 Calls action=parse&prop=tocdata and filters out non-discussion
 sections (those without an index field).  Each entry is
-(ANCHOR . NUMBER) where ANCHOR matches the thread ID anchor."
+(ANCHOR . INDEX) where INDEX is the value for action=edit&section=."
   (let* ((result (mediawiki-api-call sitename "parse"
                    `(("page" . ,page)
                      ("prop" . "tocdata")
@@ -521,10 +521,9 @@ sections (those without an index field).  Each entry is
                                          (alist-get 'parse result)))))
     (cl-loop for s in sections
              for idx = (alist-get 'index s)
-             for num = (alist-get 'number s)
              for anchor = (alist-get 'anchor s)
-             when (and idx (not (string= "" idx)) anchor num)
-             collect (cons anchor (string-to-number num)))))
+             when (and idx (not (string= "" idx)) anchor)
+             collect (cons anchor (string-to-number idx)))))
 
 (defun mediawiki-discussion-tools--section-for-thread (thread sitename page)
   "Return the section number for THREAD on PAGE at SITENAME.
