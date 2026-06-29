@@ -591,9 +591,9 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
          (section mediawiki-discussion-tools--reply-section)
          (summary mediawiki-discussion-tools--reply-summary)
          (body (save-excursion
-                 (goto-char (point-min))
-                 (forward-paragraph 2)  ; skip the two header lines
-                 (buffer-substring-no-properties (point) (point-max))))
+                  (goto-char (point-min))
+                  (forward-line 3)  ; skip 2 header lines + 1 blank line
+                  (buffer-substring-no-properties (point) (point-max))))
          (reply-text (format ": %s %s\n"
                              (string-trim body)
                              mediawiki-discussion-tools-signature))
