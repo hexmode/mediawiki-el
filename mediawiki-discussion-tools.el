@@ -533,42 +533,49 @@ with the thread list order."
       (nth index nums))))
 
 (defun mediawiki-discussion-tools-reply ()
-  "Open a buffer to compose a reply to the currently viewed thread.
+  "Open a buffer to compose a reply to the thread at point or in view.
 Use \\[mediawiki-discussion-tools-reply-submit] to post,
 \\[mediawiki-discussion-tools-reply-cancel] to abort."
   (interactive)
-  (let* ((site (buffer-local-value 'mediawiki-discussion-tools--sitename
-                                   (or mediawiki-discussion-tools--list-buffer
-                                       (current-buffer))))
-         (page (buffer-local-value 'mediawiki-discussion-tools--page
-                                   (or mediawiki-discussion-tools--list-buffer
-                                       (current-buffer))))
-         (index (buffer-local-value 'mediawiki-discussion-tools--view-index
-                                    (or mediawiki-discussion-tools--list-buffer
-                                       (current-buffer))))
-         (threads (buffer-local-value 'mediawiki-discussion-tools--threads
-                                      (or mediawiki-discussion-tools--list-buffer
-                                          (current-buffer))))
-         (thread (nth index threads))
-         (title (alist-get 'title thread))
-         (nums (mediawiki-discussion-tools--section-numbers site page))
-         (section (when (and nums (< index (length nums)))
-                    (nth index nums))))
-    (unless section
-      (error "Cannot determine section number"))
-    (let ((buf (get-buffer-create "*MW Reply*")))
-      (with-current-buffer buf
-        (erase-buffer)
-        (insert "-- Reply to: " title " --\n")
-        (insert "-- Press C-c C-c to post, C-c C-k to cancel --\n\n")
-        (mediawiki-discussion-tools-reply-mode 1)
-        (setq mediawiki-discussion-tools--reply-site site
-              mediawiki-discussion-tools--reply-page page
-              mediawiki-discussion-tools--reply-section section
-              mediawiki-discussion-tools--reply-summary
-                (format "/* %s */ Reply" title)))
-      (pop-to-buffer buf)
-      (goto-char (point-max)))))
+  (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                       (current-buffer)))
+         (site (buffer-local-value 'mediawiki-discussion-tools--sitename list-buf))
+         (page (buffer-local-value 'mediawiki-discussion-tools--page list-buf))
+         (threads (buffer-local-value 'mediawiki-discussion-tools--threads list-buf))
+         ;; Use view-index if set, otherwise use thread at point in list
+         (index (or (buffer-local-value 'mediawiki-discussion-tools--view-index list-buf)
+                    (car (with-current-buffer list-buf
+                           (mediawiki-discussion-tools--thread-at-point)))))
+         (thread (when (and index threads (< index (length threads)))
+                   (nth index threads))))
+    (unless thread
+      (user-error "No thread selected — move point to a thread first"))
+    (unless (and site page)
+      (user-error "No site or page configured"))
+    (let* ((title (alist-get 'title thread))
+           (nums (condition-case err
+                     (mediawiki-discussion-tools--section-numbers site page)
+                   (error
+                    (user-error "Failed to fetch section numbers: %S"
+                                (error-message-string err)))))
+           (section (when (and nums index (< index (length nums)))
+                      (nth index nums))))
+      (unless section
+        (user-error "Cannot determine section number for thread %d (got %d sections)"
+                    index (length nums)))
+      (let ((buf (get-buffer-create "*MW Reply*")))
+        (with-current-buffer buf
+          (erase-buffer)
+          (insert "-- Reply to: " title " --\n")
+          (insert "-- Press C-c C-c to post, C-c C-k to cancel --\n\n")
+          (mediawiki-discussion-tools-reply-mode 1)
+          (setq mediawiki-discussion-tools--reply-site site
+                mediawiki-discussion-tools--reply-page page
+                mediawiki-discussion-tools--reply-section section
+                mediawiki-discussion-tools--reply-summary
+                  (format "/* %s */ Reply" title)))
+        (pop-to-buffer buf)
+        (goto-char (point-max))))))
 
 (defun mediawiki-discussion-tools-reply-submit ()
   "Post the reply in the current reply buffer."
