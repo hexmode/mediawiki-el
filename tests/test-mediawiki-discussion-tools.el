@@ -557,15 +557,15 @@
 ;;; Phase 3 — Section Number Mapping Tests
 
 (defun test-mdt--mock-tocdata (sections)
-  "Build a mock parse/sections API response."
-  `((parse . ((sections . ,(append sections nil))))))
+  "Build a mock parse/tocdata API response."
+  `((parse . ((tocdata . ((sections . ,(append sections nil))))))))
 
 (ert-deftest test-mdt-section-numbers-no-header ()
   "Section numbers for a page with no header sections."
   (let ((json (test-mdt--mock-tocdata
-               '(((index . "1") (number . "1"))
-                 ((index . "2") (number . "2"))
-                 ((index . "3") (number . "3"))))))
+               '(((number . "1") (index . "1"))
+                 ((number . "2") (index . "2"))
+                 ((number . "3") (index . "3"))))))
     (cl-letf (((symbol-function 'mediawiki-api-call)
                (lambda (_site _action _args) json)))
       (let ((nums (mediawiki-discussion-tools--section-numbers
@@ -573,13 +573,13 @@
         (should (equal nums '(1 2 3)))))))
 
 (ert-deftest test-mdt-section-numbers-with-header-sections ()
-  "Header sections (empty index) are filtered out."
+  "Header sections (no index field) are filtered out."
   (let ((json (test-mdt--mock-tocdata
-               '(((index . "")   (number . "1"))   ; "See also"
-                 ((index . "")   (number . "2"))   ; "Before you post"
-                 ((index . "")   (number . "3"))   ; "Post a new question"
-                 ((index . "1")  (number . "4"))   ; first thread
-                 ((index . "2")  (number . "5")))))) ; second thread
+               '(((number . "1"))                 ; "See also" — no index
+                 ((number . "2"))                 ; "Before you post" — no index
+                 ((number . "3"))                 ; "Post a new question" — no index
+                 ((number . "4") (index . "1"))   ; first thread
+                 ((number . "5") (index . "2")))))) ; second thread
     (cl-letf (((symbol-function 'mediawiki-api-call)
                (lambda (_site _action _args) json)))
       (let ((nums (mediawiki-discussion-tools--section-numbers
