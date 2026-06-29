@@ -618,6 +618,67 @@
         (should-not (mediawiki-discussion-tools--section-for-thread
                      thread "TestSite" "TestPage"))))))
 
+(ert-deftest test-mdt-reply-uses-correct-section-despite-priority-sort ()
+  "Reply targets the correct section even when priority sort reorders threads.
+
+This is a regression test for the bug where replies were posted to
+the wrong thread because the priority-sorted thread index was used
+as a direct lookup into the TOC-ordered section list."
+  ;; TOC order (wiki page order):
+  ;;   section 4: Abuse_filter_on_my_bot   (active)
+  ;;   section 5: supported_fonts           (active)
+  ;;   section 6: how_can_I_see             (unanswered — sorts FIRST in priority)
+  ;;
+  ;; Priority-sorted thread order:
+  ;;   index 0: how_can_I_see  → should map to section 6, NOT section 4
+  ;;   index 1: Abuse_filter   → should map to section 4, NOT section 5
+  ;;   index 2: supported_fonts → should map to section 5, NOT section 6
+  (let ((json (test-mdt--mock-tocdata
+               '(((number . "4") (index . "1") (anchor . "Abuse_filter_on_my_bot"))
+                 ((number . "5") (index . "2") (anchor . "supported_fonts"))
+                 ((number . "6") (index . "3") (anchor . "how_can_I_see"))))))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (_site _action _args) json)))
+      ;; Thread at priority-sorted index 0 is the unanswered one
+      (let ((thread-0 '((id . "h-how_can_I_see-20260625100100")
+                        (title . "how can I see")
+                        (status . unanswered))))
+        (should (= 6 (mediawiki-discussion-tools--section-for-thread
+                      thread-0 "TestSite" "TestPage")))
+        ;; The OLD bug would have returned 4 (nth 0 of the TOC list)
+        (should-not (= 4 (mediawiki-discussion-tools--section-for-thread
+                          thread-0 "TestSite" "TestPage"))))
+      ;; Thread at priority-sorted index 1 is the first active one
+      (let ((thread-1 '((id . "h-Abuse_filter_on_my_bot-20260616005000")
+                        (title . "Abuse filter on my bot")
+                        (status . active))))
+        (should (= 4 (mediawiki-discussion-tools--section-for-thread
+                      thread-1 "TestSite" "TestPage")))
+        ;; The OLD bug would have returned 5 (nth 1 of the TOC list)
+        (should-not (= 5 (mediawiki-discussion-tools--section-for-thread
+                          thread-1 "TestSite" "TestPage"))))
+      ;; Thread at priority-sorted index 2 is the second active one
+      (let ((thread-2 '((id . "h-supported_fonts-20260619165200")
+                        (title . "supported fonts")
+                        (status . active))))
+        (should (= 5 (mediawiki-discussion-tools--section-for-thread
+                      thread-2 "TestSite" "TestPage")))
+        ;; The OLD bug would have returned 6 (nth 2 of the TOC list)
+        (should-not (= 6 (mediawiki-discussion-tools--section-for-thread
+                          thread-2 "TestSite" "TestPage")))))))
+
+(ert-deftest test-mdt-section-for-thread-special-chars-in-anchor ()
+  "Thread IDs with special characters in anchors are matched correctly."
+  (let ((json (test-mdt--mock-tocdata
+               '(((number . "7") (index . "1")
+                  (anchor . "Can_I_find_the_MW_version_inside_the_database.3F"))))))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (_site _action _args) json)))
+      (let ((thread '((id . "h-Can_I_find_the_MW_version_inside_the_database.3F-20260616024400")
+                      (title . "Can I find the MW version inside the database?"))))
+        (should (= 7 (mediawiki-discussion-tools--section-for-thread
+                      thread "TestSite" "TestPage")))))))
+
 (provide 'test-mediawiki-discussion-tools)
 
 ;;; test-mediawiki-discussion-tools.el ends here
