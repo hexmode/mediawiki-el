@@ -1,6 +1,6 @@
 ;;; mediawiki-oauth.el --- OAuth 2.0 authentication for MediaWiki  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2025 Mark A. Hershberger
+;; Copyright (C) 2026 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; URL: https://github.com/hexmode/mediawiki-el

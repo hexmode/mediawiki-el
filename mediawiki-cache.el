@@ -1,6 +1,6 @@
 ;;; mediawiki-cache.el --- Revision cache for mediawiki.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 MediaWiki.el contributors
+;; Copyright (C) 2026 MediaWiki.el contributors
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; URL: https://github.com/hexmode/mediawiki-el

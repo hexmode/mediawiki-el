@@ -1,6 +1,6 @@
 ;;; mediawiki-auth.el --- Authentication functionality for MediaWiki  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2025 Mark A. Hershberger
+;; Copyright (C) 2025-2026 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; URL: https://github.com/hexmode/mediawiki-el

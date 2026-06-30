@@ -699,7 +699,7 @@ as a direct lookup into the TOC-ordered section list."
 ;;; Reply indentation tests
 
 (ert-deftest test-mdt-reply-multi-line-indentation ()
-  "Every line of a multi-line reply gets a : prefix."
+  "Every line of a multi-line reply gets a : prefix, signature on last line."
   (let* ((body "First line.\nSecond line.\nThird line.")
          (trimmed (string-trim body))
          (lines (split-string trimmed "\n"))
@@ -709,16 +709,17 @@ as a direct lookup into the TOC-ordered section list."
                           ":"
                         (concat ": " line)))
                     lines "\n"))
-         (reply-text (format "%s %s\n"
+         (reply-text (format "\n%s\n: %s\n"
                              indented
                              mediawiki-discussion-tools-signature)))
     (should (string-match "^: First line." reply-text))
     (should (string-match "^: Second line." reply-text))
     (should (string-match "^: Third line." reply-text))
+    (should (string-match "^: ~~~~" reply-text))
     (should (string-match "~~~~$" reply-text))))
 
 (ert-deftest test-mdt-reply-single-line-indentation ()
-  "A single-line reply gets one : prefix."
+  "A single-line reply gets : prefix, signature on its own line."
   (let* ((body "Just one line.")
          (trimmed (string-trim body))
          (lines (split-string trimmed "\n"))
@@ -728,10 +729,10 @@ as a direct lookup into the TOC-ordered section list."
                           ":"
                         (concat ": " line)))
                     lines "\n"))
-         (reply-text (format "%s %s\n"
+         (reply-text (format "\n%s\n: %s\n"
                              indented
                              mediawiki-discussion-tools-signature)))
-    (should (string= ": Just one line. ~~~~\n" reply-text))))
+    (should (string= "\n: Just one line.\n: ~~~~\n" reply-text))))
 
 (ert-deftest test-mdt-reply-empty-line-indentation ()
   "Empty lines within the reply become just : (bare colon)."

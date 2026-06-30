@@ -1,6 +1,6 @@
 ;;; mediawiki.el --- mediawiki frontend  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2015 Mark A. Hershberger
+;; Copyright (C) 2004-2026 Mark A. Hershberger
 
 ;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,

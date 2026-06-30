@@ -1,6 +1,6 @@
 ;;; mediawiki-user.el --- User contributions browser for mediawiki.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 MediaWiki.el contributors
+;; Copyright (C) 2025-2026 MediaWiki.el contributors
 
 ;; Author: MediaWiki.el contributors
 ;; URL: https://github.com/hexmode/mediawiki-el
