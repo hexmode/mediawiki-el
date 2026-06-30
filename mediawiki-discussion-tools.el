@@ -1,6 +1,6 @@
 ;;; mediawiki-discussion-tools.el --- DiscussionTools browser for mediawiki.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2026 Mark A. Hershberger
+;; Copyright (C) 2026 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; URL: https://github.com/hexmode/mediawiki-el
@@ -615,7 +615,7 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
                           ":"
                         (concat ": " line)))
                     lines "\n"))
-         (reply-text (format "%s %s\n"
+         (reply-text (format "\n%s\n: %s\n"
                              indented
                              mediawiki-discussion-tools-signature))
          (token (mediawiki-site-get-token site "csrf")))
