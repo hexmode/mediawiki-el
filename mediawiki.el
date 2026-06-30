@@ -1,6 +1,9 @@
 ;;; mediawiki.el --- mediawiki frontend  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2026 Mark A. Hershberger
+;; Copyright (C) 2004-2008 Jerry <unidevel@yahoo.com.cn>,
+;;               2008-2010 Chong Yidong <cyd at stupidchicken com>,
+;;               2008-2010 Uwe Brauer <oub at mat.ucm.es>;
+;;               2008-2026 Mark A. Hershberger
 
 ;; Original Authors: Jerry <unidevel@yahoo.com.cn>,
 ;;      Chong Yidong <cyd at stupidchicken com> for wikipedia.el,
@@ -12,7 +15,7 @@
 ;; Keywords: mediawiki wikipedia network wiki
 ;; URL: https://github.com/hexmode/mediawiki-el
 ;; Package-Type: multi
-;; Last Modified: <2025-11-14 00:56:57 mah>
+;; Last Modified: <2026-06-29 21:12:21 mah>
 
 ;; This file is NOT (yet) part of GNU Emacs.
 
