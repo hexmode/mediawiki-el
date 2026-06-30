@@ -1,6 +1,6 @@
 ;;; mediawiki-support-desk.el --- Support desk convenience wrapper  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2026 Mark A. Hershberger
+;; Copyright (C) 2026 Mark A. Hershberger
 
 ;; Author: Mark A. Hershberger <mah@everybody.org>
 ;; URL: https://github.com/hexmode/mediawiki-el
