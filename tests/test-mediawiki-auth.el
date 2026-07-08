@@ -85,7 +85,7 @@
 ;;; Test Login Process (Mocked)
 
 (ert-deftest test-mediawiki-login-process-mock ()
-  "Test login process with mocked dependencies."
+  "Test login process with mocked dependencies using action=clientlogin."
   ;; Mock all the dependencies
   (cl-letf (((symbol-function 'mediawiki-prompt-for-site)
              (lambda () "TestSite"))
@@ -99,8 +99,13 @@
              (lambda (site type) "test-token"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               ;; Mock successful login response (JSON alist)
-               '((login . ((result . "Success") (lgusername . "testuser"))))))
+               (should (string= "clientlogin" action))
+               (should (assoc "username" args))
+               (should (assoc "password" args))
+               (should (assoc "logintoken" args))
+               (should (assoc "loginreturnurl" args))
+               ;; Mock successful clientlogin response (JSON alist)
+               '((clientlogin . ((status . "PASS") (username . "testuser"))))))
             ((symbol-function 'read-string)
              (lambda (prompt) "testuser"))
             ((symbol-function 'read-passwd)
@@ -132,10 +137,71 @@
 
 ;;; Test Token-based Login (Mocked)
 
-(ert-deftest test-mediawiki-token-login-mock ()
-  "Test token-based login process with mocked dependencies."
+(ert-deftest test-mediawiki-clientlogin-captcha-mock ()
+  "Test clientlogin with captcha (UI) step."
   (let ((call-count 0))
-    ;; Mock dependencies with token requirement
+    (cl-letf (((symbol-function 'mediawiki-site-username)
+               (lambda (site) "testuser"))
+              ((symbol-function 'mediawiki-site-password)
+               (lambda (site) "testpass"))
+              ((symbol-function 'mediawiki-site-domain)
+               (lambda (site) nil))
+              ((symbol-function 'mediawiki-site-get-token)
+               (lambda (site type) "login-token"))
+              ((symbol-function 'read-string)
+               (lambda (prompt) "abc123"))
+              ((symbol-function 'mediawiki-api-call)
+               (lambda (site action args)
+                 (setq call-count (1+ call-count))
+                 (cond
+                  ;; First call: clientlogin needs captcha
+                  ((= call-count 1)
+                   (should (string= "clientlogin" action))
+                   '((clientlogin
+                      . ((status . "UI")
+                         (requests
+                          . (((id . "captcha")
+                              (metadata
+                               . ((captchaId . "12345")
+                                  (captchaQuestion
+                                   . "What is 2+2?"))))))))))
+                  ;; Second call: clientlogin with captcha succeeds
+                  ((= call-count 2)
+                   (should (string= "clientlogin" action))
+                   (should (assoc "captchaId" args))
+                   (should (assoc "captchaWord" args))
+                   (should (assoc "logincontinue" args))
+                   '((clientlogin
+                      . ((status . "PASS")
+                         (username . "testuser")))))))))
+      (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
+        (should (string= "TestSite" result))
+        (should (= 2 call-count))))))
+
+(defun test-mediawiki-make-fallback-api-call (call-count-ref)
+  "Make a mock for `mediawiki-api-call' that first returns unknown_action,
+then falls back to old login with NeedToken then Success.
+CALL-COUNT-REF is a cons cell whose car tracks the call count."
+  (lambda (site action args)
+    (setcar call-count-ref (1+ (car call-count-ref)))
+    (let ((count (car call-count-ref)))
+      (cond
+       ;; First call: clientlogin fails with unknown_action
+       ((= count 1)
+        (error "(unknown_action) Unrecognized value for parameter 'action': clientlogin"))
+       ;; Second call: old login returns NeedToken
+       ((= count 2)
+        (should (string= "login" action))
+        (should (assoc "lgname" args))
+        '((login . ((result . "NeedToken") (token . "new-token")))))
+       ;; Third call: old login with token succeeds
+       ((= count 3)
+        (should (string= "login" action))
+        '((login . ((result . "Success") (lgusername . "testuser")))))))))
+
+(ert-deftest test-mediawiki-fallback-clientlogin-mock ()
+  "Test that login falls back to action=login when clientlogin is unsupported."
+  (let ((call-count (cons 0 nil)))
     (cl-letf (((symbol-function 'mediawiki-site-username)
                (lambda (site) "testuser"))
               ((symbol-function 'mediawiki-site-password)
@@ -145,51 +211,45 @@
               ((symbol-function 'mediawiki-site-get-token)
                (lambda (site type) "login-token"))
               ((symbol-function 'mediawiki-api-call)
-               (lambda (site action args)
-                 (setq call-count (1+ call-count))
-                 (cond
-                  ;; First call returns NeedToken (JSON alist)
-                  ((= call-count 1)
-                   '((login . ((result . "NeedToken") (token . "new-token")))))
-                  ;; Second call returns Success (JSON alist)
-                  ((= call-count 2)
-                   '((login . ((result . "Success") (lgusername . "testuser")))))))))
-
-      ;; Test login that requires token
+               (test-mediawiki-make-fallback-api-call call-count)))
       (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
         (should (string= "TestSite" result))
-        ;; Should have made two API calls
-        (should (= 2 call-count))))))
+        (should (= 3 (car call-count)))))))
 
 ;;; Test Authentication with Domain
 
-(ert-deftest test-mediawiki-domain-login-mock ()
-  "Test login with LDAP domain."
-  ;; Mock dependencies with domain
-  (cl-letf (((symbol-function 'mediawiki-site-username)
-             (lambda (site) "testuser"))
-            ((symbol-function 'mediawiki-site-password)
-             (lambda (site) "testpass"))
-            ((symbol-function 'mediawiki-site-domain)
-             (lambda (site) "TESTDOMAIN"))
-            ((symbol-function 'mediawiki-site-get-token)
-             (lambda (site type) "login-token"))
-            ((symbol-function 'mediawiki-api-call)
-             (lambda (site action args)
-               ;; Verify domain is included in args
-               (should (assoc "lgdomain" args))
-               (should (string= "TESTDOMAIN" (cdr (assoc "lgdomain" args))))
-               '((login . ((result . "Success") (lgusername . "testuser")))))))
-
-    ;; Test login with domain
-    (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
-      (should (string= "TestSite" result)))))
+(ert-deftest test-mediawiki-fallback-domain-login-mock ()
+  "Test login with LDAP domain using fallback (clientlogin lacks lgdomain)."
+  (let ((call-count (cons 0 nil)))
+    (cl-letf (((symbol-function 'mediawiki-site-username)
+               (lambda (site) "testuser"))
+              ((symbol-function 'mediawiki-site-password)
+               (lambda (site) "testpass"))
+              ((symbol-function 'mediawiki-site-domain)
+               (lambda (site) "TESTDOMAIN"))
+              ((symbol-function 'mediawiki-site-get-token)
+               (lambda (site type) "login-token"))
+              ((symbol-function 'mediawiki-api-call)
+               (lambda (site action args)
+                 (setcar call-count (1+ (car call-count)))
+                 (let ((count (car call-count)))
+                   (cond
+                    ((= count 1)
+                     (error "(unknown_action) Unrecognized value for parameter 'action': clientlogin"))
+                    ((= count 2)
+                     (should (string= "login" action))
+                     (should (assoc "lgdomain" args))
+                     (should (string= "TESTDOMAIN" (cdr (assoc "lgdomain" args))))
+                     '((login . ((result . "Success") (lgusername . "testuser"))))))))))
+      (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
+        (should (string= "TestSite" result))
+        (should (= 2 (car call-count)))))))
 
 ;;; Test Failed Login
 
 (ert-deftest test-mediawiki-failed-login-mock ()
   "Test that failed login properly reports error message."
-  ;; Mock dependencies to return a failed login
+  ;; Mock dependencies to return a failed login via clientlogin
   (cl-letf (((symbol-function 'mediawiki-site-username)
              (lambda (site) "testuser"))
             ((symbol-function 'mediawiki-site-password)
@@ -200,9 +260,10 @@
              (lambda (site type) "login-token"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               ;; Mock failed login response (JSON alist)
-               '((login . ((result . "Failed")
-                           (reason . "The bot password for bot name \"simple\" of user \"MarkAHershberger\" must be reset.")))))))
+               (should (string= "clientlogin" action))
+               ;; Mock failed clientlogin response (JSON alist)
+               '((clientlogin . ((status . "FAIL")
+                                 (message . "The bot password for bot name \"simple\" of user \"MarkAHershberger\" must be reset.")))))))
 
     ;; Test that failed login raises an error with the reason
     (should-error

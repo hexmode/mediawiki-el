@@ -1,3 +1,27 @@
+2026-07-08  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki.el: Bump version to 4.1.0.
+
+	* mediawiki-auth.el (mediawiki-do-login): Replace action=login
+	with action=clientlogin for main-account authentication.
+	(mediawiki-do-clientlogin): New function implementing the
+	clientlogin API flow with support for PASS, FAIL, UI (captcha),
+	REDIRECT, and RESTART response statuses.
+	(mediawiki-do-clientlogin-continue): New function handling the
+	captcha/interactive step of clientlogin.
+	(mediawiki-do-login-fallback): New function preserving old
+	action=login for bot passwords and pre-clientlogin wikis.
+	Add mediawiki-clientlogin-return-url defcustom.  Closes #61.
+
+	* tests/test-mediawiki-auth.el: Update all login mocks to use
+	clientlogin response format.  Add test-mediawiki-clientlogin-captcha-mock
+	for captcha UI flow.  Add test-mediawiki-fallback-clientlogin-mock
+	for unknown_action fallback path.  Update domain test to exercise
+	fallback (clientlogin lacks lgdomain).
+
+	* tests/test-mediawiki-api-json.el: Update test-mw-login-success
+	and test-mw-login-failed to use clientlogin response format.
+
 2026-05-19  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el: Bump version to 3.1.1.

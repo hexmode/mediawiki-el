@@ -43,6 +43,13 @@
   "String to look for in HTML response.
 This will be used to verify a successful login.")
 
+(defcustom mediawiki-clientlogin-return-url "https://hexmode.com/"
+  "Return URL for third-party authentication flows in action=clientlogin.
+This URL is never actually visited by the user during Emacs-based login,
+but the MediaWiki API requires it as a parameter."
+  :type 'string
+  :group 'mediawiki)
+
 ;;; Authentication State Checking
 
 (defun mediawiki-logged-in-p (&optional sitename)
@@ -69,9 +76,10 @@ is available, return t even if no cookies are present."
 Store cookies for future authentication.
 
 If OAuth 2.0 is configured for SITENAME, this function will use
-OAuth authentication instead of username/password login.  The OAuth
-access token will be obtained (via client credentials flow) or
-refreshed as needed."
+OAuth authentication instead of username/password login.
+
+Logs in using action=clientlogin with fallback to action=login
+for older wikis and bot passwords."
   (interactive)
   (when (not sitename)
     (setq sitename (mediawiki-prompt-for-site)))
@@ -82,13 +90,10 @@ refreshed as needed."
   ;; Check if OAuth is configured for this site
   (if (and (fboundp 'mediawiki-oauth-configured-p)
            (mediawiki-oauth-configured-p sitename))
-      ;; Use OAuth authentication
       (progn
         (mediawiki-oauth-get-access-token sitename)
         (setq mediawiki-site sitename))
 
-    ;; Fall back to traditional username/password login
-    ;; Possibly save info once we have it, eh?
     (let* ((user (or (mediawiki-site-username sitename)
                    username
                    (read-string "Username: ")))
@@ -100,39 +105,143 @@ refreshed as needed."
                    (if (string= "" dom-loaded)
                      (read-string "LDAP Domain: ")
                      dom-loaded)))
-            (sitename sitename)
-            (token (condition-case nil
-                     (mediawiki-site-get-token sitename "login")
-                     (error nil)))           ; pre-1.27 wikis lack the token API
-            (args (list (cons "lgname" user)
-                    (cons "lgpassword" pass)
-                    (when token
-                      (cons "lgtoken" token))
-                    (when dom
-                      (cons "lgdomain" dom))))
-            (result (alist-get 'login (mediawiki-api-call sitename "login" args))))
-      (when (string= (alist-get 'result result) "NeedToken")
-        (setq result
-          (alist-get 'login
-            (mediawiki-api-call sitename "login"
-              (append
-                args (list (cons "lgtoken"
-                             (alist-get 'token result))))))))
-      (cond
-        ((string= "Success" (alist-get 'result result))
-          sitename)
-        ((string= "Failed" (alist-get 'result result))
-          (error "Login failed: %s" (alist-get 'reason result)))
-        (t
-          (let ((result-str (alist-get 'result result))
-                (reason (alist-get 'reason result)))
-            (if (and (string= "Aborted" result-str)
-                     (string-match-p "user interaction" reason))
-                (error "Login aborted: %s\n\nThis site no longer supports direct password login for this account.\nConfigure OAuth 2.0 authentication with M-x mediawiki-oauth-setup-site,\nor add :oauth-access-token to the site configuration in mediawiki-site-alist.\nSee OAUTH-SETUP.org for details."
-                  reason)
-              (error "Login returned unexpected result: %s (%s)"
-                result-str
-                (or reason "see documentation at https://www.mediawiki.org/wiki/API:Login#Error_types")))))))))
+            (sitename sitename))
+      (condition-case err
+          (mediawiki-do-clientlogin sitename user pass dom)
+        (error
+         (let ((msg (error-message-string err)))
+           (if (string-match-p "unknown_action" msg)
+               (mediawiki-do-login-fallback sitename user pass dom)
+             (error "%s" msg))))))))
+
+(defun mediawiki-do-clientlogin (sitename username password &optional domain)
+  "Log into SITENAME using action=clientlogin.
+USERNAME and PASSWORD are the credentials.  DOMAIN is optional.
+Returns SITENAME on success.
+
+Handles multi-step auth including captcha.  Falls back to
+`mediawiki-do-login-fallback' if clientlogin is not supported by the wiki."
+  (let* ((token (mediawiki-site-get-token sitename "login"))
+          (args (list (cons "username" username)
+                  (cons "password" password)
+                  (cons "logintoken" token)
+                  (cons "loginreturnurl"
+                    mediawiki-clientlogin-return-url)))
+          (result (alist-get 'clientlogin
+                    (mediawiki-api-call sitename "clientlogin" args)))
+          (status (alist-get 'status result)))
+    (cond
+      ((string= "PASS" status)
+        (setq mediawiki-site sitename)
+        sitename)
+      ((string= "FAIL" status)
+        (error "Login failed: %s" (alist-get 'message result)))
+      ((string= "UI" status)
+        (mediawiki-do-clientlogin-continue sitename username password domain
+          (alist-get 'requests result)))
+      ((string= "REDIRECT" status)
+        (error "Login requires browser-based authentication.\n\
+This site requires a redirect to %s to complete login.\n\
+Use M-x mediawiki-oauth-setup-site to configure OAuth 2.0,\n\
+or create a bot password at [[Special:BotPassengers]] on the wiki."
+          (alist-get 'redirecttarget result)))
+      ((string= "RESTART" status)
+        (error "Login process needs to restart: %s"
+          (alist-get 'message result)))
+      (t
+        (error "Login returned unexpected result %s: (%s)"
+          (or status "?")
+          (or (alist-get 'message result) "no message"))))))
+
+(defun mediawiki-do-clientlogin-continue (sitename username password domain requests)
+  "Handle the UI step of clientlogin, such as captcha.
+SITENAME, USERNAME, PASSWORD, DOMAIN are the login credentials.
+REQUESTS is the list of auth requests from the API response.
+Returns SITENAME on success."
+  (let (result)
+    (dolist (request requests)
+      (let ((id (alist-get 'id request))
+            (metadata (alist-get 'metadata request)))
+        (cond
+          ((string= id "captcha")
+            (let* ((captcha-id (alist-get 'captchaId metadata))
+                    (question (or (alist-get 'captchaQuestion metadata)
+                               (alist-get 'question metadata)))
+                    (captcha-url (or (alist-get 'captchaUrl metadata)
+                                  (alist-get 'url metadata)))
+                    (login-token (mediawiki-site-get-token sitename "login"))
+                    (answer (progn
+                              (when question
+                                (message "%s" question))
+                              (when captcha-url
+                                (message "Captcha image: %s" captcha-url))
+                              (read-string "Captcha answer: ")))
+                    (args (list (cons "username" username)
+                            (cons "password" password)
+                            (cons "logintoken" login-token)
+                            (cons "loginreturnurl"
+                              mediawiki-clientlogin-return-url)
+                            (cons "logincontinue" "1")
+                            (cons "captchaId" captcha-id)
+                            (cons "captchaWord" answer)))
+                    (api-result (alist-get 'clientlogin
+                                  (mediawiki-api-call sitename "clientlogin" args)))
+                    (status (alist-get 'status api-result)))
+              (setq result
+                (cond
+                  ((string= "PASS" status)
+                    (setq mediawiki-site sitename)
+                    sitename)
+                  ((string= "FAIL" status)
+                    (error "Login failed: %s" (alist-get 'message api-result)))
+                  (t
+                    (error "Login returned unexpected result %s: (%s)"
+                      (or status "?")
+                      (or (alist-get 'message api-result) "no message")))))))
+          (t
+            (error "Login requires unsupported user interaction: %s" id)))))
+    (or result (error "No authentication requests were handled"))))
+
+(defun mediawiki-do-login-fallback (sitename username password &optional domain)
+  "Fall back to the old action=login method.
+This works for older wikis that do not support action=clientlogin
+and for bot passwords."
+  (let* ((token (condition-case nil
+                   (mediawiki-site-get-token sitename "login")
+                   (error nil)))
+          (args (list (cons "lgname" username)
+                  (cons "lgpassword" password)
+                  (when token
+                    (cons "lgtoken" token))
+                  (when domain
+                    (cons "lgdomain" domain))))
+          (result (alist-get 'login (mediawiki-api-call sitename "login" args))))
+    (when (string= (alist-get 'result result) "NeedToken")
+      (setq result
+        (alist-get 'login
+          (mediawiki-api-call sitename "login"
+            (append
+              args (list (cons "lgtoken"
+                           (alist-get 'token result))))))))
+    (cond
+      ((string= "Success" (alist-get 'result result))
+        (setq mediawiki-site sitename)
+        sitename)
+      ((string= "Failed" (alist-get 'result result))
+        (error "Login failed: %s" (alist-get 'reason result)))
+      (t
+        (let ((result-str (alist-get 'result result))
+              (reason (alist-get 'reason result)))
+          (if (and (string= "Aborted" result-str)
+                   (string-match-p "user interaction" reason))
+              (error "Login aborted: %s\n\n\
+This site no longer supports direct password login for this account.\n\
+Use M-x mediawiki-oauth-setup-site to configure OAuth 2.0,\n\
+or create a bot password at [[Special:BotPassengers]] on the wiki."
+                reason)
+            (error "Login returned unexpected result: %s (%s)"
+              result-str
+              (or reason "see documentation at https://www.mediawiki.org/wiki/API:Login#Error_types"))))))))
 
 ;;;###autoload
 (defun mediawiki-do-logout (&optional sitename)

@@ -175,31 +175,30 @@ JSON: {\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{
 ;;; 10. Login success via mocked api-call
 
 (ert-deftest test-mw-login-success ()
-  "Mock mediawiki-api-call returning JSON login success, verify mediawiki-do-login returns sitename.
-mediawiki-do-login uses (alist-get 'login (api-call ...)) as result alist."
+  "Mock mediawiki-api-call returning JSON clientlogin success."
   (cl-letf (((symbol-function 'mediawiki-site-username) (lambda (site) "testuser"))
             ((symbol-function 'mediawiki-site-password) (lambda (site) "testpass"))
             ((symbol-function 'mediawiki-site-domain)   (lambda (site) nil))
             ((symbol-function 'mediawiki-site-get-token) (lambda (site type) "logintoken+\\"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               ;; Return full JSON alist with login key
-               '((login . ((result . "Success") (lguserid . 1) (lgusername . "testuser")))))))
+               (should (string= "clientlogin" action))
+               '((clientlogin . ((status . "PASS") (username . "testuser")))))))
     (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
       (should (string= "TestSite" result)))))
 
 ;;; 11. Login failure via mocked api-call
 
 (ert-deftest test-mw-login-failed ()
-  "Mock mediawiki-api-call returning JSON login failure, verify mediawiki-do-login signals error.
-Error message must contain the 'reason' field from the login response."
+  "Mock mediawiki-api-call returning JSON clientlogin failure."
   (cl-letf (((symbol-function 'mediawiki-site-username) (lambda (site) "testuser"))
             ((symbol-function 'mediawiki-site-password) (lambda (site) "wrongpass"))
             ((symbol-function 'mediawiki-site-domain)   (lambda (site) nil))
             ((symbol-function 'mediawiki-site-get-token) (lambda (site type) "logintoken+\\"))
             ((symbol-function 'mediawiki-api-call)
              (lambda (site action args)
-               '((login . ((result . "Failed") (reason . "Wrong password")))))))
+               (should (string= "clientlogin" action))
+               '((clientlogin . ((status . "FAIL") (message . "Wrong password")))))))
     (should-error (mediawiki-do-login "TestSite" "testuser" "wrongpass"))
     (condition-case err
         (mediawiki-do-login "TestSite" "testuser" "wrongpass")
