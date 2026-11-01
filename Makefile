@@ -20,7 +20,7 @@ CONTINUE_ON_TEST_FAILURE ?= true
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
 
-.PHONY: test ci-test clean autoloads
+.PHONY: test ci-test clean autoloads check-parens
 
 # Add test target if there are any
 ifneq ($(TEST_FILES),)
@@ -83,6 +83,12 @@ editorconfig:
 check-file:
 	@emacs --batch --eval '(condition-case err (let ((checkfile "${FILE}")) (find-file checkfile) (check-parens) (message "%s parenthesis are balanced" checkfile)) (error (let ((line-number (line-number-at-pos))) (message "Error at line %d: %s" line-number (buffer-substring-no-properties (pos-bol) (pos-eol))))))'
 
+# Reports the line where an unclosed form starts, which `check-parens' and the
+# byte compiler usually do not.  Checks every *.el and tests/*.el when FILE is
+# not given.
+check-parens:
+	@$(BATCH) -l tools/check-parens.el $(if $(filter command line,$(origin FILE)),-- $(FILE))
+
 
 
 help:
@@ -92,6 +98,7 @@ ifneq ($(TEST_FILES),)
 	@echo "  ci-test        - Run all tests (fail-fast off, exit non-zero on any failure)"
 endif
 	@echo "  autoloads      - Build autoloader"
+	@echo "  check-parens   - Check *.el for unbalanced parens (FILE=x.el for one file)"
 	@echo "  check-file     - Check the file given by FILE for un-balanced parethesis"
 	@echo "  editorconfig   - Clean up whitespace"
 	@echo "  clean          - Remove compiled files"

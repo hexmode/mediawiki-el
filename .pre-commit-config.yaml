@@ -7,3 +7,10 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: elisp-parens
+        name: Check Elisp parentheses
+        entry: make check-parens
+        language: system
+        files: \.el$
+        pass_filenames: false
+        always_run: true

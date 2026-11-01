@@ -729,33 +729,56 @@ as a direct lookup into the TOC-ordered section list."
     (should (string-match "~~~~$" reply-text))))
 
 (ert-deftest test-mdt-reply-single-line-indentation ()
-  "A single-line reply gets : prefix, signature on its own line."
-  (let* ((body "Just one line.")
-         (trimmed (string-trim body))
-         (lines (split-string trimmed "\n"))
-         (indented (mapconcat
-                    (lambda (line)
-                      (if (string-empty-p line)
-                          ":"
-                        (concat ": " line)))
-                    lines "\n"))
-         (reply-text (format "\n%s\n: %s\n"
-                             indented
-                             mediawiki-discussion-tools-signature)))
-    (should (string= "\n: Just one line.\n: ~~~~\n" reply-text))))
+  "A single-line reply gets the indent prefix, signature on its own line."
+  (should (string= ": Just one line."
+                   (mediawiki-discussion-tools--indent-reply "Just one line." ":"))))
 
 (ert-deftest test-mdt-reply-empty-line-indentation ()
-  "Empty lines within the reply become just : (bare colon)."
-  (let* ((body "First.\n\nThird.")
-         (trimmed (string-trim body))
-         (lines (split-string trimmed "\n"))
-         (indented (mapconcat
-                    (lambda (line)
-                      (if (string-empty-p line)
-                          ":"
-                        (concat ": " line)))
-                    lines "\n")))
-    (should (string= ": First.\n:\n: Third." indented))))
+  "Empty lines within the reply become just the prefix."
+  (should (string= ": First.\n:\n: Third."
+                   (mediawiki-discussion-tools--indent-reply "First.\n\nThird." ":"))))
+
+;;; Reply prefix detection (the indent of the comment being answered)
+
+(ert-deftest test-mdt-reply-prefix-plain-prose ()
+  "Unindented prose gets a top-level reply."
+  (should (string= ":"
+                   (mediawiki-discussion-tools--reply-prefix
+                    "== Topic ==\nSome prose.  ~~~~\n"))))
+
+(ert-deftest test-mdt-reply-prefix-reply ()
+  "A reply to a `:' comment gets `::'."
+  (should (string= "::"
+                   (mediawiki-discussion-tools--reply-prefix
+                    "== Topic ==\nQuestion. ~~~~\n: Answer. ~~~~\n"))))
+
+(ert-deftest test-mdt-reply-prefix-deep ()
+  "The deepest indented comment determines the prefix."
+  (should (string= ":::"
+                   (mediawiki-discussion-tools--reply-prefix
+                    "Question.\n: One.\n:: Two.\n"))))
+
+(ert-deftest test-mdt-reply-prefix-bullet ()
+  "A reply to a `*' vote uses `*:' so it stays a list item."
+  (should (string= "*:"
+                   (mediawiki-discussion-tools--reply-prefix
+                    "== Survey ==\n* '''Support''' ~~~~\n"))))
+
+(ert-deftest test-mdt-reply-prefix-bullet-nested ()
+  "A reply to a `*:' comment uses `*::'."
+  (should (string= "*::"
+                   (mediawiki-discussion-tools--reply-prefix
+                    "* '''Support''' ~~~~\n*: Why? ~~~~\n"))))
+
+(ert-deftest test-mdt-reply-prefix-ignores-unindented-lines ()
+  "Unindented text after a comment does not reset the prefix."
+  (should (string= "::"
+                   (mediawiki-discussion-tools--reply-prefix
+                    ": Answer. ~~~~\n{{talkref}}\n"))))
+
+(ert-deftest test-mdt-reply-prefix-empty ()
+  "An empty section still yields a usable prefix."
+  (should (string= ":" (mediawiki-discussion-tools--reply-prefix ""))))
 
 (provide 'test-mediawiki-discussion-tools)
 

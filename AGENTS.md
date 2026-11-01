@@ -17,12 +17,20 @@ make ci-test                            # every suite; exits non-zero if any fai
 make test                               # same suites, keeps going after failures
 make autoloads                          # regenerate mediawiki-autoloads.el and byte-compile
 make autoloads-only                     # regenerate mediawiki-autoloads.el only
-make check-file FILE=mediawiki-api.el   # paren check a single file
+make check-file FILE=mediawiki-api.el   # paren check a single file (misleading positions)
+make check-parens                       # unbalanced-paren check that names the opening line
+make check-parens FILE=mediawiki-api.el # ... for one file
 make editorconfig                       # strip trailing whitespace, add final newlines
 ```
 
 Rules:
 
+- **Run `make check-parens` after editing any `.el` file, before `make ci-test`.**
+  `check-parens' and the byte compiler report the point where they gave up, not
+  the form that was left open, so a missing `)` at the end of a `defun` looks
+  like a bogus error at the start of the next one.  `tools/check-parens.el`
+  walks the buffer with the Lisp reader and prints the line of the innermost
+  unclosed form; pre-commit runs it for you.
 - Run `make ci-test` before pushing.  Never push a red suite.
 - Tests must not touch the network: mock `mediawiki-api-call`, `url-http-post`
   or `url-retrieve`.

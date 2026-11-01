@@ -105,7 +105,18 @@ an Authorization: Bearer header is automatically added to the request."
                        :null-object nil
                        :false-object nil)
                      (error
-                      (error "There was an error parsing the result of the API call")))))
+                      ;; Wikimedia answers with plain text (e.g. the
+                      ;; rate-limit notice), so show what came back
+                      ;; instead of a bare "error parsing".
+                      (error "There was an error parsing the result of the API call%s"
+                             (if (and (stringp raw) (> (length raw) 0))
+                                 (format ": %s"
+                                         (string-trim
+                                          (truncate-string-to-width
+                                           (replace-regexp-in-string
+                                            "[\n\r]+" " " raw)
+                                           300)))
+                               ""))))))
       ;; result is nil for empty {} responses (e.g. action=logout) — valid, not an error
       ;; Handle errors
       (when-let* ((err (alist-get 'error result)))

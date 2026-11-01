@@ -507,6 +507,8 @@ Intended for `post-command-hook'."
 (defvar-local mediawiki-discussion-tools--reply-site nil)
 (defvar-local mediawiki-discussion-tools--reply-page nil)
 (defvar-local mediawiki-discussion-tools--reply-section nil)
+(defvar-local mediawiki-discussion-tools--reply-indent ":"
+  "Indentation prefix for the pending reply, matching the comment it answers.")
 (defvar-local mediawiki-discussion-tools--reply-summary nil)
 
 (define-minor-mode mediawiki-discussion-tools-reply-mode
@@ -545,6 +547,46 @@ Matches the thread's ID to section anchors from the TOC."
          (nums (mediawiki-discussion-tools--section-numbers sitename page)))
     (when anchor
       (alist-get anchor nums nil nil #'string=))))
+
+;;; Reply Indentation
+
+(defun mediawiki-discussion-tools--section-wikitext (sitename page section)
+  "Return the raw wikitext of SECTION of PAGE on SITENAME."
+  (let* ((result (mediawiki-api-call sitename "parse"
+                    `(("page" . ,page)
+                      ("section" . ,(number-to-string section))
+                      ("prop" . "wikitext")
+                      ("formatversion" . "2")))))
+    (alist-get 'wikitext (alist-get 'parse result))))
+
+(defun mediawiki-discussion-tools--reply-prefix (wikitext)
+  "Return the indentation prefix a reply to WIKITEXT should use.
+Uses the indentation of the last comment that has one and adds a
+colon, so the reply nests under that comment.  Unindented prose
+yields a plain \":\"."
+  (let ((prefix ""))
+    (dolist (line (split-string (or wikitext "") "\n"))
+      (when (string-match "\\`\\([:*]+\\)" line)
+        (setq prefix (match-string 1 line))))
+    (concat prefix ":")))
+
+(defun mediawiki-discussion-tools--reply-indent (sitename page section)
+  "Return the indentation prefix for a reply in SECTION of PAGE on SITENAME.
+Falls back to \":\" when the section cannot be fetched."
+  (condition-case nil
+      (mediawiki-discussion-tools--reply-prefix
+       (mediawiki-discussion-tools--section-wikitext sitename page section))
+    (error ":")))
+
+(defun mediawiki-discussion-tools--indent-reply (body indent)
+  "Return BODY as a wiki reply indented with INDENT.
+Blank lines become INDENT alone so the reply stays a single block."
+  (mapconcat (lambda (line)
+               (if (string-empty-p line)
+                   indent
+                 (concat indent " " line)))
+             (split-string (string-trim body) "\n")
+             "\n"))
 
 (defun mediawiki-discussion-tools-reply ()
   "Open a buffer to compose a reply to the thread at point or in view.
@@ -586,6 +628,8 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
           (setq mediawiki-discussion-tools--reply-site site
                 mediawiki-discussion-tools--reply-page page
                 mediawiki-discussion-tools--reply-section section
+                mediawiki-discussion-tools--reply-indent
+                  (mediawiki-discussion-tools--reply-indent site page section)
                 mediawiki-discussion-tools--reply-summary
                   (format "/* %s */ Reply" title)))
         (pop-to-buffer buf)
@@ -607,16 +651,11 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
                         (skip-chars-forward "\n")
                         (buffer-substring-no-properties (point) (point-max)))
                     (buffer-substring-no-properties (point-min) (point-max)))))
-         (trimmed (string-trim body))
-         (lines (split-string trimmed "\n"))
-         (indented (mapconcat
-                    (lambda (line)
-                      (if (string-empty-p line)
-                          ":"
-                        (concat ": " line)))
-                    lines "\n"))
-         (reply-text (format "\n%s\n: %s\n"
+         (indent mediawiki-discussion-tools--reply-indent)
+         (indented (mediawiki-discussion-tools--indent-reply body indent))
+         (reply-text (format "\n%s\n%s %s\n"
                              indented
+                             indent
                              mediawiki-discussion-tools-signature))
          (token (mediawiki-site-get-token site "csrf")))
     (unless token

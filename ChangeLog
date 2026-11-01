@@ -35,6 +35,31 @@
 	mediawiki-history-mode signalled
 	(wrong-type-argument char-or-string-p REVID) for integer
 	revision IDs.
+	(mediawiki-api-call): Include the response body when parsing fails;
+	Wikimedia's rate-limit notice is plain text and the old message hid
+	it.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--section-wikitext)
+	(mediawiki-discussion-tools--reply-prefix)
+	(mediawiki-discussion-tools--reply-indent)
+	(mediawiki-discussion-tools--indent-reply): New functions.
+	(mediawiki-discussion-tools-reply): Record the indentation of the
+	comment being answered.
+	(mediawiki-discussion-tools-reply-submit): Indent with that prefix,
+	so replies to nested comments and to Rfc "Support"/"Oppose" lines
+	nest instead of landing at a fixed depth.
+
+	* tools/check-parens.el: New helper that reports the opening line of
+	an unclosed form, unlike `check-parens' and the byte compiler.
+	* Makefile (check-parens): New target.
+	* .pre-commit-config.yaml: Run the paren check before committing.
+	* VILLAGE-PUMP.md: New guide to using the discussion tools at the
+	Wikipedia Village Pump.
+
+	* tests/test-mediawiki-discussion-tools.el: Replace the duplicated
+	indentation logic with the new functions and test reply prefix
+	detection.
 
 	* tests/test-mediawiki-api-json.el: Add regression tests for
 	integer parameter values in mediawiki-api-call,

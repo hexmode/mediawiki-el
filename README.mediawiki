@@ -10,7 +10,7 @@ The package has been reorganized into a modular structure for better maintainabi
 * <code>mediawiki-file-mode</code> for editing MediaWiki markup in local files.
 * Revision history browser (<code>mediawiki-history</code>) with per-revision view, diffs against the parent or the current revision, restore and browse.
 * Watchlist and user-contributions browsers.
-* Discussion page browser with reply and new-thread support, including a support desk wrapper.
+* Discussion page browser with reply and new-thread support; replies are indented relative to the comment being answered.  Includes a support desk wrapper.  See [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for using it at the Wikipedia Village Pump.
 * <code>completion-at-point</code> for <code>[[wiki links]]</code>.
 * Password/clientlogin authentication with auth-source support, and OAuth 2.0.
 
