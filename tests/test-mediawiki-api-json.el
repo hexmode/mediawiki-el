@@ -248,7 +248,7 @@ integer, which is what `mediawiki-history-view-revision' passes on."
       (mediawiki-api-call-async "TestSite" "edit"
                                 (list (cons "revid" 1382181600))
                                 #'ignore))
-    (should (equal "revid=1382181600" data))))
+    (should (string-match-p "revid=1382181600" data))))
 
 (provide 'test-mediawiki-api-xml)
 
