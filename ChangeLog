@@ -6,6 +6,8 @@
 	writing wikitext in a local file (mediawiki-file-mode, drafts), and
 	login notes; update the keybinding list, module list and TODO (url
 	helpers are already in mediawiki-http.el, link completion exists).
+	Correct C-RET (it opens the page at point, not a bulleted list) and
+	the mediawiki-file-mode M-g note, both verified against a live wiki.
 
 	* CONTRIBUTING.mediawiki: Point AI agents at AGENTS.md, drop the
 	stale 2.4.x version, document make ci-test and the real test-target
