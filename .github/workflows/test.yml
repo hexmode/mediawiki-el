@@ -21,7 +21,10 @@ jobs:
 
     env:
       # Dedicated prefix so the cache contains nothing but this Emacs build.
-      EMACS_PREFIX: /opt/emacs-${{ matrix.emacs-version }}
+      # It must live somewhere the runner user can create: restoring a cache
+      # into /opt fails, because only root can write there, so the install
+      # step's `sudo mkdir' never runs on a cache hit and `emacs' is missing.
+      EMACS_PREFIX: ${{ runner.workspace }}/emacs-${{ matrix.emacs-version }}
 
     steps:
       - name: Check out repository
@@ -33,22 +36,21 @@ jobs:
         with:
           path: ${{ env.EMACS_PREFIX }}
           # Bump the key whenever the install layout or configure flags change.
-          key: emacs-${{ matrix.emacs-version }}-nativecomp-opt-${{ runner.os }}
+          key: emacs-${{ matrix.emacs-version }}-nativecomp-home-${{ runner.os }}
 
       - name: Install Emacs
         if: steps.cache-emacs.outputs.cache-hit != 'true'
         run: |
           set -e
           EMACS_VERSION="${{ matrix.emacs-version }}"
-          echo "Building Emacs $EMACS_VERSION from source..."
+          echo "Building Emacs $EMACS_VERSION into ${EMACS_PREFIX}..."
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential \
             libgnutls28-dev libxml2-dev libjansson-dev \
             libsqlite3-dev libtree-sitter-dev libgccjit-14-dev \
             libgif-dev libxpm-dev libjpeg-dev libtiff-dev \
             texinfo
-          sudo mkdir -p "${EMACS_PREFIX}"
-          sudo chown -R "$(id -u):$(id -g)" "${EMACS_PREFIX}"
+          mkdir -p "${EMACS_PREFIX}"
           cd /tmp
           wget -q "https://ftp.gnu.org/gnu/emacs/emacs-${EMACS_VERSION}.tar.xz"
           tar xf "emacs-${EMACS_VERSION}.tar.xz"
@@ -64,7 +66,13 @@ jobs:
         run: echo "${EMACS_PREFIX}/bin" >> "$GITHUB_PATH"
 
       - name: Show Emacs version
-        run: emacs --version
+        run: |
+          if ! command -v emacs >/dev/null; then
+            echo "::error::emacs is not on PATH; expected ${EMACS_PREFIX}/bin"
+            ls -la "${EMACS_PREFIX}" 2>&1 || true
+            exit 1
+          fi
+          emacs --version
 
       - name: Generate autoloads
         run: make autoloads-only
