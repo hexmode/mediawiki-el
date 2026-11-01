@@ -20,7 +20,7 @@ CONTINUE_ON_TEST_FAILURE ?= true
 # Set to something other than 1 if you want interactive tests
 export NO_INTERACTION ?= 1
 
-.PHONY: test ci-test clean autoloads check-parens
+.PHONY: test ci-test clean autoloads check-parens setup-dev
 
 # Add test target if there are any
 ifneq ($(TEST_FILES),)
@@ -28,8 +28,10 @@ ERT_TESTS := $(shell grep -l ert-deftest $(TEST_FILES))
 
 test: $(patsubst tests/%.el,%,$(ERT_TESTS))
 
-# CI test target: run all suites, report all failures, exit non-zero if any failed
-ci-test: autoloads-only
+# CI test target: check parens, then run all suites, report all failures,
+# exit non-zero if any failed.  The paren check comes first so a broken file
+# is reported as "unclosed form at line N" instead of an ERT load failure.
+ci-test: check-parens autoloads-only
 	@failed=0; \
 	for f in $(ERT_TESTS); do \
 		name=$$(basename $$f .el); \
@@ -89,6 +91,13 @@ check-file:
 check-parens:
 	@$(BATCH) -l tools/check-parens.el $(if $(filter command line,$(origin FILE)),-- $(FILE))
 
+# Install the git hooks that run the checks before every commit.
+setup-dev:
+	@pre-commit install --install-hooks
+	@echo "pre-commit installed; 'make check-parens' now runs before each commit."
+	@echo "Note: beads may point core.hooksPath at .beads/hooks — that hook"
+	@echo "runs pre-commit too, so check 'git config core.hooksPath' after 'bd init'."
+
 
 
 help:
@@ -99,6 +108,7 @@ ifneq ($(TEST_FILES),)
 endif
 	@echo "  autoloads      - Build autoloader"
 	@echo "  check-parens   - Check *.el for unbalanced parens (FILE=x.el for one file)"
+	@echo "  setup-dev      - Install the git hooks that run the checks on commit"
 	@echo "  check-file     - Check the file given by FILE for un-balanced parethesis"
 	@echo "  editorconfig   - Clean up whitespace"
 	@echo "  clean          - Remove compiled files"

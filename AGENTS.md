@@ -30,7 +30,8 @@ Rules:
   the form that was left open, so a missing `)` at the end of a `defun` looks
   like a bogus error at the start of the next one.  `tools/check-parens.el`
   walks the buffer with the Lisp reader and prints the line of the innermost
-  unclosed form; pre-commit runs it for you.
+  unclosed form; pre-commit runs it for you (`make setup-dev` installs the
+  hook), and `make ci-test` depends on it.
 - Run `make ci-test` before pushing.  Never push a red suite.
 - Tests must not touch the network: mock `mediawiki-api-call`, `url-http-post`
   or `url-retrieve`.
