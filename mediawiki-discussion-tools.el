@@ -687,11 +687,15 @@ Intended for `post-command-hook'."
   "Return search hits for QUERY under PAGE's prefix on SITENAME.
 The prefix also matches archive subpages such as
 \"Project:Support desk/Archive 24\", so one search covers both the
-live page and its archives."
+live page and its archives.  `srnamespace' is set to \"*\" because it
+defaults to 0: without it the search would only look in the main
+namespace and a Project- or Talk-namespace page would match nothing,
+however well its prefix matches."
   (let* ((result (mediawiki-api-call sitename "query"
                    `(("list" . "search")
                      ("srsearch" .
                       ,(string-trim (concat query " prefix:" page)))
+                     ("srnamespace" . "*")
                      ("srlimit" . "50")
                      ("formatversion" . "2")))))
     (alist-get 'search (alist-get 'query result))))

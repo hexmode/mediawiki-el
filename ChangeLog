@@ -57,6 +57,11 @@
 	both browser modes.
 
 	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--search-results): Pass srnamespace=*.  It
+	defaults to namespace 0, so the prefixed search would never have
+	matched a Project- or Talk-namespace page, however well the prefix fit.
+
+	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--known-ids)
 	(mediawiki-discussion-tools--vanished)
 	(mediawiki-discussion-tools--vanished-ids)
@@ -102,6 +107,23 @@
 
 	* DISCUSSION-TOOLS-PLAN.md: List keybindings instead of function names
 	in the status and keybinding tables, and record the m/C binding.
+
+	* DISCUSSION-TOOLS.mediawiki: New user guide for the discussion
+	browser: opening a page, the list and its status icons, the priority
+	tiers, reading, replying, new threads, resolving, searching the page
+	and its archives, the options, and troubleshooting.  Points at the
+	support desk and the Village pump as worked examples.
+
+	* README.mediawiki: Link the new guide from the feature list and add a
+	"Discussion tools" section with the basic keys.  Drop the TODO that
+	said marking a thread resolved was still a stub.
+
+	* DISCUSSION-TOOLS-PLAN.md: Note that the plan is the design record
+	and the user guide owns the instructions, and replace the duplicated
+	keybinding tables with a pointer.
+
+	* AGENTS.md: List DISCUSSION-TOOLS.mediawiki among the user-facing
+	docs to keep in sync.
 
 	* CONTRIBUTING.mediawiki: Add a Keybinding Conventions section that
 	points at Gnus for compose/reply/move/quit keys, and warn that a stale

@@ -10,7 +10,7 @@ The package has been reorganized into a modular structure for better maintainabi
 * <code>mediawiki-file-mode</code> for editing MediaWiki markup in local files.
 * Revision history browser (<code>mediawiki-history</code>) with per-revision view, diffs against the parent or the current revision, restore and browse.
 * Watchlist and user-contributions browsers.
-* Discussion page browser with reply and new-thread support; replies are indented relative to the comment being answered.  Includes a support desk wrapper.  See [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for using it at the Wikipedia Village Pump.
+* Discussion page browser with reply and new-thread support; replies are indented relative to the comment being answered.  Includes a support desk wrapper.  See [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS.mediawiki DISCUSSION-TOOLS.mediawiki] for how to use it, and [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for a walk-through at the Wikipedia Village Pump.
 * <code>completion-at-point</code> for <code>[[wiki links]]</code>.
 * Password/clientlogin authentication with auth-source support, and OAuth 2.0.
 
@@ -86,6 +86,21 @@ Password-based login (bot passwords) works, but OAuth 2.0 is the preferred metho
 Although there is a place to put your password when you customize this package, there is no need to store your password in plain text.
 
 If mediawiki sees that the password is empty, then it will use [https://www.gnu.org/software/emacs/manual/html_mono/auth.html the auth-source library] to retrieve the password.  This will allow you to use encryption to store your passwords.
+
+=== Discussion tools ===
+
+<code>mediawiki-discussion-tools</code> browses a discussion page as a list of threads: read them in a window below the list, reply, start a new one, mark one resolved, and search the page and its archives.  It works with any wikitext discussion page - talk pages, noticeboards, village pump desks - and <code>M-x mediawiki-support-desk</code> is a shortcut for the mediawiki.org support desk.
+
+<pre>
+ M-x mediawiki-discussion-tools RET Page name RET
+
+ RET      open the thread at point        r      reply
+ n / p    next / previous thread          m / C  start a new thread
+ g        refresh the list                d      mark resolved
+ s        search page and archives        q      close the thread view
+</pre>
+
+See [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS.mediawiki DISCUSSION-TOOLS.mediawiki] for the full guide - what the status icons and priority tiers mean, the compose buffer, and the options - and [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for a tested walk-through at Wikipedia.
 
 === Package Structure ===
 
@@ -169,4 +184,3 @@ With the client credentials and access token configured, mediawiki.el will autom
   completion through the prefixsearch API already lives in <code>mediawiki-completion.el</code>.
 * Clean up and thoroughly test imported wikimedia.el code
 * Improve language support.  Currently there is a toggle for English or German.  This should probably just be replaced with the ability to use MediaWiki's i18n files in json format.
-* Finish the discussion tools: marking a thread resolved is still a stub (see [DISCUSSION-TOOLS-PLAN.md]).

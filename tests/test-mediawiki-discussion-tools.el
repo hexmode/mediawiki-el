@@ -1204,17 +1204,22 @@ as a direct lookup into the TOC-ordered section list."
 (ert-deftest test-mdt-search-prefix-query ()
   "One prefixed search covers the page and its archive subpages."
   (test-mdt-with-site "TestSite"
-    (let ((sent nil)
+    (let ((sent-query nil)
+          (sent-ns nil)
           (hits '(((title . "Project:Support_desk/Archive 24")))))
       (cl-letf (((symbol-function 'mediawiki-api-call)
                  (lambda (_site action args)
                    (when (string= action "query")
-                     (setq sent (cdr (assoc "srsearch" args))))
+                     (setq sent-query (cdr (assoc "srsearch" args))
+                           sent-ns (cdr (assoc "srnamespace" args))))
                    `((query . ((search . ,hits)))))))
         (should (equal (mediawiki-discussion-tools--search-results
                         "TestSite" "Project:Support_desk" "fonts")
                        hits))
-        (should (string= sent "fonts prefix:Project:Support_desk"))))))
+        (should (string= sent-query "fonts prefix:Project:Support_desk"))
+        ;; srnamespace defaults to 0, which would exclude the Project
+        ;; namespace entirely, so it has to be passed explicitly.
+        (should (string= sent-ns "*"))))))
 
 (ert-deftest test-mdt-search-renders-hits ()
   "Hits are shown with tags stripped and entities decoded."

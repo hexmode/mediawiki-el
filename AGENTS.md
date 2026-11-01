@@ -8,9 +8,10 @@ This is the single source of truth for agent instructions.  There is no
 `CLAUDE.md` any more — everything it used to say lives here.  Do not add
 per-tool instruction files; update this one instead.
 
-User-facing documentation lives in `README.mediawiki` (features and usage) and
-`CONTRIBUTING.mediawiki` (build, architecture, keybinding conventions).  When a
-change alters user-visible behaviour, update those files too.
+User-facing documentation lives in `README.mediawiki` (features and usage),
+`CONTRIBUTING.mediawiki` (build, architecture, keybinding conventions) and
+`DISCUSSION-TOOLS.mediawiki` (how to use the discussion browser).  When a change
+alters user-visible behaviour, update those files too.
 
 ## Build & Test
 

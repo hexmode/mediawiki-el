@@ -1,0 +1,255 @@
+= Using the discussion tools =
+
+<code>mediawiki-discussion-tools.el</code> browses any MediaWiki discussion page: a
+talk page, a village pump desk, a noticeboard, or the support desk.  It lists the
+threads in a table, opens a thread in a window below the list, and posts replies,
+new threads and resolution markers through the API.  Nothing in it is specific to
+one wiki - the page name is an argument.
+
+Two worked examples ship with the package:
+
+* The '''support desk''' at
+  [https://www.mediawiki.org/wiki/Project:Support_desk Project:Support desk] on
+  mediawiki.org, wrapped by <code>mediawiki-support-desk</code>.
+* The '''Wikipedia Village pump''' at
+  [https://en.wikipedia.org/wiki/Wikipedia:Village_pump Wikipedia:Village pump],
+  written up in
+  [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md]
+  after being tested against en.wikipedia.org.
+
+The design behind the module, and what was deliberately left out of it, is in
+[https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS-PLAN.md DISCUSSION-TOOLS-PLAN.md].
+
+== Opening a page ==
+
+<pre>
+ M-x mediawiki-discussion-tools RET Page name RET
+ M-x mediawiki-support-desk
+</pre>
+
+<code>mediawiki-discussion-tools</code> prompts for the page and, when no
+<code>mediawiki-site</code> is set, for the site.  <code>mediawiki-support-desk</code>
+is a shortcut for <code>Project:Support desk</code>; set
+<code>mediawiki-support-desk-page</code> to point it at a different page.
+
+Open the page that actually holds the threads, not a hub page that transcludes the
+desks.  The Village pump index has no threads of its own, so the list comes up
+empty there - open a desk subpage such as
+<code>Wikipedia:Village pump (policy)</code> instead.
+
+The list is shown in <code>*MW Discussion: PAGE*</code>.  Threads come from the
+DiscussionTools extension, so the wiki must have it installed.
+
+== The thread list ==
+
+The list has five columns:
+
+{| class="wikitable"
+! Width !! Column !! Contents
+|-
+| 3 || || Status icon (see below)
+|-
+| 40 || Title || The thread heading, with markup stripped
+|-
+| 16 || Author || Whoever opened the thread
+|-
+| 5 || # || Number of comments
+|-
+| 20 || Last || How long ago the last comment was posted
+|}
+
+Threads are sorted by priority, not by date; there is no header sort:
+
+# '''Needs attention''' (<code>!</code>) - you posted, and someone answered after
+  your last comment.
+# '''Watching''' (<code>*</code>) - you posted and nobody has answered since.
+# '''Active''' (<code>&middot;</code>) - any other thread with replies.
+# '''Unanswered''' (<code>?</code>) - the opening post has no replies.
+# '''Resolved''' (<code>&#x2713;</code>) - the section contains <code>{{Resolved}}</code>.
+# '''Stale''' (<code>~</code>) - no activity for
+  <code>mediawiki-discussion-tools-stale-days</code> days (14 by default).
+
+The first two tiers only appear when mediawiki.el knows who you are: they need the
+per-comment authors, which cost a larger list payload.  Anonymous browsing gets the
+other four tiers and a lighter fetch.
+
+{| class="wikitable"
+! Key !! Action
+|-
+| <kbd>g</kbd> || Re-fetch the thread list
+|-
+| <kbd>RET</kbd> || Show the thread at point below the list
+|-
+| <kbd>n</kbd> / <kbd>p</kbd> || Next / previous thread
+|-
+| <kbd>m</kbd> / <kbd>C</kbd> || Start a new thread
+|-
+| <kbd>r</kbd> || Reply to the thread at point
+|-
+| <kbd>d</kbd> || Mark the thread resolved
+|-
+| <kbd>s</kbd> || Search this page and its archives
+|}
+
+The keys follow Gnus where Gnus has an equivalent, so a newsgroup habit carries
+over.
+
+== Reading a thread ==
+
+<kbd>RET</kbd> opens the thread in <code>*MW Thread View*</code>, a single buffer
+below the list that is reused for every thread.  Each comment shows its author and
+timestamp, with replies indented one level per answer.  <kbd>n</kbd> and
+<kbd>p</kbd> walk the list and replace the view contents, so paging through a desk
+costs nothing.
+
+{| class="wikitable"
+! Key !! Action
+|-
+| <kbd>r</kbd> || Reply to this thread
+|-
+| <kbd>d</kbd> || Mark this thread resolved
+|-
+| <kbd>g</kbd> || Re-fetch and re-render this thread
+|-
+| <kbd>n</kbd> / <kbd>p</kbd> || Next / previous thread
+|-
+| <kbd>s</kbd> || Search this page and its archives
+|-
+| <kbd>RET</kbd> / <kbd>q</kbd> || Close the view and return to the list
+|}
+
+== Replying ==
+
+<kbd>r</kbd> opens <code>*MW Reply*</code> with a header naming the thread and a
+separator line, <code>--- Reply below this line ---</code>.  Type below the
+separator; anything above it, including the separator, is discarded.
+
+<pre>
+ C-c C-c    post the reply and refresh the list
+ C-c C-k    cancel
+</pre>
+
+The reply is indented relative to the comment it answers, not always with a single
+colon: answering a <code>:</code> comment produces <code>::</code>, and answering a
+<code>*</code> vote produces <code>*:</code> so the reply stays inside the list
+item.  A section with no indented comment falls back to <code>:</code>.  The
+signature from <code>mediawiki-discussion-tools-signature</code> (default
+<code>~~~~</code>) is appended on its own line.
+
+== Starting a new thread ==
+
+<kbd>m</kbd> (or <kbd>C</kbd>) prompts for a title and opens
+<code>*MW New Thread*</code>, which works exactly like the reply buffer:
+<kbd>C-c C-c</kbd> posts, <kbd>C-c C-k</kbd> cancels.  The body is not indented and
+gets the signature appended, as a new section should.  Nothing is published from
+the title prompt alone.
+
+== Marking a thread resolved ==
+
+<kbd>d</kbd> asks for an optional summary and appends a comment at the thread's
+indentation level:
+
+* with a summary: <code>{{Resolved|the answer above fixed it|~~~~}}</code>
+* without one: <code>{{Resolved|~~~~}}</code>
+
+The summary is a good place to point at the reply that solved the problem.  Either
+way the thread comes back from the next refresh with a <code>&#x2713;</code>, because
+the list reads the section wikitext and looks for the <code>{{Resolved}}</code>
+template.
+
+'''The template name is fixed.'''  A wiki that uses, say, <code>{{Done}}</code> or
+<code>{{Fixed}}</code> will still receive <code>{{Resolved}}</code> and the list
+will not recognise it.  Check what the desk you are using actually marks
+resolutions with before relying on the tick.
+
+== Searching a page and its archives ==
+
+<kbd>s</kbd> asks for a search term and runs one prefixed search over the page and
+everything under it, so archived threads are found without opening an archive page:
+
+* <code>fonts prefix:Project:Support desk</code> finds the live desk and
+  <code>Project:Support desk/Archive 24</code> alike.
+* An '''empty term''' lists every subpage, which is the quickest way to find the
+  archive pages.
+
+Results appear in <code>*MW Discussion Search*</code> with HTML stripped; <kbd>RET</kbd>
+opens the page at point.  The search goes through the wiki's search backend, so a
+wiki whose backend does not implement <code>prefix:</code> will return ordinary
+full-text hits instead of a title-restricted set.
+
+== Archived threads ==
+
+Threads leave the live page when a bot archives them.  The list remembers what it
+showed last time and says so on refresh:
+
+<pre>
+ Discussion refreshed (12 threads); 3 disappeared (probably archived -
+ s to search archives)
+</pre>
+
+That is the whole of the module's archive handling: it does not chase threads into
+archive pages.  Use <kbd>s</kbd> to find them when you need one.
+
+== Options ==
+
+{| class="wikitable"
+! Option !! Default !! Meaning
+|-
+| <code>mediawiki-discussion-tools-stale-days</code> || 14 || Days without activity before a thread counts as stale; match the desk's archiving threshold
+|-
+| <code>mediawiki-discussion-tools-max-threads</code> || <code>nil</code> || Show at most this many threads; <code>nil</code> shows all
+|-
+| <code>mediawiki-discussion-tools-signature</code> || <code>~~~~</code> || Appended to replies, new threads and resolution markers
+|-
+| <code>mediawiki-discussion-tools-reply-separator</code> || <code>--- Reply below this line ---</code> || Text above this line is discarded when posting
+|}
+
+All of them live in the <code>mediawiki-discussion-tools</code> customization group.
+
+== Authentication and what it changes ==
+
+Reading a desk needs no login.  Posting does: <code>mediawiki-site-get-token</code>
+must return a CSRF token, which means clientlogin or OAuth is configured (see
+[http://github.com/hexmode/mediawiki-el/blob/master/README.mediawiki README.mediawiki]).
+Without it, posting fails with <code>No CSRF token - authenticate first</code>.
+
+Knowing your user name also switches on the two attention tiers, because replies
+have to be scanned for your comments and for anyone who followed them.  The name
+comes from the site configuration, or from one <code>meta=userinfo</code> call for
+OAuth sessions that do not store it.
+
+== Troubleshooting ==
+
+; No threads found on PAGE
+: The page has no level-2 headings, or you opened a hub page that only transcludes
+  the real desks.  Open the desk subpage.
+
+; Cannot determine section number for thread
+: The heading changed between the list fetch and the edit, so its anchor no longer
+  matches the table of contents.  Press <kbd>g</kbd> and try again.
+
+; Reply failed / Resolve failed
+: The API's own message is shown - an edit conflict, an abuse filter, or a protected
+  page.  Nothing was written in those cases.
+
+; No matches in search
+: Check the term, then try an empty term to confirm that the page's subpages are
+  visible at all.  A wiki without <code>prefix:</code> support ignores the title
+  restriction rather than failing.
+
+== What it does not do ==
+
+* Flow / Structured Discussions boards: those are not wikitext sections.
+* Editing or deleting individual comments; the browser posts, it does not rewrite
+  history.
+* Watching a desk from inside Emacs; use <code>mediawiki-watchlist</code>.
+* More than one site at a time: the buffer is tied to the site it was opened on.
+
+== See also ==
+
+* [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] -
+  a tested walk-through at the Wikipedia Village pump.
+* [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS-PLAN.md DISCUSSION-TOOLS-PLAN.md] -
+  the design, the API calls, and the decisions.
+* [https://github.com/hexmode/mediawiki-el/blob/master/SUPPORT-DESK-WIKI-IMPLEMENTATION.md SUPPORT-DESK-WIKI-IMPLEMENTATION.md] -
+  how the mediawiki.org support desk is built and archived.

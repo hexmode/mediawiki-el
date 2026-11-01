@@ -4,15 +4,17 @@ This document describes the plan for `mediawiki-discussion-tools.el`, a new gene
 
 See [SUPPORT-DESK-WIKI-IMPLEMENTATION.md](./SUPPORT-DESK-WIKI-IMPLEMENTATION.md) for how the support desk page works on the wiki side (page structure, archiving, the `{{Resolved}}` template, and the DiscussionTools API).
 
-## Status (as of 4.1.x)
+User-facing documentation lives in [DISCUSSION-TOOLS.mediawiki](./DISCUSSION-TOOLS.mediawiki): how to open a page, read a thread, reply, resolve and search.  This file stays the design record — API calls, data model, phases, and what was deliberately dropped — and does not repeat the user instructions.
 
-| Phase | State |
-|---|---|
-| 1 — Thread listing | Implemented |
-| 2 — Thread viewing | Implemented |
-| 3 — Posting | Implemented: `r` replies (compose buffer, `C-c C-c` to post, `C-c C-k` to cancel) and `m` / `C` start a new thread |
-| 4 — Status workflow | Implemented: `d` marks a thread resolved, the list detects `{{Resolved}}`, and the needs-attention / watching tiers work when the logged-in user is known |
-| 5 — Archive awareness | Reduced: no per-archive scanning. Threads that vanish on refresh are reported, and `s` searches the page and its archives in one prefixed `list=search` call |
+## Status (as of 4.1.1)
+
+|Phase                |State                                                                                                                                                       |
+|---------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|1 — Thread listing   |Implemented                                                                                                                                                 |
+|2 — Thread viewing   |Implemented                                                                                                                                                 |
+|3 — Posting          |Implemented: `r` replies (compose buffer, `C-c C-c` to post, `C-c C-k` to cancel) and `m` / `C` start a new thread                                          |
+|4 — Status workflow  |Implemented: `d` marks a thread resolved, the list detects `{{Resolved}}`, and the needs-attention / watching tiers work when the logged-in user is known   |
+|5 — Archive awareness|Reduced: no per-archive scanning. Threads that vanish on refresh are reported, and `s` searches the page and its archives in one prefixed `list=search` call|
 
 Everything below is the design this was built from; where it disagrees with
 the code, the code wins.
@@ -38,21 +40,21 @@ Two major modes:
 
 ## Data Model
 
-Thread data is populated from the `discussiontoolspageinfo` API response.  The initial list fetch uses `threaditemsflags=activity|noreplies` for a lightweight payload; a full re-fetch (without `noreplies`) is done when the user needs thread content.
+Thread data is populated from the `discussiontoolspageinfo` API response.  The list fetch uses `threaditemsflags=activity|noreplies` for a lightweight payload, except when the logged-in user is known: the needs-attention and watching tiers then need the reply tree, so the list fetch uses `activity|excludesignatures`.  The thread view re-fetches the page with full trees when the record has none.
 
 ### Thread record (alist used as struct)
 
-| Key | Source field | Example |
-|---|---|---|
-| `id` | `thread.id` | `"h-Slgrandson-20260624025200"` |
-| `title` | `thread.html` (strip tags) | `"Is there an extension..."` |
-| `author` | `thread.oldestReply.author` (from `activity` flag) | `"Slgrandson"` |
-| `timestamp` | `thread.oldestReply.timestamp` | `"2026-06-24T02:52:00Z"` |
-| `reply-count` | `thread.commentCount` | `2` |
-| `author-count` | `thread.authorCount` | `2` |
-| `last-reply` | `thread.latestReply` object (from `activity`) | `{timestamp, author, id}` |
-| `status` | derived (see below) | `'active`, `'resolved`, `'stale` |
-| `raw` | full thread object | (cached after Phase 2 fetch) |
+|Key           |Source field                                      |Example                                                                         |
+|--------------|--------------------------------------------------|--------------------------------------------------------------------------------|
+|`id`          |`thread.id`                                       |`"h-Slgrandson-20260624025200"`                                                 |
+|`title`       |`thread.html` (strip tags)                        |`"Is there an extension..."`                                                    |
+|`author`      |`thread.oldestReply.author` (from `activity` flag)|`"Slgrandson"`                                                                  |
+|`timestamp`   |`thread.oldestReply.timestamp`                    |`"2026-06-24T02:52:00Z"`                                                        |
+|`reply-count` |`thread.commentCount`                             |`2`                                                                             |
+|`author-count`|`thread.authorCount`                              |`2`                                                                             |
+|`last-reply`  |`thread.latestReply` object (from `activity`)     |`{timestamp, author, id}`                                                       |
+|`replies`     |`thread.replies`                                  |nested reply tree, or `nil` with `noreplies`                                    |
+|`status`      |derived (see below)                               |`'needs-attention`, `'watching`, `'active`, `'unanswered`, `'resolved`, `'stale`|
 
 ### Status derivation
 
@@ -110,20 +112,20 @@ action=discussiontoolspageinfo
 &format=json&formatversion=2
 ```
 
-Returns all threads with metadata and rendered HTML. Called once and cached for the session. The `replies` trees store individual comment IDs used for reply threading.
+Returns all threads with metadata and rendered HTML.  Called on every open and refresh; there is no session cache, because the page changes underneath it.  The `replies` trees store the comment IDs used for reply threading, and are the source for the attention tiers when they are present.
 
 ### 2. View a single thread
 
-Uses the cached `raw` field from the list call. If needed, a targeted parse can be done:
+The view is rendered from the thread record.  When the record has no `replies` tree (the anonymous list fetch), the view re-fetches the page with full trees rather than parsing one section:
 
 ```
-action=parse
+action=discussiontoolspageinfo
 &page=<wiki page>
-&section=N
-&prop=text
+&prop=threaditemshtml
+&threaditemsflags=activity|excludesignatures
 ```
 
-However, the `discussiontoolspageinfo` response already includes per-comment HTML, so we can assemble the thread view from cached data without an additional request.
+The response already includes per-comment HTML, so no `action=parse&prop=text` call is needed.
 
 ### 3. Reply to a thread
 
@@ -138,7 +140,7 @@ action=edit
 
 The section number `N` comes from `action=parse&prop=tocdata` (which maps `index` to section number).
 
-The reply text is prepended with `:` for standard talk-page indentation.
+The indentation is not hard-coded.  It is computed from the section's wikitext — the reply nests one level deeper than the last indented comment, so `::` answers a `:` comment and `*:` keeps a vote reply inside its list item — and falls back to `:` when the section has no indented comment.
 
 ### 4. Create a new thread
 
@@ -150,6 +152,8 @@ action=edit
 &text=Topic body ~~~~
 &token=...
 ```
+
+The body is composed in `*MW New Thread*` (`C-c C-c` posts, `C-c C-k` cancels), so nothing is published from a single-line prompt.  The signature is appended, and unlike a reply the body gets no indentation prefix — a new thread starts at the section level.
 
 ### 5. Mark as resolved
 
@@ -173,8 +177,8 @@ at the last refresh (`mediawiki-discussion-tools--known-ids`); IDs that
 disappear are reported in the echo area:
 
 ```
-Discussion refreshed (12 threads, 3 disappeared (probably archived;
-s to search archives))
+Discussion refreshed (12 threads); 3 disappeared (probably archived —
+s to search archives)
 ```
 
 That answers the actual question ("where did it go?") for the cost of a
@@ -188,15 +192,19 @@ That answers the actual question ("where did it go?") for the cost of a
 action=query
 &list=search
 &srsearch=SEARCH_TERMS prefix:<wiki page>
+&srnamespace=*
 &srlimit=50
 ```
 
 One prefixed search covers the live page *and* its archive subpages,
 because `Project:Support desk/Archive 24` shares the
-`Project:Support desk` prefix.  That is why no `srnamespace` is passed:
-the prefix is the full title, so the namespace comes along with it, and
-the same code works for talk pages (namespace 1) and project pages
-(namespace 4) without guessing a namespace number.
+`Project:Support desk` prefix.  `srnamespace` is passed as `*` rather
+than left out: it defaults to `0`, so without it the search would only
+look in the main namespace and a Project- or Talk-namespace page would
+match nothing however well its prefix matches.  The full-title prefix
+keeps `*` from pulling in unrelated pages, and the same code works for
+talk pages (namespace 1) and project pages (namespace 4) without
+guessing a namespace number.
 
 An empty search term lists every subpage, which is the quickest way to
 find the archives.  Results render in `*MW Discussion Search*` with
@@ -207,27 +215,33 @@ tags stripped and entities decoded; `RET` opens the page through
 
 The `discussiontoolspageinfo` module accepts several flags on the `threaditemsflags` parameter, exposed as pipe-separated values:
 
-| Flag | Effect |
-|---|---|
-| `activity` | Adds `oldestReply` and `latestReply` objects to each thread (timestamp, author, type, level, id) — lightweight references without nested reply trees or HTML |
-| `noreplies` | Returns only top-level headings; omits the recursive `replies` tree entirely — fastest option for list views |
-| `excludesignatures` | Strips user signatures from the rendered HTML — cleaner output for view mode, easier author detection |
+|Flag               |Effect                                                                                                                                                      |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|`activity`         |Adds `oldestReply` and `latestReply` objects to each thread (timestamp, author, type, level, id) — lightweight references without nested reply trees or HTML|
+|`noreplies`        |Returns only top-level headings; omits the recursive `replies` tree entirely — fastest option for list views                                                |
+|`excludesignatures`|Strips user signatures from the rendered HTML — cleaner output for view mode, easier author detection                                                       |
 
 **Recommended call pattern:**
 
 ```
-;; Phase 1: Lightweight list view
+;; Anonymous list view: lightweight
 action=discussiontoolspageinfo
 &prop=threaditemshtml
 &threaditemsflags=activity|noreplies
 
-;; Phase 2: Full thread fetch when user views a thread
+;; List view when the logged-in user is known: the attention tiers
+;; need per-comment authors
+action=discussiontoolspageinfo
+&prop=threaditemshtml
+&threaditemsflags=activity|excludesignatures
+
+;; Thread view (re-fetch when the record has no reply tree)
 action=discussiontoolspageinfo
 &prop=threaditemshtml
 &threaditemsflags=activity|excludesignatures
 ```
 
-Phase 1 fetches headings + counts + oldest/latest reply timestamps without any reply content — minimal bandwidth, perfect for the `tabulated-list` view. Phase 2 fetches the full reply tree with cleaned HTML for rendering the thread detail.
+The `noreplies` payload keeps headings, counts and the oldest/latest reply references without any reply content — minimal bandwidth, perfect for anonymous browsing of the `tabulated-list` view.  The full payload adds the reply tree with cleaned HTML, which the view renders and the attention tiers scan.  Resolved detection adds one `action=parse&prop=wikitext|sections` call per refresh, never a per-thread fetch.
 
 **Additional parameters:**
 
@@ -244,28 +258,21 @@ Derived from `tabulated-list-mode`.
 
 **Columns:**
 
-| Width | Header | Content |
-|---|---|---|
-| 3 | (blank) | Status icon: `!` needs attention, `*` watching, `·` active, `?` unanswered, `~` stale, `✓` resolved |
-| 40 | Title | Thread title (truncated) |
-| 16 | Author | Opening poster's username |
-| 5 | `#` | Reply count |
-| 20 | Last | Relative time since last reply (e.g., "2d ago") |
+|Width|Header |Content                                                                                            |
+|-----|-------|---------------------------------------------------------------------------------------------------|
+|3    |(blank)|Status icon: `!` needs attention, `*` watching, `·` active, `?` unanswered, `~` stale, `✓` resolved|
+|40   |Title  |Thread title (truncated)                                                                           |
+|16   |Author |Opening poster's username                                                                          |
+|5    |`#`    |Reply count                                                                                        |
+|20   |Last   |Relative time since last reply (e.g., "2d ago")                                                    |
 
 **Default sort:** by priority (see priority sorting above); there is no header
 sort, `tabulated-list-sort-key` is nil.
 
-**Keybindings:**
-
-| Key | Action |
-|---|---|
-| `g` | Re-fetch the thread list |
-| `RET` | Show the thread at point in the view split below |
-| `n` / `p` | Move to the next / previous thread, updating the view buffer |
-| `m` / `C` | Start a new thread (Gnus convention) |
-| `r` | Reply to the thread at point |
-| `d` | Mark the thread resolved |
-| `s` | Search this page and its archives (empty query lists subpages) |
+**Keybindings:** `g` refresh, `RET` view, `n` / `p` next / previous,
+`m` / `C` new thread, `r` reply, `d` resolve, `s` search.  The user-facing
+documents, `DISCUSSION-TOOLS.mediawiki`, owns the keybinding tables; this plan
+does not duplicate them.
 
 **Window layout:** `RET` splits the frame and shows the thread view buffer
 in the lower portion.  The view buffer is named `*MW Thread View*` and is
@@ -282,17 +289,9 @@ buffer so `n`/`p` navigation is instant and doesn't create new windows.
 - Indented body text (stripped of most HTML but preserving links and code blocks)
 - Replies nested with increasing indentation
 
-**Keybindings:**
-
-| Key | Action |
-|---|---|
-| `r` | Reply to this thread |
-| `m` / `C` | Start a new thread (Gnus convention) |
-| `d` | Mark this thread as resolved |
-| `g` | Re-fetch and re-render this thread |
-| `n` / `p` | Next / previous thread (reuses the `*MW Thread View*` buffer) |
-| `s` | Search this page and its archives |
-| `RET` / `q` | Close the view window, return to the list |
+**Keybindings:** `r` reply, `m` / `C` new thread, `d` resolve, `g` re-render,
+`n` / `p` next / previous, `s` search, `RET` / `q` close.  Again, the tables
+live in `DISCUSSION-TOOLS.mediawiki`.
 
 ## Core Functions
 
@@ -321,6 +320,15 @@ Returns one of: 'needs-attention, 'watching, 'active, 'unanswered,
 
 (defun mediawiki-discussion-tools--current-user (sitename)
   "Return the logged-in user name for SITENAME, or nil.")
+
+(defun mediawiki-discussion-tools--flatten-replies (replies)
+  "Return REPLIES and their nested replies as a flat, depth-first list.")
+
+(defun mediawiki-discussion-tools--resolved-anchors (sitename page)
+  "Return the anchors of PAGE sections that contain a resolved marker.")
+
+(defun mediawiki-discussion-tools--mark-resolved (threads anchors)
+  "Set THREADS whose anchor is in ANCHORS to 'resolved status.")
 
 (defun mediawiki-discussion-tools--vanished-ids (old-ids threads)
   "Return the IDs in OLD-IDS that are absent from THREADS.")
@@ -382,8 +390,8 @@ indented to answer the thread's last comment.")
 - [x] Implement `mediawiki-discussion-tools--fetch-threads`
 - [x] Call `discussiontoolspageinfo&threaditemsflags=activity|noreplies`, parse headings + counts + timestamps into thread records (lightweight, no reply trees)
 - [x] Implement `mediawiki-discussion-tools-list-mode` with `tabulated-list`
-- [x] Implement status derivation — `active`/`stale` from `latestReplyTimestamp`. `resolved` detection requires full thread HTML (Phase 2/4).
-- [x] Implement priority sorting (without "needs attention" / "watching" — that requires the user's username in Phase 4)
+- [x] Implement status derivation — `active`/`stale` from `latestReplyTimestamp`; `resolved` detection arrived in Phase 4.
+- [x] Implement priority sorting (the attention tiers arrived in Phase 4)
 - [x] Implement `mediawiki-support-desk` wrapper
 
 ### Phase 2 — Thread viewing (done)
@@ -396,8 +404,9 @@ indented to answer the thread's last comment.")
 
 ### Phase 3 — Posting (done)
 
-- [x] Implement `mediawiki-discussion-tools-reply` (section append with `:`)
-- [x] Implement `mediawiki-discussion-tools-new-thread` (section=new)
+- [x] Implement `mediawiki-discussion-tools-reply` (indented section append, composed in `*MW Reply*`)
+- [x] Implement `mediawiki-discussion-tools-new-thread` (section=new, composed in `*MW New Thread*`)
+- [x] Both posting commands use a compose buffer (`C-c C-c` posts, `C-c C-k` cancels); new thread is on `m` / `C`, as in Gnus
 - [x] Handle edit token acquisition via `mediawiki-api.el`
 - [x] Handle OAuth authentication via `mediawiki-auth.el`
 
@@ -413,10 +422,25 @@ indented to answer the thread's last comment.")
 
 The original design scanned every `Archive N` page's `discussiontoolspageinfo` to find one thread — O(archives) API calls against an unstable API, to locate a thread that is no longer actionable.  Dropped in favour of:
 
-- [x] Remember the thread IDs shown at the last refresh (`--known-ids`) and report vanished ones: `N disappeared (probably archived; s to search archives)`
+- [x] Remember the thread IDs shown at the last refresh (`--known-ids`) and report vanished ones: `N disappeared (probably archived — s to search archives)`
 - [x] `s` (`mediawiki-discussion-tools-search`) covers the page and its archives with one prefixed `list=search` call
 - [x] Open a result with `RET` via `mediawiki-open`
 - [ ] Not doing: `--check-archived`, `closed` status for archived threads, per-archive thread lookup
+
+## Dropped from the plan
+
+These were part of the original design and are deliberately not implemented:
+
+|Dropped                                                                                |Replacement                                                                                                                                                                                                          |
+|---------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|`mediawiki-discussion-tools--check-archived` and a `closed` status for archived threads|An archived thread is not actionable — replying to it is exactly what archiving prevents. The list reports vanished IDs instead, and `s` searches the page and its archives.                                         |
+|Scanning every `Archive N` page with `discussiontoolspageinfo` to find one thread      |O(archives) calls against an API MediaWiki labels "internal or unstable", to locate something the user can no longer act on.                                                                                         |
+|`srnamespace=4` on search                                                              |It hard-coded the Project namespace, so talk-page archives would never match. The search passes `srnamespace=*` instead: the API defaults to namespace 0, and the full-title `prefix:` is what restricts the results.|
+|Checkmark detection in rendered HTML (`&#x2713;`, `&#x2714;`, a bare `✔`)              |Rendered HTML is not in the lightweight payload, so this only worked after a per-thread fetch. Matching `{{Resolved` in the section wikitext costs one call per refresh.                                             |
+|`action=parse&prop=text` for viewing a single thread                                   |The full-tree `discussiontoolspageinfo` re-fetch already returns per-comment HTML.                                                                                                                                   |
+|Caching the `tocdata` index → section-number map for the session                       |Pages change under the client, and a stale map posts a reply into the wrong section without any error. The map is fetched when it is needed.                                                                         |
+|The `oldid=` and `prop=transcludedfrom` parameters                                     |Documented for completeness and never used; transcluded threads would need separate handling before the extra query is worth it.                                                                                     |
+|A separate "OP replied" active tier                                                    |Distinguishing it requires the reply tree on every fetch, including anonymous ones. Every active thread ranks as tier 3; the two tiers that change the answer (needs attention, watching) are implemented.           |
 
 ## Configuration
 
@@ -437,7 +461,15 @@ Should match the auto-archiving threshold on the wiki."
 (defcustom mediawiki-discussion-tools-signature "~~~~"
   "Signature string appended to replies and resolution comments.
 The default \"~~~~\" expands to the user's standard MediaWiki
-signature (timestamp + username link) when saved."
+signature (timestamp + username link) when saved.  Set to a custom
+string like \"--~~~~\" or a raw wikitext sig if preferred."
+  :type 'string
+  :group 'mediawiki-discussion-tools)
+
+(defcustom mediawiki-discussion-tools-reply-separator "--- Reply below this line ---"
+  "Separator line inserted in the reply buffer.
+Everything above and including this line is discarded when posting.
+The user's reply text starts on the line after the separator."
   :type 'string
   :group 'mediawiki-discussion-tools)
 ```
@@ -457,10 +489,10 @@ Tests follow the ERT patterns used by the rest of the project (`cl-letf` mocks, 
 
 ### File layout
 
-| File | What it tests |
-|---|---|
-| `tests/test-mediawiki-discussion-tools.el` | Core module: parsing, status, sorting, formatting, fetch pipeline |
-| `tests/test-mediawiki-support-desk.el` | Wrapper: config defaults, delegation to discussion-tools |
+|File                                      |What it tests                                                    |
+|------------------------------------------|-----------------------------------------------------------------|
+|`tests/test-mediawiki-discussion-tools.el`|Core module: parsing, status, sorting, formatting, fetch pipeline|
+|`tests/test-mediawiki-support-desk.el`    |Wrapper: config defaults, delegation to discussion-tools         |
 
 ### Unit Tests
 
@@ -477,10 +509,11 @@ Unit tests mock all network and I/O boundaries.  No API calls, no `auth-source`,
 **Status derivation** (operates on thread records, no network)
 - `latestReplyTimestamp` < stale-days old → `active`
 - `latestReplyTimestamp` > stale-days old → `stale`
-- Thread HTML contains checkmark entity (`&#x2713;`) → `resolved`
-- Thread HTML contains `{{Resolved}}` template → `resolved`
-- Thread HTML contains no markers → not `resolved`
 - Thread with no `latestReplyTimestamp` (fallback) → `unanswered`
+- User posted and someone answered afterwards → `needs-attention`
+- User's comment is still the last one → `watching`
+- No user name known → the attention tiers are not produced
+- Section wikitext contains `{{Resolved|~~~~}}` → `resolved` (see below)
 
 **Priority sorting** (operates on thread records, no network)
 - Thread where user posted and got a reply → rank 1 (needs attention)
@@ -501,17 +534,17 @@ Unit tests mock all network and I/O boundaries.  No API calls, no `auth-source`,
 - `tocdata` with `Post_a_new_question` (index `""`) → filtered out
 - Thread at `index` 1 → maps to `number` 4 (after 3 header sections)
 
-**Checkmark detection**
-- `&#x2713;` in HTML → detected
-- `{{Resolved}}` in HTML → detected
-- `{{resolved}}` in HTML → detected
+**Resolved detection (section wikitext)**
+- A section whose byte range contains `{{Resolved}}` → anchor returned
+- `{{resolved}}` and `{{ Resolved }}` variants → detected
 - `{{Resolved|summary|~~~~}}` → detected
-- `✔` (bare character) → detected
-- `&#x2714;` (heavy check) → detected
+- A section with no marker → not returned
+- A failing `action=parse` call → no anchors, list still builds
+- Only the marked section is returned when the page has several threads
 
 ### Integration Tests
 
-Integration tests use `cl-letf` to mock `url-retrieve-synchronously` at the HTTP level, exercising the full `mediawiki-api.el` → `mediawiki-discussion-tools.el` pipeline with realistic JSON payloads.
+Integration tests use `cl-letf` to mock `mediawiki-api-call` and `mediawiki-site-get-token`, so the whole module runs without touching the network, while the API arguments each command sends are asserted directly.
 
 **Full list pipeline**
 - Mock `discussiontoolspageinfo` → feed through `mediawiki-discussion-tools--fetch-threads` → verify `tabulated-list` entries have correct column values
@@ -561,7 +594,7 @@ These are manual tests performed against live wikis to verify real-world behavio
 10. Press `q` or `RET` in view buffer — verify view window closes, focus returns to list
 
 **Posting**
-11. Press `N` to create a new thread — type a title and body — verify it appears on the page
+11. Press `m` (or `C`) to create a new thread — type a title, then a body in the compose buffer — verify `C-c C-k` cancels and `C-c C-c` posts
 12. Press `r` on an existing thread — type a reply — verify it appears with correct indentation
 13. Press `g` to refresh — verify the new content appears
 
@@ -570,11 +603,16 @@ These are manual tests performed against live wikis to verify real-world behavio
 15. Press `d` on a thread — leave summary empty — verify `{{Resolved|~~~~}}` appears
 16. Refresh — verify status icon changes to `✓`
 
+**Searching and archiving**
+17. Press `s` with a term that only appears in an archived thread — verify it is found without opening the archive page
+18. Press `s` with an empty term — verify the archive subpages are listed
+19. Press `RET` on a result — verify the page opens through `mediawiki-open`
+
 **Edge cases**
-17. Interrupted network mid-fetch — verify graceful error, not a hang
-18. Thread archived between list and view — verify "thread not found"
-19. Very long thread titles — verify table column truncation
-20. Unicode authors and titles — verify display without mojibake
+20. Interrupted network mid-fetch — verify graceful error, not a hang
+21. Let a thread age out or archive it by hand, then press `g` — verify the "disappeared (probably archived)" notice and that `s` finds it
+22. Very long thread titles — verify table column truncation
+23. Unicode authors and titles — verify display without mojibake
 
 #### Support desk wrapper
 
@@ -583,10 +621,14 @@ These are manual tests performed against live wikis to verify real-world behavio
 
 ## Resolved Design Decisions
 
-1. **Recovering section numbers** — Call `action=parse&prop=tocdata` once and cache the `index → section-number` mapping. Filter out non-discussion sections. The `tocdata` response includes both `index` (matches the `discussiontoolspageinfo` thread order) and `number` (the integer used by `action=edit&section=`).
+1. **Recovering section numbers** — Call `action=parse&prop=tocdata` and filter out non-discussion sections. The response includes both `index` (matches the `discussiontoolspageinfo` thread order) and `number` (the integer used by `action=edit&section=`), and the code deliberately uses `index`. The map is fetched when a reply or resolve needs it rather than cached for the session, because an edit elsewhere changes the section numbers and a stale map posts silently into the wrong section.
 
 2. **Single-thread re-fetch** — After posting a reply or marking resolved, re-fetch the entire `discussiontoolspageinfo` response. This is simpler than updating the local cache and verifies the edit posted correctly. The payload is small (~50KB for a typical page).
 
-3. **{{Resolved}} detection** — Scan for the checkmark icon in the rendered HTML rather than wikitext. The template renders as `&#x2713;` or the tick image; searching HTML is more robust against variant wikitext forms (`{{Resolved}}`, `{{resolved}}`, `{{Resolved|...}}`, manual checkmark insertions).
+3. **{{Resolved}} detection** — The original plan was to scan rendered HTML for the checkmark (`&#x2713;`, `&#x2714;`, a bare `✔`). That was reversed: the lightweight list payload has no HTML at all, so HTML scanning would have forced a per-thread fetch. The page wikitext is fetched once per refresh with `prop=wikitext|sections`, each section is sliced out by its `byteoffset`, and the slice is matched against `{{` + optional spaces + `Resolved` (any case) + optional spaces + `|` or `}}`. That catches `{{Resolved}}`, `{{resolved}}`, `{{Resolved|...}}` and spacing variants, at one request per refresh.  A regexp using `\_>` was tried first and rejected: it depends on the syntax table, and `Resolved|` did not match under the standard one, which failed silently.
 
 4. **Module split** — Core logic lives in `mediawiki-discussion-tools.el` with the page as a runtime parameter. `mediawiki-support-desk.el` is a thin wrapper that sets the page to `"Project:Support_desk"`. This allows the same browser to work with any discussion page (talk pages, village pumps, noticeboards) without duplicating code.
+
+5. **Attention tiers versus payload size** — Needs-attention and watching need per-comment authors, which `threaditemsflags=noreplies` omits. Rather than fetch the list twice, the list fetch upgrades itself to `activity|excludesignatures` when the logged-in user is known (site configuration, or one cached `meta=userinfo` call). Anonymous browsing keeps the lightweight payload and simply has no attention tiers.
+
+6. **Keybindings follow Gnus** — `m` / `C` compose, `r` replies, `n` / `p` move, `RET` opens, `q` quits, so discussion pages feel like a newsgroup buffer. `s` is search, which Gnus does not bind the same way, but it does not collide with the keys above.  See `CONTRIBUTING.mediawiki` for the convention.
