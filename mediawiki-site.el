@@ -190,6 +190,14 @@ Interactively, prompt for a SITE."
   "Get the username for a given SITENAME."
   (mediawiki-site-user-pass sitename 2 'url-user-for-url))
 
+(defun mediawiki-site--auth-secret (entry)
+  "Return the password from an auth-source ENTRY, or nil.
+ENTRY may carry the secret directly or as a function."
+  (let ((secret (plist-get entry :secret)))
+    (cond ((functionp secret) (funcall secret))
+          ((stringp secret) secret)
+          (t nil))))
+
 (defun mediawiki-site-password (sitename)
   "Get the password for a given SITENAME.
 Uses the password in `mediawiki-site-alist' when it is not empty and
@@ -208,7 +216,7 @@ first entry for the host, which need not have a password."
                         (auth-source-search :host host
                                             :require '(:secret) :max 1))))
         (when found
-          (auth-info-password (car found)))))))
+          (mediawiki-site--auth-secret (car found)))))))
 
 (defun mediawiki-site-domain (sitename)
   "Get the LDAP domain for a given SITENAME."
