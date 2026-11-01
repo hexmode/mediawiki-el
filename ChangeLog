@@ -1,3 +1,120 @@
+2026-11-01  Mark A. Hershberger  <mah@everybody.org>
+
+	Finish the discussion browser's status workflow and replace the
+	planned archive scanning with a vanished-thread notice and search.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-resolve): Replace the stub with a working
+	command.  Prompts for an optional summary, appends
+	{{Resolved|summary|~~~~}} indented under the thread's last comment,
+	and refreshes the list and view buffers.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--resolved-anchors)
+	(mediawiki-discussion-tools--mark-resolved): Detect {{Resolved}} by
+	fetching the page wikitext once per refresh and matching it inside
+	each section's byte range, so the list can show the checkmark without
+	a per-thread fetch.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--priority-tiers)
+	(mediawiki-discussion-tools--thread-priority): Sort by the plan's
+	tiers (attention, watching, active, unanswered, resolved, stale)
+	instead of putting unanswered first, with the two attention tiers
+	reserved until per-comment data is fetched.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--thread-status): Return
+	needs-attention when the logged-in user posted and someone answered
+	afterwards, and watching when their comment is still last.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--flatten-replies)
+	(mediawiki-discussion-tools--thread-contains-username-p)
+	(mediawiki-discussion-tools--replied-after-username-p): Detect the
+	user's own comments in a reply tree and whether anyone replied after
+	them.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--current-user)
+	(mediawiki-discussion-tools--userinfo): Resolve the logged-in user
+	from the site configuration or one meta=userinfo call, cached per
+	site, so OAuth sessions without a stored name still get the tiers.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--fetch-threads): Fetch full reply trees
+	when the user is known; anonymous browsing keeps the noreplies
+	payload.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--thread-anchor): New helper shared by
+	section lookup and resolved detection.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-search): Search the page and its archive
+	subpages with one prefixed list=search call, render the hits in
+	*MW Discussion Search*, and open a result with RET.  Bound to s in
+	both browser modes.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--known-ids)
+	(mediawiki-discussion-tools--vanished)
+	(mediawiki-discussion-tools--vanished-ids)
+	(mediawiki-discussion-tools--report-refresh): Remember the thread
+	IDs from the last refresh and report how many disappeared, since
+	that is what archiving looks like from the client.  This replaces
+	the planned per-archive check-archived scan.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--status-icon): Give the attention tiers
+	their own icons instead of falling through to a blank column.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--refresh-buffers): New helper that
+	refreshes the list and, when it is visible, the thread view.
+
+	* tests/test-mediawiki-discussion-tools.el: Cover resolve (with and
+	without a summary, and with no matching section), resolved detection,
+	the attention tiers and their icons, vanished threads, and search.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-new-thread): Prompt only for the title and
+	open a *MW New Thread* compose buffer, instead of posting from a
+	one-line body prompt with no preview and no way to cancel.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-reply-submit): Dispatch to
+	mediawiki-discussion-tools--submit-reply or
+	mediawiki-discussion-tools--submit-new-thread according to
+	mediawiki-discussion-tools--reply-kind.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--compose-body): New helper returning the
+	text below the reply separator.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-list-mode-map)
+	(mediawiki-discussion-tools-view-mode-map): Bind new thread to m and
+	C, as in Gnus, instead of N.
+
+	* tests/test-mediawiki-discussion-tools.el: Cover the compose buffer,
+	the section=new payload, the empty-body refusal and the m/C bindings.
+
+	* DISCUSSION-TOOLS-PLAN.md: List keybindings instead of function names
+	in the status and keybinding tables, and record the m/C binding.
+
+	* CONTRIBUTING.mediawiki: Add a Keybinding Conventions section that
+	points at Gnus for compose/reply/move/quit keys, and warn that a stale
+	.elc keeps the test suites running old code after an edit.
+
+	* AGENTS.md: Send agents to the keybinding conventions and to the
+	user-facing docs when behaviour changes, and record the stale .elc trap
+	in the Build & Test rules.
+
+2026-11-01  Mark A. Hershberger  <mah@everybody.org>
+
+	Fix the Emacs cache restore and the auth-source password lookup.
+
 	* mediawiki-site.el (mediawiki-site-password): Ask auth-source for an
 	entry that actually has a secret before falling back to
 	`url-password-for-url', which stops at the first entry for the host

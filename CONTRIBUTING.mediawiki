@@ -22,6 +22,8 @@ MediaWiki.el is an Emacs package for editing MediaWiki sites (like Wikipedia) di
 
 At the time of writing there are 25 test files and roughly 386 tests.
 
+'''Stale byte-code:''' <code>make autoloads</code> byte-compiles the modules in place, and Emacs prefers an existing <code>.elc</code> over a newer <code>.el</code> unless <code>load-prefer-newer</code> is set.  Once a file has been compiled, <code>make test</code> and <code>make ci-test</code> keep running the old code after you edit the source.  Run <code>make autoloads</code> (or <code>make clean</code>) before testing, or a fix can look like it had no effect.
+
 === Development Tasks ===
 
 * <code>make autoloads</code> - Generate the autoloader file and byte-compile
@@ -64,6 +66,29 @@ The package follows a modular architecture with these core modules:
 * Each module handles a specific aspect of MediaWiki interaction
 * Authentication uses Emacs auth-source library (supports encrypted password storage)
 * Uses MediaWiki API for all server interactions
+
+=== Keybinding Conventions ===
+
+Where a command has a Gnus equivalent, use the Gnus key for it.  Discussion
+pages and mail/Usenet groups are the same interaction model, so users should
+not have to learn a second set of keys:
+
+* <code>m</code> and <code>C</code> - compose a new message or thread
+* <code>r</code> - reply to the message or thread at point
+* <code>n</code> / <code>p</code> - next / previous item
+* <code>RET</code> - open the item at point
+* <code>q</code> - quit or close the current window
+
+<code>mediawiki-discussion-tools-list-mode</code> and
+<code>mediawiki-discussion-tools-view-mode</code> are the reference
+implementation: <code>m</code> or <code>C</code> start a new thread,
+<code>r</code> replies, <code>n</code>/<code>p</code> move between threads,
+<code>RET</code> shows the thread and <code>q</code> closes the view.
+
+Do not invent a key for an action Gnus already binds elsewhere - "new thread"
+on <code>N</code> was changed to <code>m</code>/<code>C</code> for exactly
+this reason.  If a module needs a key Gnus does not have, prefer a
+<code>C-c</code> prefix over a bare letter so the Gnus keys stay free.
 
 === Testing Structure ===
 

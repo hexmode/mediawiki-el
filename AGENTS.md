@@ -8,6 +8,10 @@ This is the single source of truth for agent instructions.  There is no
 `CLAUDE.md` any more — everything it used to say lives here.  Do not add
 per-tool instruction files; update this one instead.
 
+User-facing documentation lives in `README.mediawiki` (features and usage) and
+`CONTRIBUTING.mediawiki` (build, architecture, keybinding conventions).  When a
+change alters user-visible behaviour, update those files too.
+
 ## Build & Test
 
 Only Emacs (>= 28.1) is required.  Everything goes through the `Makefile`:
@@ -33,6 +37,10 @@ Rules:
   unclosed form; pre-commit runs it for you (`make setup-dev` installs the
   hook), and `make ci-test` depends on it.
 - Run `make ci-test` before pushing.  Never push a red suite.
+- A compiled `.elc` wins over a newer `.el` unless `load-prefer-newer` is set,
+  so once a file has been byte-compiled the suites keep running the old code
+  after you edit it.  Rerun `make autoloads` (or `make clean`) first; otherwise
+  a fix looks like it had no effect.
 - Tests must not touch the network: mock `mediawiki-api-call`, `url-http-post`
   or `url-retrieve`.
 - Tests must not depend on today's date.  Build fixture timestamps relative to
@@ -68,6 +76,10 @@ Rules:
   line.
 - Docstrings for every public defun/defvar/defcustom; user options go in a
   `defgroup`.
+- Keybindings follow Gnus where a command has a Gnus equivalent (`m`/`C`
+  compose, `r` reply, `n`/`p` move, `RET` open, `q` quit).  Check the
+  "Keybinding Conventions" section of `CONTRIBUTING.mediawiki` before adding a
+  key, and keep that section current when you do.
 - `ChangeLog` is maintained by hand: `YYYY-MM-DD  Name  <email>` followed by
   tab-indented `* file (function):` entries; mention `Fixes #N` for issues.
 - Commits are sentence-case subject lines describing the bug, with a body that

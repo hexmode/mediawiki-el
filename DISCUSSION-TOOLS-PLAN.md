@@ -10,9 +10,9 @@ See [SUPPORT-DESK-WIKI-IMPLEMENTATION.md](./SUPPORT-DESK-WIKI-IMPLEMENTATION.md)
 |---|---|
 | 1 — Thread listing | Implemented |
 | 2 — Thread viewing | Implemented |
-| 3 — Posting | Implemented: `mediawiki-discussion-tools-reply` (compose buffer, `C-c C-c` to post, `C-c C-k` to cancel) and `mediawiki-discussion-tools-new-thread` |
-| 4 — Status workflow | Partial: `mediawiki-discussion-tools-resolve` is still a stub that signals "not yet implemented", and the "needs attention" / "watching" tiers, own-comment detection and reply-after-me detection do not exist |
-| 5 — Archive awareness | Not started |
+| 3 — Posting | Implemented: `r` replies (compose buffer, `C-c C-c` to post, `C-c C-k` to cancel) and `m` / `C` start a new thread |
+| 4 — Status workflow | Implemented: `d` marks a thread resolved, the list detects `{{Resolved}}`, and the needs-attention / watching tiers work when the logged-in user is known |
+| 5 — Archive awareness | Reduced: no per-archive scanning. Threads that vanish on refresh are reported, and `s` searches the page and its archives in one prefixed `list=search` call |
 
 Everything below is the design this was built from; where it disagrees with
 the code, the code wins.
@@ -57,24 +57,45 @@ Thread data is populated from the `discussiontoolspageinfo` API response.  The i
 ### Status derivation
 
 ```
-resolved?  ── scan thread HTML for "{{Resolved}}" or "{{resolved}}"
+resolved?  ── does the section wikitext match "{{Resolved"?
   ├── yes ── status = 'resolved
   └── no
+       ├── user posted, someone replied after ── status = 'needs-attention
+       ├── user posted, nobody replied after  ── status = 'watching
+       ├── commentCount <= 1                 ── status = 'unanswered
        └── last-reply > stale-days ago?
             ├── yes ── status = 'stale
             └── no  ── status = 'active
 ```
 
+The two attention tiers need the logged-in user name (site configuration,
+or one `action=query&meta=userinfo` call) and the recursive reply tree.
+When the user is known, the list fetch uses
+`threaditemsflags=activity|excludesignatures` instead of `noreplies`, so
+per-comment authors are available; anonymous browsing keeps the
+lightweight payload.
+
+Resolved detection reads the page once per refresh with
+`action=parse&prop=wikitext|sections`, slices each section out of the
+wikitext by `byteoffset`, and matches `{{Resolved` (any case, optional
+spaces) followed by `|` or `}}`.  Scanning wikitext rather than rendered
+HTML keeps the lightweight list payload intact: one extra call per
+refresh, no per-thread fetches.
+
 ### Priority sorting for list display
 
-Threads are sorted by priority (highest first):
+Threads are sorted by priority (highest first), using the tiers in
+`mediawiki-discussion-tools--priority-tiers`:
 
 1. **Needs attention** — the logged-in user posted a reply and someone else replied after them. The user hasn't replied to that latest message.
-2. **Watching** — the logged-in user posted but nobody has replied yet.
-3. **Active, OP replied** — another user's thread; the OP has replied to answers (active discussion).
+2. **Watching** — the logged-in user posted and nobody has replied after their last comment.
+3. **Active** — any other thread with replies.
 4. **Unanswered** — no replies at all (just the opening post).
-5. **Resolved** — contains `{{Resolved}}`.
+5. **Resolved** — the section contains `{{Resolved}}`.
 6. **Stale** — > stale-days since last reply.
+
+`sort` is stable, so threads in the same tier keep the order the API
+returned them in.
 
 ## API Calls
 
@@ -143,17 +164,23 @@ action=edit
 
 This inserts a new reply containing the `{{Resolved}}` template.  If the user provides a summary, it is included before the signature: `{{Resolved|summary text|~~~~}}`.  The summary can reference a specific reply comment by its DiscussionTools comment ID (e.g., `c-Ciencia_Al_Poder-20260626155300-...`) to link the resolution to the answer that solved it.  The signature is controlled by `mediawiki-discussion-tools-signature` (defaults to `~~~~`).
 
-### 6. Check if a thread was archived
+The implementation does not hard-code the single `:`.  It reuses the reply-indent logic, so the marker is appended under the thread's last comment at the same indentation a human would use.
+
+### 6. Notice archived threads
+
+No archive API call.  The list buffer remembers the thread IDs it showed
+at the last refresh (`mediawiki-discussion-tools--known-ids`); IDs that
+disappear are reported in the echo area:
 
 ```
-action=query
-&list=search
-&srsearch=prefix:<wiki page>/Archive
-&srnamespace=4
-&srlimit=50
+Discussion refreshed (12 threads, 3 disappeared (probably archived;
+s to search archives))
 ```
 
-Lists archive pages. Then for each archived thread ID, we can query the archive page's `discussiontoolspageinfo` to find it, or simply check that the thread ID no longer appears on the live page.
+That answers the actual question ("where did it go?") for the cost of a
+`cl-remove-if`, instead of fetching every `Archive N` page's
+`discussiontoolspageinfo` to find one thread.  The vanished IDs stay in
+`mediawiki-discussion-tools--vanished` for callers that want them.
 
 ### 7. Search threads
 
@@ -161,10 +188,20 @@ Lists archive pages. Then for each archived thread ID, we can query the archive 
 action=query
 &list=search
 &srsearch=SEARCH_TERMS prefix:<wiki page>
-&srnamespace=4
+&srlimit=50
 ```
 
-Standard MediaWiki search scoped to the Project namespace and prefixed to the discussion page.
+One prefixed search covers the live page *and* its archive subpages,
+because `Project:Support desk/Archive 24` shares the
+`Project:Support desk` prefix.  That is why no `srnamespace` is passed:
+the prefix is the full title, so the namespace comes along with it, and
+the same code works for talk pages (namespace 1) and project pages
+(namespace 4) without guessing a namespace number.
+
+An empty search term lists every subpage, which is the quickest way to
+find the archives.  Results render in `*MW Discussion Search*` with
+tags stripped and entities decoded; `RET` opens the page through
+`mediawiki-open`.
 
 ### 8. API flags and optimisations
 
@@ -209,7 +246,7 @@ Derived from `tabulated-list-mode`.
 
 | Width | Header | Content |
 |---|---|---|
-| 3 | (blank) | Status icon: `·` active, `?` unanswered, `~` stale (`✓` resolved and the needs-attention/watching tiers are Phase 4) |
+| 3 | (blank) | Status icon: `!` needs attention, `*` watching, `·` active, `?` unanswered, `~` stale, `✓` resolved |
 | 40 | Title | Thread title (truncated) |
 | 16 | Author | Opening poster's username |
 | 5 | `#` | Reply count |
@@ -220,14 +257,15 @@ sort, `tabulated-list-sort-key` is nil.
 
 **Keybindings:**
 
-| Key | Command |
+| Key | Action |
 |---|---|
-| `g` | `mediawiki-discussion-tools-refresh` — re-fetch thread list |
-| `RET` | `mediawiki-discussion-tools-view-thread-at-point` — open view mode split below |
-| `n` / `p` | `mediawiki-discussion-tools-view-next` / `-view-prev` — navigate threads, updating the view buffer |
-| `N` | `mediawiki-discussion-tools-new-thread` — create new thread |
-| `r` | `mediawiki-discussion-tools-reply` — reply to thread at point |
-| `d` | `mediawiki-discussion-tools-resolve` — mark resolved (stub in 4.1.x; signals "not yet implemented") |
+| `g` | Re-fetch the thread list |
+| `RET` | Show the thread at point in the view split below |
+| `n` / `p` | Move to the next / previous thread, updating the view buffer |
+| `m` / `C` | Start a new thread (Gnus convention) |
+| `r` | Reply to the thread at point |
+| `d` | Mark the thread resolved |
+| `s` | Search this page and its archives (empty query lists subpages) |
 
 **Window layout:** `RET` splits the frame and shows the thread view buffer
 in the lower portion.  The view buffer is named `*MW Thread View*` and is
@@ -246,13 +284,15 @@ buffer so `n`/`p` navigation is instant and doesn't create new windows.
 
 **Keybindings:**
 
-| Key | Command |
+| Key | Action |
 |---|---|
 | `r` | Reply to this thread |
+| `m` / `C` | Start a new thread (Gnus convention) |
 | `d` | Mark this thread as resolved |
-| `g` | Refresh thread content |
-| `n` / `p` | Next / previous thread (reuses `*MW Thread View*` buffer) |
-| `RET` / `q` | Close the view window, return to list |
+| `g` | Re-fetch and re-render this thread |
+| `n` / `p` | Next / previous thread (reuses the `*MW Thread View*` buffer) |
+| `s` | Search this page and its archives |
+| `RET` / `q` | Close the view window, return to the list |
 
 ## Core Functions
 
@@ -261,19 +301,29 @@ buffer so `n`/`p` navigation is instant and doesn't create new windows.
 (defun mediawiki-discussion-tools--fetch-threads (sitename page &optional full)
   "Fetch thread data from PAGE on SITENAME using the DiscussionTools API.
 If FULL is non-nil, fetch with full reply trees (no noreplies flag).
+Reply trees are also fetched when the logged-in user is known.
 Otherwise uses threaditemsflags=activity|noreplies for lightweight list.
 Returns an alist of thread records sorted by priority.")
 
-(defun mediawiki-discussion-tools--thread-status (thread)
-  "Determine the status of THREAD.
+(defun mediawiki-discussion-tools--thread-status (thread &optional username)
+  "Determine the status of THREAD for USERNAME.
 Returns one of: 'needs-attention, 'watching, 'active, 'unanswered,
-'resolved, 'stale.")
+'stale.  'resolved is applied later by --mark-resolved.")
 
 (defun mediawiki-discussion-tools--thread-priority (thread)
   "Return a numeric priority for THREAD (lower = higher priority).")
 
 (defun mediawiki-discussion-tools--thread-contains-username-p (thread username)
   "Return t if USERNAME appears in any reply in THREAD.")
+
+(defun mediawiki-discussion-tools--replied-after-username-p (thread username)
+  "Return t if someone other than USERNAME posted after USERNAME did.")
+
+(defun mediawiki-discussion-tools--current-user (sitename)
+  "Return the logged-in user name for SITENAME, or nil.")
+
+(defun mediawiki-discussion-tools--vanished-ids (old-ids threads)
+  "Return the IDs in OLD-IDS that are absent from THREADS.")
 
 ;; Entry point
 (defun mediawiki-discussion-tools (page &optional sitename)
@@ -285,28 +335,26 @@ Displays threads sorted by priority.")
   "Re-fetch the thread list for the current discussion buffer.")
 
 (defun mediawiki-discussion-tools-search (query)
-  "Search threads on the current discussion page for QUERY.")
+  "Search the current discussion page and its archives for QUERY.")
 
 ;; Thread actions
 (defun mediawiki-discussion-tools-view-thread-at-point ()
   "View the full thread at point in a dedicated buffer.")
 
-(defun mediawiki-discussion-tools-reply (text)
-  "Post a reply to the thread at point with TEXT.")
+(defun mediawiki-discussion-tools-reply ()
+  "Compose a reply to the thread at point in a reply buffer.")
 
-(defun mediawiki-discussion-tools-new-thread (title text)
-  "Create a new discussion thread with TITLE and TEXT.")
+(defun mediawiki-discussion-tools-new-thread ()
+  "Compose a new discussion thread in a reply buffer.")
 
-(defun mediawiki-discussion-tools-resolve (summary)
+(defun mediawiki-discussion-tools-resolve (&optional summary)
   "Mark the thread at point as resolved.
 Prompts for an optional SUMMARY.  If provided, the resolution comment
 includes the summary text followed by the signature.  The summary may
 reference a specific reply comment (e.g. \"See reply above\") to link
 the resolution to a particular answer.  If SUMMARY is empty, just
-appends {{Resolved|~~~~}} with no additional text.")
-
-(defun mediawiki-discussion-tools--check-archived (thread-id)
-  "Return t if THREAD-ID has been archived, nil otherwise.")
+appends {{Resolved|~~~~}} with no additional text.  The marker is
+indented to answer the thread's last comment.")
 ```
 
 ### Support Desk Wrapper
@@ -355,16 +403,20 @@ appends {{Resolved|~~~~}} with no additional text.")
 
 ### Phase 4 — Status workflow
 
-- [ ] Implement `mediawiki-discussion-tools-resolve` — prompts for optional summary, appends `{{Resolved|summary|~~~~}}`. The summary may reference a reply comment ID. (Currently a stub that signals "not yet implemented".)
-- [ ] Implement "needs attention" and "watching" priority tiers
-- [ ] Detect user's own comments in threads
-- [ ] Detect when someone replied after the user
+- [x] Implement `mediawiki-discussion-tools-resolve` — prompts for optional summary, appends `{{Resolved|summary|~~~~}}` at the thread's indentation level. The summary may reference a reply comment ID.
+- [x] Detect `{{Resolved}}` for the list (`--resolved-anchors`, one wikitext fetch per refresh) and mark those threads `resolved`
+- [x] Detect user's own comments in threads (`--thread-contains-username-p`)
+- [x] Detect when someone replied after the user (`--replied-after-username-p`)
+- [x] Implement "needs attention" and "watching" priority tiers.  These need the user's name (site config or `meta=userinfo`) and the reply tree, so the list fetch switches to `activity|excludesignatures` when the user is known.
 
-### Phase 5 — Archive awareness
+### Phase 5 — Archive awareness (reduced)
 
-- [ ] Implement `mediawiki-discussion-tools--check-archived`
-- [ ] Mark archived threads as `closed` in the list
-- [ ] Search archive pages for thread IDs that disappeared from live page
+The original design scanned every `Archive N` page's `discussiontoolspageinfo` to find one thread — O(archives) API calls against an unstable API, to locate a thread that is no longer actionable.  Dropped in favour of:
+
+- [x] Remember the thread IDs shown at the last refresh (`--known-ids`) and report vanished ones: `N disappeared (probably archived; s to search archives)`
+- [x] `s` (`mediawiki-discussion-tools-search`) covers the page and its archives with one prefixed `list=search` call
+- [x] Open a result with `RET` via `mediawiki-open`
+- [ ] Not doing: `--check-archived`, `closed` status for archived threads, per-archive thread lookup
 
 ## Configuration
 
@@ -483,10 +535,10 @@ Integration tests use `cl-letf` to mock `url-retrieve-synchronously` at the HTTP
 - Mock `action=edit&appendtext={{Resolved|...}}` success
 - Verify thread re-fetched after resolve and status updated to `resolved`
 
-**Archive detection**
-- Mock `action=query&list=search` returning archive page list
-- Mock archive page `discussiontoolspageinfo` containing a known thread ID
-- Verify `mediawiki-discussion-tools--check-archived` returns `t`
+**Vanished threads and search**
+- Refresh with one thread removed from the response → `--vanished` holds its ID and the message mentions "disappeared"
+- Mock `action=query&list=search` → verify the request is one prefixed search (`"QUERY prefix:PAGE"`) and that hits render with tags stripped and entities decoded
+- Empty result set → "No matches" rather than a blank buffer
 
 ### User Testing
 

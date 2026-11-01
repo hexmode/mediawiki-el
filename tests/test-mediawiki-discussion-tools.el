@@ -164,18 +164,119 @@
                        (lambda (a b)
                          (< (mediawiki-discussion-tools--thread-priority a)
                             (mediawiki-discussion-tools--thread-priority b))))))
-    (should (eq (alist-get 'status (nth 0 sorted)) 'unanswered))
-    (should (eq (alist-get 'status (nth 1 sorted)) 'active))
+    (should (eq (alist-get 'status (nth 0 sorted)) 'active))
+    (should (eq (alist-get 'status (nth 1 sorted)) 'unanswered))
     (should (eq (alist-get 'status (nth 2 sorted)) 'stale))))
 
 (ert-deftest test-mdt-priority-values ()
-  (let ((unanswered '((status . unanswered)))
-        (active     '((status . active)))
-        (stale      '((status . stale))))
-    (should (< (mediawiki-discussion-tools--thread-priority unanswered)
-               (mediawiki-discussion-tools--thread-priority active)))
+  "Tiers sort in the plan's order, with unknown statuses last."
+  (let ((active      '((status . active)))
+        (unanswered  '((status . unanswered)))
+        (resolved    '((status . resolved)))
+        (stale       '((status . stale)))
+        (unknown     '((status . something-else))))
     (should (< (mediawiki-discussion-tools--thread-priority active)
-               (mediawiki-discussion-tools--thread-priority stale)))))
+               (mediawiki-discussion-tools--thread-priority unanswered)))
+    (should (< (mediawiki-discussion-tools--thread-priority unanswered)
+               (mediawiki-discussion-tools--thread-priority resolved)))
+    (should (< (mediawiki-discussion-tools--thread-priority resolved)
+               (mediawiki-discussion-tools--thread-priority stale)))
+    (should (< (mediawiki-discussion-tools--thread-priority stale)
+               (mediawiki-discussion-tools--thread-priority unknown)))))
+
+(ert-deftest test-mdt-priority-reserves-attention-tiers ()
+  "Needs-attention and watching sort above everything else."
+  (let ((needs '((status . needs-attention)))
+        (watch '((status . watching)))
+        (active '((status . active))))
+    (should (< (mediawiki-discussion-tools--thread-priority needs)
+               (mediawiki-discussion-tools--thread-priority watch)))
+    (should (< (mediawiki-discussion-tools--thread-priority watch)
+               (mediawiki-discussion-tools--thread-priority active)))))
+
+(ert-deftest test-mdt-thread-contains-username ()
+  "Own comments are found at any depth in the reply tree."
+  (let ((thread '((replies . (((author . "Alice")
+                               (replies . (((author . "Bob")
+                                            (replies . (((author . "Me")))))))))))))
+    (should (mediawiki-discussion-tools--thread-contains-username-p
+             thread "Me"))
+    (should (mediawiki-discussion-tools--thread-contains-username-p
+             thread "Alice"))
+    (should-not (mediawiki-discussion-tools--thread-contains-username-p
+                 thread "Nobody"))
+    (should-not (mediawiki-discussion-tools--thread-contains-username-p
+                 thread nil))))
+
+(ert-deftest test-mdt-replied-after-username ()
+  "A reply after the user's comment counts; the user speaking last does not."
+  (let ((thread '((replies . (((author . "Alice")
+                               (replies . (((author . "Me")
+                                            (replies . (((author . "Bob")))))))))))))
+    (should (mediawiki-discussion-tools--replied-after-username-p
+             thread "Me")))
+  (let ((thread '((replies . (((author . "Alice")
+                               (replies . (((author . "Bob")
+                                            (replies . (((author . "Me")))))))))))))
+    (should-not (mediawiki-discussion-tools--replied-after-username-p
+                 thread "Me"))))
+
+(ert-deftest test-mdt-status-needs-attention ()
+  "Someone replied after the user's last comment."
+  (let ((thread '((id . "h-Mine-20260616005000")
+                  (commentCount . 3)
+                  (latestReply . ((timestamp . "2026-06-16T00:50:00Z")))
+                  (replies . (((author . "Me")
+                               (replies . (((author . "Other"))))))))))
+    (should (eq (mediawiki-discussion-tools--thread-status thread "Me")
+                'needs-attention))))
+
+(ert-deftest test-mdt-status-watching ()
+  "The user posted and nobody has answered yet."
+  (let ((thread '((id . "h-Mine-20260616005000")
+                  (commentCount . 2)
+                  (latestReply . ((timestamp . "2026-06-16T00:50:00Z")))
+                  (replies . (((author . "Someone")
+                               (replies . (((author . "Me"))))))))))
+    (should (eq (mediawiki-discussion-tools--thread-status thread "Me")
+                'watching))))
+
+(ert-deftest test-mdt-status-attention-needs-username ()
+  "Without a user name the attention tiers are not produced."
+  (let ((thread `((id . "h-Mine-20260616005000")
+                  (commentCount . 2)
+                  (latestReply . ((timestamp . ,(test-mdt--timestamp 3600))))
+                  (replies . (((author . "Me")
+                               (replies . (((author . "Other"))))))))))
+    (should (eq (mediawiki-discussion-tools--thread-status thread)
+                'active))))
+
+(ert-deftest test-mdt-fetch-uses-full-tree-when-user-known ()
+  "A known user forces full reply trees so the attention tiers work."
+  (test-mdt-with-site "TestSite"
+    (let ((flags nil)
+          (mock-json (test-mdt--make-response (list (test-mdt--thread-fresh)))))
+      (cl-letf (((symbol-function 'mediawiki-site-username)
+                 (lambda (&rest _) "Alice"))
+                ((symbol-function 'mediawiki-api-call)
+                 (lambda (_site action args)
+                   (when (string= action "discussiontoolspageinfo")
+                     (setq flags (cdr (assoc "threaditemsflags" args))))
+                   mock-json)))
+        (mediawiki-discussion-tools--fetch-threads "TestSite" "TestPage")
+        (should (string= flags "activity|excludesignatures"))))))
+
+(ert-deftest test-mdt-priority-stability ()
+  "Threads in the same tier keep their API order."
+  (let* ((threads '(((id . "a") (status . active))
+                    ((id . "b") (status . active))
+                    ((id . "c") (status . answered))))
+         (sorted (sort (copy-sequence threads)
+                       (lambda (a b)
+                         (< (mediawiki-discussion-tools--thread-priority a)
+                            (mediawiki-discussion-tools--thread-priority b))))))
+    (should (equal (mapcar (lambda (th) (alist-get 'id th)) sorted)
+                   '("a" "b" "c")))))
 
 ;;; ISO 8601 Parsing Tests
 
@@ -272,6 +373,12 @@
   (should (string-match "✓\\|\u2713"
                          (mediawiki-discussion-tools--status-icon 'resolved))))
 
+(ert-deftest test-mdt-status-icon-attention ()
+  (should (string= " !"
+                   (mediawiki-discussion-tools--status-icon 'needs-attention)))
+  (should (string= " *"
+                   (mediawiki-discussion-tools--status-icon 'watching))))
+
 ;;; Full Fetch Pipeline (mocked)
 
 (ert-deftest test-mdt-fetch-threads-mock ()
@@ -282,8 +389,8 @@
                  (lambda (sitename action args) mock-json)))
         (let ((threads (mediawiki-discussion-tools--fetch-threads "TestSite" "TestPage")))
           (should (= (length threads) 2))
-          (should (eq (alist-get 'status (car threads)) 'unanswered))
-          (should (eq (alist-get 'status (cadr threads)) 'active)))))))
+          (should (eq (alist-get 'status (car threads)) 'active))
+          (should (eq (alist-get 'status (cadr threads)) 'unanswered)))))))
 
 (ert-deftest test-mdt-fetch-threads-full-flag ()
   (test-mdt-with-site "TestSite"
@@ -291,7 +398,9 @@
           (mock-json (test-mdt--make-response (list (test-mdt--thread-fresh)))))
       (cl-letf (((symbol-function 'mediawiki-api-call)
                  (lambda (sitename action args)
-                   (setq called-flags (cdr (assoc "threaditemsflags" args)))
+                   (when (string= action "discussiontoolspageinfo")
+                     (setq called-flags
+                           (cdr (assoc "threaditemsflags" args))))
                    mock-json)))
          (mediawiki-discussion-tools--fetch-threads "TestSite" "TestPage")
          (should (string= called-flags "activity|noreplies"))
@@ -450,8 +559,8 @@
   "A nil tabulated-list-sort-key does not reorder entries."
   (let ((threads (list (test-mdt--mock-thread "h-A" "A")
                        (test-mdt--mock-thread "h-B" "B"))))
-    (setf (alist-get 'status (nth 0 threads)) 'active)
-    (setf (alist-get 'status (nth 1 threads)) 'unanswered)
+    (setf (alist-get 'status (nth 0 threads)) 'unanswered)
+    (setf (alist-get 'status (nth 1 threads)) 'active)
     (setq threads (sort threads (lambda (a b)
                     (< (mediawiki-discussion-tools--thread-priority a)
                        (mediawiki-discussion-tools--thread-priority b)))))
@@ -779,6 +888,385 @@ as a direct lookup into the TOC-ordered section list."
 (ert-deftest test-mdt-reply-prefix-empty ()
   "An empty section still yields a usable prefix."
   (should (string= ":" (mediawiki-discussion-tools--reply-prefix ""))))
+
+;;; Keybinding Tests
+
+(ert-deftest test-mdt-new-thread-keys-follow-gnus ()
+  "New thread is on `m' and `C' in both browser modes, not `N'."
+  (dolist (map (list mediawiki-discussion-tools-list-mode-map
+                     mediawiki-discussion-tools-view-mode-map))
+    (should (eq (lookup-key map (kbd "m"))
+                #'mediawiki-discussion-tools-new-thread))
+    (should (eq (lookup-key map (kbd "C"))
+                #'mediawiki-discussion-tools-new-thread))
+    (should-not (eq (lookup-key map (kbd "N"))
+                    #'mediawiki-discussion-tools-new-thread))))
+
+;;; New Thread Compose Tests
+
+(ert-deftest test-mdt-new-thread-opens-compose-buffer ()
+  "New-thread prompts only for the title and posts nothing yet."
+  (test-mdt-with-site "TestSite"
+    (let ((posted nil))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'read-string)
+                       (lambda (_prompt &rest _) "A new topic"))
+                      ((symbol-function 'pop-to-buffer)
+                       (lambda (buf &rest _) (set-buffer buf)))
+                      ((symbol-function 'mediawiki-api-call)
+                       (lambda (&rest _) (setq posted t))))
+              (with-temp-buffer
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "TestPage")
+                (mediawiki-discussion-tools-new-thread)))
+            (with-current-buffer "*MW New Thread*"
+              (should-not posted)
+              (should (eq mediawiki-discussion-tools--reply-kind 'new-thread))
+              (should (string= mediawiki-discussion-tools--reply-title
+                               "A new topic"))
+              (should (string= mediawiki-discussion-tools--reply-site
+                               "TestSite"))
+              (should (string= mediawiki-discussion-tools--reply-page
+                               "TestPage"))
+              (should mediawiki-discussion-tools-reply-mode)
+              (should (string-match-p
+                       (regexp-quote mediawiki-discussion-tools-reply-separator)
+                       (buffer-string)))))
+        (when (get-buffer "*MW New Thread*")
+          (kill-buffer "*MW New Thread*"))))))
+
+(ert-deftest test-mdt-new-thread-submit-posts-section-new ()
+  "Submitting a new-thread buffer posts an `action=edit&section=new'."
+  (test-mdt-with-site "TestSite"
+    (let ((posted-action nil)
+          (posted-args nil))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-site-get-token)
+                       (lambda (&rest _) "csrf-token"))
+                      ((symbol-function 'mediawiki-api-call)
+                       (lambda (_site action args)
+                         (setq posted-action action
+                               posted-args args)
+                         '((edit (("result" . "Success"))))))
+                      ((symbol-function 'quit-window)
+                       (lambda (&rest _) nil)))
+              (with-current-buffer (get-buffer-create "*MW Test Compose*")
+                (erase-buffer)
+                (insert "New thread: Topic\n"
+                        "Press C-c C-c to post, C-c C-k to cancel.\n"
+                        mediawiki-discussion-tools-reply-separator "\n\n"
+                        "Body line one\nBody line two\n")
+                (setq mediawiki-discussion-tools--reply-kind 'new-thread
+                      mediawiki-discussion-tools--reply-site "TestSite"
+                      mediawiki-discussion-tools--reply-page "TestPage"
+                      mediawiki-discussion-tools--reply-title "Topic"
+                      mediawiki-discussion-tools--reply-summary
+                      "/* Topic */ new thread")
+                (mediawiki-discussion-tools-reply-submit)))
+            (should (equal posted-action "edit"))
+            (should (equal (cdr (assoc "section" posted-args)) "new"))
+            (should (equal (cdr (assoc "sectiontitle" posted-args)) "Topic"))
+            (should (equal (cdr (assoc "text" posted-args))
+                           "Body line one\nBody line two ~~~~\n"))
+            (should (equal (cdr (assoc "summary" posted-args))
+                           "/* Topic */ new thread")))
+        (when (get-buffer "*MW Test Compose*")
+          (kill-buffer "*MW Test Compose*"))))))
+
+(ert-deftest test-mdt-new-thread-submit-empty-body ()
+  "An empty body is refused before the API is called."
+  (test-mdt-with-site "TestSite"
+    (let ((called nil))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-site-get-token)
+                       (lambda (&rest _) "csrf-token"))
+                      ((symbol-function 'mediawiki-api-call)
+                       (lambda (&rest _) (setq called t))))
+              (with-current-buffer (get-buffer-create "*MW Test Compose*")
+                (erase-buffer)
+                (insert mediawiki-discussion-tools-reply-separator "\n\n\n")
+                (setq mediawiki-discussion-tools--reply-kind 'new-thread
+                      mediawiki-discussion-tools--reply-site "TestSite"
+                      mediawiki-discussion-tools--reply-page "TestPage"
+                      mediawiki-discussion-tools--reply-title "Topic")
+                (should-error (mediawiki-discussion-tools-reply-submit)
+                              :type 'user-error)))
+            (should-not called))
+        (when (get-buffer "*MW Test Compose*")
+          (kill-buffer "*MW Test Compose*"))))))
+
+;;; Resolved Marker Tests
+
+(ert-deftest test-mdt-resolved-anchors-detects-template ()
+  "A section containing {{Resolved}} is returned; plain sections are not."
+  (test-mdt-with-site "TestSite"
+    (let* ((wikitext "intro\n== A ==\nq\n: {{Resolved|~~~~}}\n== B ==\nq2\n")
+           (a (string-match-p "== A ==" wikitext))
+           (b (string-match-p "== B ==" wikitext)))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (_site _action _args)
+                   `((parse . ((wikitext . ,wikitext)
+                               (sections . (((index . "1") (anchor . "A")
+                                             (byteoffset . ,a))
+                                            ((index . "2") (anchor . "B")
+                                             (byteoffset . ,b))))))))))
+        (should (equal (mediawiki-discussion-tools--resolved-anchors
+                        "TestSite" "TestPage")
+                       '("A")))))))
+
+(ert-deftest test-mdt-resolved-anchors-no-marker ()
+  "No resolved template means no anchors."
+  (test-mdt-with-site "TestSite"
+    (let ((wikitext "== A ==\nq\n: Answer ~~~~\n"))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (&rest _)
+                   `((parse . ((wikitext . ,wikitext)
+                               (sections . (((index . "1") (anchor . "A")
+                                             (byteoffset . 0))))))))))
+        (should-not (mediawiki-discussion-tools--resolved-anchors
+                     "TestSite" "TestPage"))))))
+
+(ert-deftest test-mdt-resolved-anchors-api-error ()
+  "A failing parse call does not break the thread list."
+  (test-mdt-with-site "TestSite"
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _) (error "boom"))))
+      (should-not (mediawiki-discussion-tools--resolved-anchors
+                   "TestSite" "TestPage")))))
+
+(ert-deftest test-mdt-fetch-marks-resolved ()
+  "The fetch pipeline marks a thread whose section has {{Resolved}}."
+  (test-mdt-with-site "TestSite"
+    (let* ((pageinfo (test-mdt--make-response
+                      (list (test-mdt--thread-json
+                             "h-Fresh_topic-20260616005000" "Fresh topic" 2
+                             "Alice" 2 (test-mdt--timestamp (* 86400))))))
+           (wikitext "== Fresh topic ==\nq\n: {{Resolved|~~~~}}\n")
+           (parse `((parse . ((wikitext . ,wikitext)
+                              (sections . (((index . "1")
+                                            (anchor . "Fresh_topic")
+                                            (byteoffset . 0)))))))))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (_site action _args)
+                   (if (string= action "parse") parse pageinfo))))
+        (let ((threads (mediawiki-discussion-tools--fetch-threads
+                        "TestSite" "TestPage")))
+          (should (eq (alist-get 'status (car threads)) 'resolved)))))))
+
+(ert-deftest test-mdt-resolve-posts-marker-with-summary ()
+  "Resolving appends {{Resolved|SUMMARY|~~~~}} to the thread's section."
+  (test-mdt-with-site "TestSite"
+    (let ((posted-args nil)
+          (tocdata (test-mdt--mock-tocdata
+                    '(((number . "4") (index . "1") (anchor . "Fresh_topic"))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-api-call)
+                       (lambda (_site action args)
+                         (cond
+                          ((and (string= action "parse") (assoc "section" args))
+                           '((parse . ((wikitext .
+                                        "== Fresh topic ==\n: Answer ~~~~\n")))))
+                          ((string= action "parse") tocdata)
+                          ((string= action "edit")
+                           (setq posted-args args)
+                           '((edit (("result" . "Success"))))))))
+                      ((symbol-function 'mediawiki-site-get-token)
+                       (lambda (&rest _) "csrf-token")))
+              (with-current-buffer (get-buffer-create "*MW Test List*")
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "TestPage"
+                      mediawiki-discussion-tools--threads
+                      (list '((id . "h-Fresh_topic-20260616005000")
+                              (title . "Fresh topic")
+                              (status . active)))
+                      mediawiki-discussion-tools--view-index 0)
+                (mediawiki-discussion-tools-resolve "Fixed by the answer above")))
+            (should posted-args)
+            (should (equal (cdr (assoc "section" posted-args)) 1))
+            (should (string-match-p
+                     "{{Resolved|Fixed by the answer above|~~~~}}"
+                     (cdr (assoc "appendtext" posted-args))))
+            (should (string-match-p
+                     "\\`\n:* {{Resolved"
+                     (cdr (assoc "appendtext" posted-args))))
+            (should (string-match-p "Marking as resolved"
+                                    (cdr (assoc "summary" posted-args)))))
+        (when (get-buffer "*MW Test List*")
+          (kill-buffer "*MW Test List*"))))))
+
+(ert-deftest test-mdt-resolve-posts-bare-marker ()
+  "An empty summary yields {{Resolved|~~~~}}."
+  (test-mdt-with-site "TestSite"
+    (let ((posted-args nil)
+          (tocdata (test-mdt--mock-tocdata
+                    '(((number . "4") (index . "1") (anchor . "Fresh_topic"))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-api-call)
+                       (lambda (_site action args)
+                         (cond
+                          ((and (string= action "parse") (assoc "section" args))
+                           '((parse . ((wikitext .
+                                        "== Fresh topic ==\nQuestion ~~~~\n")))))
+                          ((string= action "parse") tocdata)
+                          ((string= action "edit")
+                           (setq posted-args args)
+                           '((edit (("result" . "Success"))))))))
+                      ((symbol-function 'mediawiki-site-get-token)
+                       (lambda (&rest _) "csrf-token")))
+              (with-current-buffer (get-buffer-create "*MW Test List*")
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "TestPage"
+                      mediawiki-discussion-tools--threads
+                      (list '((id . "h-Fresh_topic-20260616005000")
+                              (title . "Fresh topic")
+                              (status . active)))
+                      mediawiki-discussion-tools--view-index 0)
+                (mediawiki-discussion-tools-resolve "")))
+            (should (string-match-p "{{Resolved|~~~~}}"
+                                    (cdr (assoc "appendtext" posted-args)))))
+        (when (get-buffer "*MW Test List*")
+          (kill-buffer "*MW Test List*"))))))
+
+(ert-deftest test-mdt-resolve-without-section-errors ()
+  "A thread with no matching TOC entry is refused before editing."
+  (test-mdt-with-site "TestSite"
+    (let ((edited nil)
+          (tocdata (test-mdt--mock-tocdata
+                    '(((number . "4") (index . "1") (anchor . "Other_topic"))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-api-call)
+                       (lambda (_site action _args)
+                         (if (string= action "edit")
+                             (setq edited t)
+                           tocdata)))
+                      ((symbol-function 'mediawiki-site-get-token)
+                       (lambda (&rest _) "csrf-token")))
+              (with-current-buffer (get-buffer-create "*MW Test List*")
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "TestPage"
+                      mediawiki-discussion-tools--threads
+                      (list '((id . "h-Fresh_topic-20260616005000")
+                              (title . "Fresh topic")
+                              (status . active)))
+                      mediawiki-discussion-tools--view-index 0)
+                (should-error (mediawiki-discussion-tools-resolve "nope")
+                              :type 'user-error)))
+            (should-not edited))
+        (when (get-buffer "*MW Test List*")
+          (kill-buffer "*MW Test List*"))))))
+
+;;; Vanished Thread Tests
+
+(ert-deftest test-mdt-vanished-ids ()
+  "IDs missing from the fresh list are reported."
+  (let ((threads '(((id . "h-Kept-1") (status . active))
+                   ((id . "h-New-2") (status . active)))))
+    (should (equal (mediawiki-discussion-tools--vanished-ids
+                    '("h-Gone-0" "h-Kept-1") threads)
+                   '("h-Gone-0")))
+    (should-not (mediawiki-discussion-tools--vanished-ids
+                 '("h-Kept-1") threads))))
+
+(ert-deftest test-mdt-refresh-reports-vanished ()
+  "Refreshing says how many threads disappeared and keeps their IDs."
+  (test-mdt-with-site "TestSite"
+    (let ((messages nil)
+          (mock-json (test-mdt--make-response (list (test-mdt--thread-fresh)))))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (_site action _args)
+                   (if (string= action "discussiontoolspageinfo")
+                       mock-json
+                     nil)))
+                ((symbol-function 'message)
+                 (lambda (fmt &rest args)
+                   (push (apply #'format fmt args) messages))))
+        (with-temp-buffer
+          (mediawiki-discussion-tools-list-mode)
+          (setq mediawiki-discussion-tools--sitename "TestSite"
+                mediawiki-discussion-tools--page "TestPage"
+                mediawiki-discussion-tools--known-ids
+                '("h-Gone-0" "h-Alice-fresh"))
+          (mediawiki-discussion-tools-refresh)
+          (should (equal mediawiki-discussion-tools--vanished '("h-Gone-0")))
+          (should (equal mediawiki-discussion-tools--known-ids
+                         '("h-Alice-fresh")))
+          (should (string-match-p "1 disappeared" (car messages)))
+          (should (string-match-p "s to search archives" (car messages))))))))
+
+;;; Search Tests
+
+(ert-deftest test-mdt-search-prefix-query ()
+  "One prefixed search covers the page and its archive subpages."
+  (test-mdt-with-site "TestSite"
+    (let ((sent nil)
+          (hits '(((title . "Project:Support_desk/Archive 24")))))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (_site action args)
+                   (when (string= action "query")
+                     (setq sent (cdr (assoc "srsearch" args))))
+                   `((query . ((search . ,hits)))))))
+        (should (equal (mediawiki-discussion-tools--search-results
+                        "TestSite" "Project:Support_desk" "fonts")
+                       hits))
+        (should (string= sent "fonts prefix:Project:Support_desk"))))))
+
+(ert-deftest test-mdt-search-renders-hits ()
+  "Hits are shown with tags stripped and entities decoded."
+  (test-mdt-with-site "TestSite"
+    (let ((hits '(((title . "Project:Support_desk/Archive 24")
+                   (snippet . "about <span class=\"searchmatch\">fonts</span> &amp; more")))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-api-call)
+                       (lambda (&rest _) `((query . ((search . ,hits))))))
+                      ((symbol-function 'pop-to-buffer)
+                       (lambda (buf &rest _) (set-buffer buf))))
+              (with-temp-buffer
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support_desk")
+                (mediawiki-discussion-tools-search "fonts")))
+            (with-current-buffer "*MW Discussion Search*"
+              (should (eq major-mode 'mediawiki-discussion-tools-search-mode))
+              (should (string-match-p "Archive 24" (buffer-string)))
+              (should (string-match-p "about fonts & more" (buffer-string)))
+              (goto-char (point-min))
+              (search-forward "Archive 24")
+              (should (equal (get-text-property (match-beginning 0)
+                                                'mediawiki-title)
+                             "Project:Support_desk/Archive 24"))))
+        (when (get-buffer "*MW Discussion Search*")
+          (kill-buffer "*MW Discussion Search*"))))))
+
+(ert-deftest test-mdt-search-no-hits ()
+  "An empty result set says so instead of showing a blank buffer."
+  (test-mdt-with-site "TestSite"
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'mediawiki-api-call)
+                     (lambda (&rest _) '((query . ((search))))))
+                    ((symbol-function 'pop-to-buffer)
+                     (lambda (buf &rest _) (set-buffer buf))))
+            (with-temp-buffer
+              (setq mediawiki-discussion-tools--sitename "TestSite"
+                    mediawiki-discussion-tools--page "Project:Support_desk")
+              (mediawiki-discussion-tools-search "nothing")))
+          (with-current-buffer "*MW Discussion Search*"
+            (should (string-match-p "No matches" (buffer-string)))))
+      (when (get-buffer "*MW Discussion Search*")
+        (kill-buffer "*MW Discussion Search*")))))
+
+(ert-deftest test-mdt-search-key-binding ()
+  "s searches from either browser buffer."
+  (dolist (map (list mediawiki-discussion-tools-list-mode-map
+                     mediawiki-discussion-tools-view-mode-map))
+    (should (eq (lookup-key map (kbd "s"))
+                #'mediawiki-discussion-tools-search))))
 
 (provide 'test-mediawiki-discussion-tools)
 

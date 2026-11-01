@@ -58,6 +58,7 @@
 (require 'cl-lib)
 
 (declare-function mediawiki-prompt-for-site "mediawiki-site")
+(declare-function mediawiki-open "mediawiki-page")
 
 ;;; Customization
 
@@ -101,9 +102,11 @@ The user's reply text starts on the line after the separator."
     (define-key map (kbd "RET") #'mediawiki-discussion-tools-view-thread-at-point)
     (define-key map (kbd "n")   #'mediawiki-discussion-tools-view-next)
     (define-key map (kbd "p")   #'mediawiki-discussion-tools-view-prev)
-    (define-key map (kbd "N")   #'mediawiki-discussion-tools-new-thread)
+    (define-key map (kbd "m")   #'mediawiki-discussion-tools-new-thread)
+    (define-key map (kbd "C")   #'mediawiki-discussion-tools-new-thread)
     (define-key map (kbd "r")   #'mediawiki-discussion-tools-reply)
     (define-key map (kbd "d")   #'mediawiki-discussion-tools-resolve)
+    (define-key map (kbd "s")   #'mediawiki-discussion-tools-search)
     map)
   "Keymap for `mediawiki-discussion-tools-list-mode'.")
 
@@ -114,9 +117,12 @@ The user's reply text starts on the line after the separator."
     (define-key map (kbd "g")   #'mediawiki-discussion-tools-view-refresh)
     (define-key map (kbd "RET") #'mediawiki-discussion-tools-view-close)
     (define-key map (kbd "r")   #'mediawiki-discussion-tools-reply)
+    (define-key map (kbd "m")   #'mediawiki-discussion-tools-new-thread)
+    (define-key map (kbd "C")   #'mediawiki-discussion-tools-new-thread)
     (define-key map (kbd "d")   #'mediawiki-discussion-tools-resolve)
     (define-key map (kbd "n")   #'mediawiki-discussion-tools-view-next)
     (define-key map (kbd "p")   #'mediawiki-discussion-tools-view-prev)
+    (define-key map (kbd "s")   #'mediawiki-discussion-tools-search)
     map)
   "Keymap for `mediawiki-discussion-tools-view-mode'.")
 
@@ -146,10 +152,51 @@ The user's reply text starts on the line after the separator."
 (defvar-local mediawiki-discussion-tools--last-viewed-id nil
   "Thread ID last shown in the view buffer, to avoid redundant updates.")
 
+(defvar-local mediawiki-discussion-tools--known-ids nil
+  "Thread IDs seen at the last successful refresh of this buffer.
+Used to notice threads that vanished, which usually means they were
+archived.")
+
+(defvar-local mediawiki-discussion-tools--vanished nil
+  "Thread IDs that disappeared since the previous refresh of this buffer.")
+
+(defvar mediawiki-discussion-tools--user-cache (make-hash-table :test #'equal)
+  "Cache of sitename to logged-in user name, or nil when anonymous.")
+
+;;; Current User
+
+(defun mediawiki-discussion-tools--userinfo (sitename)
+  "Ask SITENAME who is logged in, or nil when anonymous."
+  (ignore-errors
+    (let* ((result (mediawiki-api-call sitename "query"
+                     '(("meta" . "userinfo")
+                       ("formatversion" . "2"))))
+           (info (alist-get 'userinfo (alist-get 'query result))))
+      (unless (alist-get 'anon info)
+        (alist-get 'name info)))))
+
+(defun mediawiki-discussion-tools--current-user (sitename)
+  "Return the logged-in user name for SITENAME, or nil.
+Uses the configured site user first, then `action=query&meta=userinfo'
+once per session, which covers OAuth sessions with no stored name."
+  (let ((name (ignore-errors (mediawiki-site-username sitename))))
+    (if (and (stringp name) (not (string-empty-p name)))
+        name
+      (let ((cached (gethash sitename mediawiki-discussion-tools--user-cache
+                             'unknown)))
+        (if (not (eq cached 'unknown))
+            (unless (eq cached 'anonymous)
+              cached)
+          (let ((name (mediawiki-discussion-tools--userinfo sitename)))
+            (puthash sitename (or name 'anonymous)
+                     mediawiki-discussion-tools--user-cache)
+            name))))))
+
 ;;; Thread Parsing
 
-(defun mediawiki-discussion-tools--parse-threads (json)
+(defun mediawiki-discussion-tools--parse-threads (json &optional username)
   "Parse the discussiontoolspageinfo JSON response into thread records.
+USERNAME is the logged-in user, used to rank threads they took part in.
 Returns a list of thread alists, or signals an error if the response
 is malformed."
   (let ((items (alist-get 'threaditemshtml
@@ -181,19 +228,60 @@ is malformed."
                             (alist-get 'replies thread))
                       (cons 'status
                             (mediawiki-discussion-tools--thread-status
-                             thread))))))
+                             thread username))))))
 
 (defun mediawiki-discussion-tools--strip-tags (html)
   "Strip HTML tags from HTML string."
   (replace-regexp-in-string "<[^>]+>" "" html))
 
-(defun mediawiki-discussion-tools--thread-status (thread)
+(defun mediawiki-discussion-tools--flatten-replies (replies)
+  "Return REPLIES and their nested replies as a flat, depth-first list."
+  (cl-loop for reply in replies
+           append (cons reply
+                        (mediawiki-discussion-tools--flatten-replies
+                         (alist-get 'replies reply)))))
+
+(defun mediawiki-discussion-tools--thread-contains-username-p (thread username)
+  "Return t if USERNAME appears in any reply in THREAD."
+  (and username
+       (cl-some (lambda (reply)
+                  (equal (alist-get 'author reply) username))
+                (mediawiki-discussion-tools--flatten-replies
+                 (alist-get 'replies thread)))))
+
+(defun mediawiki-discussion-tools--replied-after-username-p (thread username)
+  "Return t if someone other than USERNAME posted after USERNAME did."
+  (when username
+    (let ((seen-user nil)
+          (answered nil))
+      (dolist (reply (mediawiki-discussion-tools--flatten-replies
+                      (alist-get 'replies thread)))
+        (let ((author (alist-get 'author reply)))
+          (cond
+           ((equal author username)
+            (setq seen-user t
+                  answered nil))
+           ((and seen-user (not (equal author username)))
+            (setq answered t)))))
+      answered)))
+
+(defun mediawiki-discussion-tools--thread-status (thread &optional username)
   "Determine the status of a THREAD record from the API.
-Returns one of: \\='active, \\='stale, \\='unanswered.
-Note: \\='resolved detection is deferred to Phase 2 (requires full HTML)."
+USERNAME is the logged-in user; when it is given, threads they took
+part in become \\='needs-attention (someone answered them) or
+\\='watching (nobody has answered yet).  Otherwise returns one of
+\\='active, \\='stale or \\='unanswered.  \\='resolved is applied later
+by `mediawiki-discussion-tools--mark-resolved'."
   (let ((comment-count (or (alist-get 'commentCount thread) 0))
-        (latest (alist-get 'latestReply thread)))
+        (latest (alist-get 'latestReply thread))
+        (mine (mediawiki-discussion-tools--thread-contains-username-p
+               thread username)))
     (cond
+     ((and mine
+           (mediawiki-discussion-tools--replied-after-username-p
+            thread username))
+      'needs-attention)
+     (mine 'watching)
      ((<= comment-count 1) 'unanswered)
      ((and latest
            (let* ((latest-ts (alist-get 'timestamp latest))
@@ -214,26 +302,83 @@ Note: \\='resolved detection is deferred to Phase 2 (requires full HTML)."
       (date-to-time timestamp)
     (error nil)))
 
+;;; Resolved Markers
+
+(defun mediawiki-discussion-tools--thread-anchor (thread)
+  "Return the section anchor embedded in THREAD's DiscussionTools ID.
+Thread IDs look like \"h-Abuse_filter_on_my_bot-20260616005000\" and
+the anchor is the part between \"h-\" and the trailing timestamp."
+  (when-let* ((id (alist-get 'id thread)))
+    (when (string-match "\\`h-\\(.+\\)-[0-9]+\\'" id)
+      (match-string 1 id))))
+
+(defun mediawiki-discussion-tools--resolved-anchors (sitename page)
+  "Return the anchors of PAGE sections that contain a resolved marker.
+Reads the wikitext once with `action=parse&prop=wikitext|sections' and
+matches `{{Resolved' inside each section's byte range.  Returns nil if
+the page cannot be fetched, so a failure never blocks the thread list."
+  (condition-case nil
+      (let* ((result (mediawiki-api-call sitename "parse"
+                       `(("page" . ,page)
+                         ("prop" . "wikitext|sections")
+                         ("formatversion" . "2"))))
+             (parse (alist-get 'parse result))
+             (wikitext (or (alist-get 'wikitext parse) ""))
+             (length (length wikitext)))
+        (cl-loop for (section . rest) on (alist-get 'sections parse)
+                 for start = (or (alist-get 'byteoffset section) 0)
+                 for end = (if rest
+                               (or (alist-get 'byteoffset (car rest)) length)
+                             length)
+                 for anchor = (alist-get 'anchor section)
+                 for text = (if (<= start length)
+                                (substring wikitext start (min end length))
+                              "")
+                 when (and anchor
+                           (string-match-p
+                            "{{[[:space:]]*[Rr]esolved[[:space:]]*[|}]" text))
+                 collect anchor))
+    (error nil)))
+
+(defun mediawiki-discussion-tools--mark-resolved (threads anchors)
+  "Set THREADS whose anchor is in ANCHORS to `resolved' status."
+  (dolist (thread threads threads)
+    (when (member (mediawiki-discussion-tools--thread-anchor thread) anchors)
+      (setf (alist-get 'status thread) 'resolved))))
+
 ;;; Priority Sorting
+
+(defconst mediawiki-discussion-tools--priority-tiers
+  '((needs-attention . 10)
+    (watching . 20)
+    (active . 30)
+    (unanswered . 40)
+    (resolved . 50)
+    (stale . 60))
+  "Ordered priority tiers for the thread list, lowest number first.
+The first two tiers are only produced when the logged-in user name is
+known; see `mediawiki-discussion-tools--thread-status'.")
 
 (defun mediawiki-discussion-tools--thread-priority (thread)
   "Return a numeric priority for THREAD (lower = higher priority).
-Phase 1 ordering: unanswered first, then active, then stale."
-  (pcase (alist-get 'status thread)
-    ('unanswered 10)
-    ('active 20)
-    (_ 30)))
+Order follows `mediawiki-discussion-tools--priority-tiers'.  Unknown
+statuses sort last."
+  (or (alist-get (alist-get 'status thread)
+                 mediawiki-discussion-tools--priority-tiers)
+      70))
 
 ;;; Table Entries
 
 (defun mediawiki-discussion-tools--status-icon (status)
   "Return a character icon for STATUS."
   (pcase status
-    ('unanswered " ?")
-    ('active     " \u00b7")   ; middle dot
-    ('stale      " ~")
-    ('resolved   " \u2713")   ; checkmark
-    (_           "  ")))
+    ('needs-attention " !")
+    ('watching        " *")
+    ('unanswered      " ?")
+    ('active          " \u00b7")   ; middle dot
+    ('stale           " ~")
+    ('resolved        " \u2713")   ; checkmark
+    (_                "  ")))
 
 (defun mediawiki-discussion-tools--format-relative-time (timestamp)
   "Format TIMESTAMP (ISO 8601 string) as a relative time string."
@@ -270,9 +415,12 @@ Phase 1 ordering: unanswered first, then active, then stale."
 (defun mediawiki-discussion-tools--fetch-threads (sitename page &optional full)
   "Fetch thread data from PAGE on SITENAME using the DiscussionTools API.
 If FULL is non-nil, fetch with full reply trees (no noreplies flag).
-Otherwise uses threaditemsflags=activity|noreplies for lightweight list.
-Returns a list of thread alists sorted by priority."
-  (let* ((flags (if full
+Reply trees are also fetched when the logged-in user is known, because
+the needs-attention and watching tiers need per-comment authors.
+Otherwise uses threaditemsflags=activity|noreplies for a lightweight
+list.  Returns a list of thread alists sorted by priority."
+  (let* ((username (mediawiki-discussion-tools--current-user sitename))
+         (flags (if (or full username)
                     "activity|excludesignatures"
                   "activity|noreplies"))
          (result (mediawiki-api-call sitename "discussiontoolspageinfo"
@@ -280,7 +428,9 @@ Returns a list of thread alists sorted by priority."
                      ("prop" . "threaditemshtml")
                      ("threaditemsflags" . ,flags)
                      ("formatversion" . "2"))))
-         (threads (mediawiki-discussion-tools--parse-threads result)))
+         (threads (mediawiki-discussion-tools--parse-threads result username)))
+    (mediawiki-discussion-tools--mark-resolved
+     threads (mediawiki-discussion-tools--resolved-anchors sitename page))
     (when mediawiki-discussion-tools-max-threads
       (setq threads (cl-subseq threads 0 mediawiki-discussion-tools-max-threads)))
     (sort threads
@@ -311,25 +461,52 @@ then stale."
       (mediawiki-discussion-tools-list-mode)
       (setq mediawiki-discussion-tools--threads threads
             mediawiki-discussion-tools--sitename site
-            mediawiki-discussion-tools--page page)
+            mediawiki-discussion-tools--page page
+            mediawiki-discussion-tools--known-ids
+            (mapcar (lambda (thread) (alist-get 'id thread)) threads)
+            mediawiki-discussion-tools--vanished nil)
       (mediawiki-discussion-tools--refresh-table)
       (pop-to-buffer (current-buffer)))))
 
 ;;; Interactive Commands
 
+(defun mediawiki-discussion-tools--vanished-ids (old-ids threads)
+  "Return the IDs in OLD-IDS that are absent from THREADS."
+  (let ((new-ids (mapcar (lambda (thread) (alist-get 'id thread)) threads)))
+    (cl-remove-if (lambda (id) (member id new-ids)) old-ids)))
+
+(defun mediawiki-discussion-tools--report-refresh (threads vanished)
+  "Message the result of a refresh of THREADS.
+VANISHED lists threads that were in the list before and are not now,
+which normally means they were archived."
+  (message "Discussion refreshed (%d thread%s)%s"
+           (length threads)
+           (if (= 1 (length threads)) "" "s")
+           (if vanished
+               (format "; %d disappeared (probably archived — s to search archives)"
+                       (length vanished))
+             "")))
+
 (defun mediawiki-discussion-tools-refresh ()
-  "Re-fetch the thread list and refresh the table display."
+  "Re-fetch the thread list and refresh the table display.
+Threads that vanished since the last refresh are noted, since that is
+what archiving looks like from the client side."
   (interactive)
   (let ((site mediawiki-discussion-tools--sitename)
         (page mediawiki-discussion-tools--page))
     (unless (and site page)
       (user-error "No site or page set for this buffer"))
-    (let ((threads (mediawiki-discussion-tools--fetch-threads site page)))
+    (let* ((threads (mediawiki-discussion-tools--fetch-threads site page))
+           (vanished (mediawiki-discussion-tools--vanished-ids
+                      mediawiki-discussion-tools--known-ids threads)))
       (unless threads
         (error "No threads found on %s" page))
-      (setq mediawiki-discussion-tools--threads threads)
+      (setq mediawiki-discussion-tools--threads threads
+            mediawiki-discussion-tools--known-ids
+            (mapcar (lambda (thread) (alist-get 'id thread)) threads)
+            mediawiki-discussion-tools--vanished vanished)
       (mediawiki-discussion-tools--refresh-table)
-      (message "Discussion refreshed (%d threads)" (length threads)))))
+      (mediawiki-discussion-tools--report-refresh threads vanished))))
 
 ;;; Thread Viewing
 
@@ -495,6 +672,89 @@ Intended for `post-command-hook'."
               (mediawiki-discussion-tools--fetch-threads site page t))))
     (mediawiki-discussion-tools--show-thread 0)))
 
+;;; Searching
+
+(defun mediawiki-discussion-tools--decode-entities (text)
+  "Replace the HTML entities MediaWiki search snippets contain."
+  (let ((text (or text "")))
+    (dolist (pair '(("&quot;" . "\"") ("&#039;" . "'") ("&lt;" . "<")
+                    ("&gt;" . ">") ("&nbsp;" . " ") ("&amp;" . "&"))
+                  text)
+      (setq text (replace-regexp-in-string
+                  (regexp-quote (car pair)) (cdr pair) text t t)))))
+
+(defun mediawiki-discussion-tools--search-results (sitename page query)
+  "Return search hits for QUERY under PAGE's prefix on SITENAME.
+The prefix also matches archive subpages such as
+\"Project:Support desk/Archive 24\", so one search covers both the
+live page and its archives."
+  (let* ((result (mediawiki-api-call sitename "query"
+                   `(("list" . "search")
+                     ("srsearch" .
+                      ,(string-trim (concat query " prefix:" page)))
+                     ("srlimit" . "50")
+                     ("formatversion" . "2")))))
+    (alist-get 'search (alist-get 'query result))))
+
+(defvar mediawiki-discussion-tools-search-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "RET") #'mediawiki-discussion-tools-search-open)
+    (define-key map (kbd "q")   #'quit-window)
+    map)
+  "Keymap for `mediawiki-discussion-tools-search-mode'.")
+
+(define-derived-mode mediawiki-discussion-tools-search-mode special-mode "MW Search"
+  "Major mode for discussion page search results.
+Press \\[mediawiki-discussion-tools-search-open] to open the page at point."
+  (setq buffer-read-only t))
+
+(defvar-local mediawiki-discussion-tools--search-site nil
+  "Site name the search results belong to.")
+
+(defun mediawiki-discussion-tools-search-open ()
+  "Open the search result at point."
+  (interactive)
+  (let ((title (get-text-property (point) 'mediawiki-title)))
+    (unless title
+      (user-error "No search result at point"))
+    (let ((mediawiki-site mediawiki-discussion-tools--search-site))
+      (mediawiki-open title))))
+
+(defun mediawiki-discussion-tools-search (query)
+  "Search the current discussion page and its archives for QUERY.
+With an empty QUERY this lists every page under the discussion page's
+prefix, which is the quickest way to find the archive pages."
+  (interactive
+   (list (read-string "Search threads (empty lists subpages): ")))
+  (let ((site mediawiki-discussion-tools--sitename)
+        (page mediawiki-discussion-tools--page))
+    (unless (and site page)
+      (user-error "No site or page set for this buffer"))
+    (let ((hits (mediawiki-discussion-tools--search-results site page query))
+          (buf (get-buffer-create "*MW Discussion Search*")))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (format "Search %S under %s on %s:\n\n" query page site))
+          (if (null hits)
+              (insert "No matches.\n")
+            (dolist (hit hits)
+              (insert (propertize (or (alist-get 'title hit) "")
+                                  'face 'bold
+                                  'mediawiki-title (alist-get 'title hit))
+                      "\n")
+              (when-let* ((snippet (mediawiki-discussion-tools--decode-entities
+                                    (mediawiki-discussion-tools--strip-tags
+                                     (or (alist-get 'snippet hit) "")))))
+                (unless (string-empty-p (string-trim snippet))
+                  (insert "  " (string-trim snippet) "\n")))
+              (insert "\n")))
+          (goto-char (point-min)))
+        (mediawiki-discussion-tools-search-mode)
+        (setq mediawiki-discussion-tools--search-site site))
+      (pop-to-buffer buf))))
+
 ;;; Posting
 
 (defvar mediawiki-discussion-tools-reply-mode-map
@@ -510,6 +770,10 @@ Intended for `post-command-hook'."
 (defvar-local mediawiki-discussion-tools--reply-indent ":"
   "Indentation prefix for the pending reply, matching the comment it answers.")
 (defvar-local mediawiki-discussion-tools--reply-summary nil)
+(defvar-local mediawiki-discussion-tools--reply-kind 'reply
+  "What the compose buffer is for: `reply' or `new-thread'.")
+(defvar-local mediawiki-discussion-tools--reply-title nil
+  "Thread title being created in a `new-thread' compose buffer.")
 
 (define-minor-mode mediawiki-discussion-tools-reply-mode
   "Minor mode for composing a reply.
@@ -537,16 +801,9 @@ sections (those without an index field).  Each entry is
 (defun mediawiki-discussion-tools--section-for-thread (thread sitename page)
   "Return the section number for THREAD on PAGE at SITENAME.
 Matches the thread's ID to section anchors from the TOC."
-  (let* ((thread-id (alist-get 'id thread))
-         ;; Thread IDs from discussiontoolspageinfo look like
-         ;; h-Abuse_filter_on_my_bot-20260616005000
-         ;; Section anchors look like Abuse_filter_on_my_bot
-         ;; Extract the anchor from the thread ID
-         (anchor (when (string-match "^h-\\(.+\\)-[0-9]+$" thread-id)
-                   (match-string 1 thread-id)))
-         (nums (mediawiki-discussion-tools--section-numbers sitename page)))
-    (when anchor
-      (alist-get anchor nums nil nil #'string=))))
+  (when-let* ((anchor (mediawiki-discussion-tools--thread-anchor thread)))
+    (alist-get anchor (mediawiki-discussion-tools--section-numbers sitename page)
+               nil nil #'string=)))
 
 ;;; Reply Indentation
 
@@ -625,9 +882,11 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
           (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
           (insert mediawiki-discussion-tools-reply-separator "\n\n")
           (mediawiki-discussion-tools-reply-mode 1)
-          (setq mediawiki-discussion-tools--reply-site site
+          (setq mediawiki-discussion-tools--reply-kind 'reply
+                mediawiki-discussion-tools--reply-site site
                 mediawiki-discussion-tools--reply-page page
                 mediawiki-discussion-tools--reply-section section
+                mediawiki-discussion-tools--reply-title nil
                 mediawiki-discussion-tools--reply-indent
                   (mediawiki-discussion-tools--reply-indent site page section)
                 mediawiki-discussion-tools--reply-summary
@@ -635,22 +894,26 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
         (pop-to-buffer buf)
         (goto-char (point-max))))))
 
-(defun mediawiki-discussion-tools-reply-submit ()
-  "Post the reply in the current reply buffer."
-  (interactive)
+(defun mediawiki-discussion-tools--compose-body ()
+  "Return the user text in the current compose buffer.
+That is everything after the separator line, or the whole buffer when
+the separator is missing."
+  (save-excursion
+    (goto-char (point-min))
+    (if (search-forward mediawiki-discussion-tools-reply-separator nil t)
+        (progn
+          (forward-line 1)
+          (skip-chars-forward "\n")
+          (buffer-substring-no-properties (point) (point-max)))
+      (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defun mediawiki-discussion-tools--submit-reply ()
+  "Post the reply described by the current compose buffer."
   (let* ((site mediawiki-discussion-tools--reply-site)
          (page mediawiki-discussion-tools--reply-page)
          (section mediawiki-discussion-tools--reply-section)
          (summary mediawiki-discussion-tools--reply-summary)
-         (sep mediawiki-discussion-tools-reply-separator)
-         (body (save-excursion
-                  (goto-char (point-min))
-                  (if (search-forward sep nil t)
-                      (progn
-                        (forward-line 1)
-                        (skip-chars-forward "\n")
-                        (buffer-substring-no-properties (point) (point-max)))
-                    (buffer-substring-no-properties (point-min) (point-max)))))
+         (body (mediawiki-discussion-tools--compose-body))
          (indent mediawiki-discussion-tools--reply-indent)
          (indented (mediawiki-discussion-tools--indent-reply body indent))
          (reply-text (format "\n%s\n%s %s\n"
@@ -674,41 +937,147 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
             (mediawiki-discussion-tools-view-refresh))
         (error "Reply failed: %S" result)))))
 
-(defun mediawiki-discussion-tools-reply-cancel ()
-  "Cancel the reply and close the buffer."
-  (interactive)
-  (quit-window))
-
-(defun mediawiki-discussion-tools-new-thread ()
-  "Create a new discussion thread on the current page."
-  (interactive)
-  (let* ((title (read-string "Thread title: "))
-         (body (read-string "Body: "))
-         (site mediawiki-discussion-tools--sitename)
-         (page mediawiki-discussion-tools--page)
-         (text (format "%s %s\n" body mediawiki-discussion-tools-signature))
+(defun mediawiki-discussion-tools--submit-new-thread ()
+  "Post the new thread described by the current compose buffer."
+  (let* ((site mediawiki-discussion-tools--reply-site)
+         (page mediawiki-discussion-tools--reply-page)
+         (title mediawiki-discussion-tools--reply-title)
+         (summary mediawiki-discussion-tools--reply-summary)
+         (body (string-trim (mediawiki-discussion-tools--compose-body)))
          (token (mediawiki-site-get-token site "csrf")))
+    (when (string-empty-p body)
+      (user-error "Thread body is empty"))
     (unless token
       (error "No CSRF token — authenticate first"))
     (let ((result (mediawiki-api-call site "edit"
                     `(("title" . ,page)
                       ("section" . "new")
                       ("sectiontitle" . ,title)
-                      ("text" . ,text)
-                      ("summary" . ,(format "/* %s */ new thread" title))
+                      ("text" . ,(format "%s %s\n"
+                                         body
+                                         mediawiki-discussion-tools-signature))
+                      ("summary" . ,summary)
                       ("token" . ,token)
                       ("formatversion" . "2")))))
-      (when (alist-get 'edit result)
-        (message "Thread created")
-        (mediawiki-discussion-tools-refresh)))))
+      (if (alist-get 'edit result)
+          (progn
+            (message "Thread created")
+            (quit-window)
+            (mediawiki-discussion-tools--refresh-buffers page))
+        (error "New thread failed: %S" result)))))
 
-;;; Stub (Phase 4)
-
-(defun mediawiki-discussion-tools-resolve ()
-  "Mark the thread at point as resolved.
-Not yet implemented."
+(defun mediawiki-discussion-tools-reply-submit ()
+  "Post the text in the current compose buffer.
+Posts a reply or a new thread, depending on the command that opened
+the buffer."
   (interactive)
-  (user-error "Resolve: not yet implemented (Phase 4)"))
+  (if (eq mediawiki-discussion-tools--reply-kind 'new-thread)
+      (mediawiki-discussion-tools--submit-new-thread)
+    (mediawiki-discussion-tools--submit-reply)))
+
+(defun mediawiki-discussion-tools-reply-cancel ()
+  "Cancel the reply and close the buffer."
+  (interactive)
+  (quit-window))
+
+(defun mediawiki-discussion-tools-new-thread ()
+  "Compose a new discussion thread on the current page.
+Prompts for the title, then opens a buffer for the body.
+Use \\[mediawiki-discussion-tools-reply-submit] to post,
+\\[mediawiki-discussion-tools-reply-cancel] to abort."
+  (interactive)
+  (let ((title (string-trim (read-string "Thread title: ")))
+        (site mediawiki-discussion-tools--sitename)
+        (page mediawiki-discussion-tools--page))
+    (when (string-empty-p title)
+      (user-error "Thread title cannot be empty"))
+    (unless (and site page)
+      (user-error "No site or page configured"))
+    (let ((buf (get-buffer-create "*MW New Thread*")))
+      (with-current-buffer buf
+        (erase-buffer)
+        (insert "New thread: " title "\n")
+        (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
+        (insert mediawiki-discussion-tools-reply-separator "\n\n")
+        (mediawiki-discussion-tools-reply-mode 1)
+        (setq mediawiki-discussion-tools--reply-kind 'new-thread
+              mediawiki-discussion-tools--reply-site site
+              mediawiki-discussion-tools--reply-page page
+              mediawiki-discussion-tools--reply-section nil
+              mediawiki-discussion-tools--reply-title title
+              mediawiki-discussion-tools--reply-summary
+              (format "/* %s */ new thread" title)))
+      (pop-to-buffer buf)
+      (goto-char (point-max)))))
+
+;;; Resolving
+
+(defun mediawiki-discussion-tools--refresh-buffers (page)
+  "Refresh the thread list for PAGE and the thread view if it is open."
+  (when-let* ((list-buf (get-buffer (format "*MW Discussion: %s*" page))))
+    (with-current-buffer list-buf
+      (mediawiki-discussion-tools-refresh)))
+  (when (get-buffer-window mediawiki-discussion-tools--view-buffer-name)
+    (with-current-buffer mediawiki-discussion-tools--view-buffer-name
+      (mediawiki-discussion-tools-view-refresh))))
+
+(defun mediawiki-discussion-tools-resolve (&optional summary)
+  "Mark the thread at point as resolved.
+Prompts for an optional SUMMARY, which is placed before the signature
+in the resolution comment, so it can point at the reply that answered
+the question.  With no SUMMARY, only the marker and signature are
+appended."
+  (interactive
+   (list (read-string "Resolution summary (optional): ")))
+  (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                       (current-buffer)))
+         (site (buffer-local-value 'mediawiki-discussion-tools--sitename
+                                   list-buf))
+         (page (buffer-local-value 'mediawiki-discussion-tools--page list-buf))
+         (threads (buffer-local-value 'mediawiki-discussion-tools--threads
+                                      list-buf))
+         (index (or (buffer-local-value 'mediawiki-discussion-tools--view-index
+                                        list-buf)
+                    (car (with-current-buffer list-buf
+                           (mediawiki-discussion-tools--thread-at-point)))))
+         (thread (when (and index threads (< index (length threads)))
+                   (nth index threads))))
+    (unless thread
+      (user-error "No thread selected — move point to a thread first"))
+    (unless (and site page)
+      (user-error "No site or page configured"))
+    (let ((section (mediawiki-discussion-tools--section-for-thread
+                    thread site page)))
+      (unless section
+        (user-error "Cannot determine section number for thread: %s"
+                    (or (alist-get 'id thread) "unknown")))
+      (let* ((summary (string-trim (or summary "")))
+             (marker (if (string-empty-p summary)
+                         (format "{{Resolved|%s}}"
+                                 mediawiki-discussion-tools-signature)
+                       (format "{{Resolved|%s|%s}}"
+                               summary mediawiki-discussion-tools-signature)))
+             (text (format "\n%s %s\n"
+                           (mediawiki-discussion-tools--reply-indent
+                            site page section)
+                           marker))
+             (token (mediawiki-site-get-token site "csrf")))
+        (unless token
+          (error "No CSRF token — authenticate first"))
+        (let ((result (mediawiki-api-call site "edit"
+                        `(("title" . ,page)
+                          ("section" . ,section)
+                          ("appendtext" . ,text)
+                          ("summary" .
+                           ,(format "/* %s */ Marking as resolved"
+                                    (alist-get 'title thread)))
+                          ("token" . ,token)
+                          ("formatversion" . "2")))))
+          (if (alist-get 'edit result)
+              (progn
+                (message "Thread marked resolved")
+                (mediawiki-discussion-tools--refresh-buffers page))
+            (error "Resolve failed: %S" result)))))))
 
 ;;; Mode Definition
 
