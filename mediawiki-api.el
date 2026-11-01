@@ -62,6 +62,19 @@ This function is kept for backward compatibility and does nothing."
 
 ;;; Core API Call Function
 
+(defun mediawiki-api--stringify-args (args)
+  "Return ARGS with every parameter value converted to a string.
+Callers routinely pass integers (revision IDs, limits, namespaces)
+and the values reach `mm-url-encode-multipart-form-data' and
+`mm-url-encode-www-form-urlencoded' unchanged, both of which expect
+strings.  See issue #62."
+  (mapcar (lambda (pair)
+            (cons (car pair)
+                  (if (stringp (cdr pair))
+                      (cdr pair)
+                    (format "%s" (cdr pair)))))
+          (delq nil args)))
+
 (defun mediawiki-api-call (sitename action &optional args)
   "Wrapper for making an API call to SITENAME.
 ACTION is the API action.  ARGS is a list of arguments.
@@ -71,48 +84,42 @@ If OAuth 2.0 is configured for SITENAME (via `mediawiki-oauth-configured-p'),
 an Authorization: Bearer header is automatically added to the request."
   (when (null sitename)
     (error "No sitename given!"))
-  (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
-                          (mm-url-encode-multipart-form-data
-                            (delq nil args) "==")))
-  (let* ((headers
-           (when (and (fboundp 'mediawiki-oauth-configured-p)
+  (let* ((string-args (mediawiki-api--stringify-args args))
+         (headers
+          (when (and (fboundp 'mediawiki-oauth-configured-p)
                      (mediawiki-oauth-configured-p sitename))
-             (list (mediawiki-oauth-make-auth-header
-                    (mediawiki-oauth-get-access-token sitename)))))
-          ;; Stringify all param values — url-http-post passes them through
-          ;; mm-url-form-encode-xwfu which expects strings, not integers.
-          (string-args (mapcar (lambda (p)
-                                 (cons (car p)
-                                       (if (stringp (cdr p))
-                                           (cdr p)
-                                         (format "%s" (cdr p)))))
-                               (delq nil args)))
-          (raw (url-http-post (mediawiki-make-api-url sitename)
-                (append string-args (list (cons "format" "json")
-                                      (cons "action" action)))
-                nil headers))
-          (result (condition-case _err
-                    (json-parse-string raw
-                      :object-type 'alist
-                      :array-type 'list
-                      :null-object nil
-                      :false-object nil)
-                    (error
-                     (error "There was an error parsing the result of the API call")))))
-    ;; result is nil for empty {} responses (e.g. action=logout) — valid, not an error
-    ;; Handle errors
-    (when-let* ((err (alist-get 'error result)))
-      (error "(%s) %s"
-        (alist-get 'code err)
-        (alist-get 'info err)))
-    ;; Handle warnings (log via message, do not error)
-    (when-let* ((warnings (alist-get 'warnings result)))
-      (dolist (w warnings)
-        (let* ((label (car w))
-               (info (alist-get 'warnings (cdr w))))
-          (when info
-            (message "Warning (%s) %s" label info)))))
-    result))
+            (list (mediawiki-oauth-make-auth-header
+                   (mediawiki-oauth-get-access-token sitename))))))
+    ;; The debug line encodes the arguments, so it needs the stringified ones.
+    (mediawiki-debug-line (format "\n\n----\nFor %s (action=%s):\n\n %s\n" sitename action
+                            (mm-url-encode-multipart-form-data
+                              string-args "==")))
+    (let* ((raw (url-http-post (mediawiki-make-api-url sitename)
+                  (append string-args (list (cons "format" "json")
+                                        (cons "action" action)))
+                  nil headers))
+           (result (condition-case _err
+                     (json-parse-string raw
+                       :object-type 'alist
+                       :array-type 'list
+                       :null-object nil
+                       :false-object nil)
+                     (error
+                      (error "There was an error parsing the result of the API call")))))
+      ;; result is nil for empty {} responses (e.g. action=logout) — valid, not an error
+      ;; Handle errors
+      (when-let* ((err (alist-get 'error result)))
+        (error "(%s) %s"
+          (alist-get 'code err)
+          (alist-get 'info err)))
+      ;; Handle warnings (log via message, do not error)
+      (when-let* ((warnings (alist-get 'warnings result)))
+        (dolist (w warnings)
+          (let* ((label (car w))
+                 (info (alist-get 'warnings (cdr w))))
+            (when info
+              (message "Warning (%s) %s" label info)))))
+      result)))
 
 ;;; Parameter Formatting
 
@@ -418,7 +425,8 @@ Returns nil."
          (all-params (append params
                              (list (cons "format" "json")
                                    (cons "action" action))))
-         (data (mm-url-encode-www-form-urlencoded all-params)))
+         (data (mm-url-encode-www-form-urlencoded
+                (mediawiki-api--stringify-args all-params))))
     (let ((url-request-method "POST")
           (url-request-extra-headers
            '(("Content-Type" . "application/x-www-form-urlencoded")))

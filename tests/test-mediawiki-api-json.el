@@ -204,6 +204,52 @@ JSON: {\"curtimestamp\":\"2024-01-01T00:00:01Z\",\"query\":{\"pages\":{\"1\":{
         (mediawiki-do-login "TestSite" "testuser" "wrongpass")
       (error (should (string-match-p "Wrong password" (error-message-string err)))))))
 
+;;; 12. Non-string parameter values (issue #62)
+
+(ert-deftest test-mw-api-call-stringifies-integer-args ()
+  "Mediawiki-api-call accepts integer parameter values (issue #62).
+The debug log encodes the parameters with
+`mm-url-encode-multipart-form-data', which requires strings, so
+non-string values have to be converted before that call."
+  (let (sent)
+    (cl-letf (((symbol-function 'url-http-post)
+               (lambda (_url args &optional _multipart _headers)
+                 (setq sent args)
+                 "{\"query\":{\"pages\":{\"1\":{\"revisions\":[]}}}}"))
+              ((symbol-function 'mediawiki-make-api-url)
+               (lambda (&optional _site) "https://example.com/w/api.php")))
+      (mediawiki-api-call "TestSite" "query"
+                          (list (cons "rvstartid" 1382181600)
+                                (cons "rvlimit" 50))))
+    (should (equal "1382181600" (cdr (assoc "rvstartid" sent))))
+    (should (equal "50" (cdr (assoc "rvlimit" sent))))))
+
+(ert-deftest test-mw-get-revision-content-integer-revid ()
+  "Integer revision IDs work with `mediawiki-api-get-revision-content'.
+`mediawiki-history--revision-at-point' hands out the revid as an
+integer, which is what `mediawiki-history-view-revision' passes on."
+  (cl-letf (((symbol-function 'url-http-post)
+             (lambda (_url _args &optional _multipart _headers)
+               "{\"query\":{\"pages\":{\"1\":{\"revisions\":[{\"slots\":{\"main\":{\"*\":\"hello\"}}}]}}}}"))
+            ((symbol-function 'mediawiki-make-api-url)
+             (lambda (&optional _site) "https://example.com/w/api.php")))
+    (should (equal "hello" (mediawiki-api-get-revision-content
+                            "TestSite" "Test Page" 1382181600)))))
+
+(ert-deftest test-mw-api-call-async-stringifies-integer-args ()
+  "`mediawiki-api-call-async' accepts integer parameter values (issue #62)."
+  (let (data)
+    (cl-letf (((symbol-function 'url-retrieve)
+               (lambda (_url _callback &rest _)
+                 (setq data url-request-data)
+                 nil))
+              ((symbol-function 'mediawiki-make-api-url)
+               (lambda (&optional _site) "https://example.com/w/api.php")))
+      (mediawiki-api-call-async "TestSite" "edit"
+                                (list (cons "revid" 1382181600))
+                                #'ignore))
+    (should (string-match-p "revid=1382181600" data))))
+
 (provide 'test-mediawiki-api-xml)
 
 ;;; test-mediawiki-api-xml.el ends here

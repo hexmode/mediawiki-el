@@ -63,14 +63,22 @@
                     author id title comment-count author-count ts latest oldest)
             "}")))
 
+(defun test-mdt--timestamp (seconds-ago)
+  "Return an ISO 8601 timestamp SECONDS-AGO seconds before now."
+  (format-time-string "%Y-%m-%dT%H:%M:%SZ"
+                      (time-subtract nil seconds-ago) t))
+
 (defun test-mdt--thread-fresh ()
-  (test-mdt--thread-json "h-Alice-fresh" "Fresh topic <b>with HTML</b>" 3 "Alice" 2 "2026-06-28T10:00:00Z"))
+  (test-mdt--thread-json "h-Alice-fresh" "Fresh topic <b>with HTML</b>" 3 "Alice" 2
+                         (test-mdt--timestamp (* 2 86400))))
 
 (defun test-mdt--thread-stale ()
-  (test-mdt--thread-json "h-Bob-stale" "Stale topic" 2 "Bob" 2 "2026-01-01T00:00:00Z"))
+  (test-mdt--thread-json "h-Bob-stale" "Stale topic" 2 "Bob" 2
+                         (test-mdt--timestamp (* 60 86400))))
 
 (defun test-mdt--thread-unanswered ()
-  (test-mdt--thread-json "h-Carol-unanswered" "Unanswered topic" 1 "Carol" 1 "2026-06-28T09:00:00Z"))
+  (test-mdt--thread-json "h-Carol-unanswered" "Unanswered topic" 1 "Carol" 1
+                         (test-mdt--timestamp (* 3 3600))))
 
 (defun test-mdt--make-response (thread-jsons)
   "Build a full API response JSON from THREAD-JSONS."
@@ -174,7 +182,9 @@
 (ert-deftest test-mdt-parse-iso8601-valid ()
   (let ((result (mediawiki-discussion-tools--parse-iso8601 "2026-06-28T10:00:00Z")))
     (should result)
-    (should (integerp (car result)))))
+    ;; `date-to-time' returns a time value list on older Emacsen and raw
+    ;; ticks on newer ones; either way it must work as a time value.
+    (should (time-less-p result (current-time)))))
 
 (ert-deftest test-mdt-parse-iso8601-invalid ()
   (should-not (mediawiki-discussion-tools--parse-iso8601 "not-a-date")))

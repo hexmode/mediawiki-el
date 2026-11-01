@@ -19,6 +19,10 @@ jobs:
 
     name: Emacs ${{ matrix.emacs-version }}
 
+    env:
+      # Dedicated prefix so the cache contains nothing but this Emacs build.
+      EMACS_PREFIX: /opt/emacs-${{ matrix.emacs-version }}
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -27,8 +31,9 @@ jobs:
         id: cache-emacs
         uses: actions/cache@v5
         with:
-          path: /usr/local
-          key: emacs-${{ matrix.emacs-version }}-nativecomp-${{ runner.os }}
+          path: ${{ env.EMACS_PREFIX }}
+          # Bump the key whenever the install layout or configure flags change.
+          key: emacs-${{ matrix.emacs-version }}-nativecomp-opt-${{ runner.os }}
 
       - name: Install Emacs
         if: steps.cache-emacs.outputs.cache-hit != 'true'
@@ -42,16 +47,21 @@ jobs:
             libsqlite3-dev libtree-sitter-dev libgccjit-14-dev \
             libgif-dev libxpm-dev libjpeg-dev libtiff-dev \
             texinfo
+          sudo mkdir -p "${EMACS_PREFIX}"
+          sudo chown -R "$(id -u):$(id -g)" "${EMACS_PREFIX}"
           cd /tmp
           wget -q "https://ftp.gnu.org/gnu/emacs/emacs-${EMACS_VERSION}.tar.xz"
           tar xf "emacs-${EMACS_VERSION}.tar.xz"
           cd "emacs-${EMACS_VERSION}"
           ./configure --with-no-popups --with-native-compilation --without-x \
-            --prefix=/usr/local CFLAGS="-O2" \
+            --prefix="${EMACS_PREFIX}" CFLAGS="-O2" \
             LDFLAGS="-L/usr/lib/gcc/x86_64-linux-gnu/14" \
             CPPFLAGS="-I/usr/lib/gcc/x86_64-linux-gnu/14/include"
           make -j$(nproc)
-          sudo make install
+          make install
+
+      - name: Put Emacs on PATH
+        run: echo "${EMACS_PREFIX}/bin" >> "$GITHUB_PATH"
 
       - name: Show Emacs version
         run: emacs --version

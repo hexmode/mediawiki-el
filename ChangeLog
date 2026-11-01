@@ -1,3 +1,15 @@
+2026-11-01  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki-api.el (mediawiki-api--stringify-args): New function.
+	(mediawiki-api-call): Stringify the arguments before they are
+	encoded for the debug log, not just before the POST body.
+	(mediawiki-api-call-async): Stringify the arguments before
+	encoding.  Refs #62.
+
+	* tests/test-mediawiki-api-json.el: Add regression tests for
+	integer parameter values in mediawiki-api-call,
+	mediawiki-api-get-revision-content and mediawiki-api-call-async.
+
 2026-07-08  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki.el: Bump version to 4.1.0.
