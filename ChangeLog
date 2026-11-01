@@ -1,5 +1,29 @@
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
+	Open the comment at point in a web browser.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--render-replies): Attach each comment's
+	DiscussionTools id to its rendered text as the mediawiki-comment-id
+	property.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-browse-comment-at-point)
+	(mediawiki-discussion-tools--comment-id-at-point): New command on & in
+	the thread view.  It builds <page url>#<comment id> and hands it to
+	browse-url, so the browser lands on that comment instead of the top
+	of the page.
+
+	* tests/test-mediawiki-discussion-tools.el: Cover the id property, the
+	URL built for a comment, the no-comment error and the & binding.
+
+	* DISCUSSION-TOOLS.mediawiki, README.mediawiki,
+	DISCUSSION-TOOLS-PLAN.md: Document &.
+
+	Fixes #64
+
+2026-11-01  Mark A. Hershberger  <mah@everybody.org>
+
 	Finish the discussion browser's status workflow and replace the
 	planned archive scanning with a vanished-thread notice and search.
 

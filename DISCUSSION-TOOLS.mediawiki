@@ -102,12 +102,19 @@ timestamp, with replies indented one level per answer.  <kbd>n</kbd> and
 <kbd>p</kbd> walk the list and replace the view contents, so paging through a desk
 costs nothing.
 
+<kbd>&</kbd> opens the comment at point in your web browser.  Every comment's
+DiscussionTools id is also the anchor MediaWiki gives it, so the browser lands on
+that comment rather than the top of the page - useful for seeing a comment in
+context, following a link inside it, or passing it to someone else.
+
 {| class="wikitable"
 ! Key !! Action
 |-
 | <kbd>r</kbd> || Reply to this thread
 |-
 | <kbd>d</kbd> || Mark this thread resolved
+|-
+| <kbd>&</kbd> || Open the comment at point in your web browser
 |-
 | <kbd>g</kbd> || Re-fetch and re-render this thread
 |-

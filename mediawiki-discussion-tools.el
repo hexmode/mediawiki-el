@@ -54,8 +54,10 @@
 (require 'mediawiki-core)
 (require 'mediawiki-site)
 (require 'mediawiki-api)
+(require 'mediawiki-utils)
 (require 'tabulated-list)
 (require 'cl-lib)
+(require 'browse-url)
 
 (declare-function mediawiki-prompt-for-site "mediawiki-site")
 (declare-function mediawiki-open "mediawiki-page")
@@ -123,6 +125,7 @@ The user's reply text starts on the line after the separator."
     (define-key map (kbd "n")   #'mediawiki-discussion-tools-view-next)
     (define-key map (kbd "p")   #'mediawiki-discussion-tools-view-prev)
     (define-key map (kbd "s")   #'mediawiki-discussion-tools-search)
+    (define-key map (kbd "&")   #'mediawiki-discussion-tools-browse-comment-at-point)
     map)
   "Keymap for `mediawiki-discussion-tools-view-mode'.")
 
@@ -632,12 +635,16 @@ Intended for `post-command-hook'."
     (set-buffer-modified-p nil)))
 
 (defun mediawiki-discussion-tools--render-replies (replies depth)
-  "Render REPLIES (a list) at indentation DEPTH into the current buffer."
+  "Render REPLIES (a list) at indentation DEPTH into the current buffer.
+Each comment's text carries its DiscussionTools id in the
+`mediawiki-comment-id' property, which is what `&' turns into a link."
   (dolist (reply replies)
     (let ((author (alist-get 'author reply))
           (timestamp (alist-get 'timestamp reply))
           (html (alist-get 'html reply))
-          (children (alist-get 'replies reply)))
+          (children (alist-get 'replies reply))
+          (id (alist-get 'id reply))
+          (start (point)))
       (insert (make-string (* depth 2) ?\s))
       (when (stringp author)
         (insert (propertize author 'face 'font-lock-function-name-face)))
@@ -651,8 +658,36 @@ Intended for `post-command-hook'."
             (insert (make-string (* depth 2) ?\s))
             (insert line "\n"))))
       (insert "\n")
+      (when id
+        (add-text-properties start (point)
+                             (list 'mediawiki-comment-id id)))
       (when children
         (mediawiki-discussion-tools--render-replies children (1+ depth))))))
+
+(defun mediawiki-discussion-tools--comment-id-at-point ()
+  "Return the DiscussionTools id of the comment at point, or nil.
+Point on the newline that ends a comment still belongs to it."
+  (or (get-text-property (point) 'mediawiki-comment-id)
+      (and (> (point) (point-min))
+           (get-text-property (1- (point)) 'mediawiki-comment-id))))
+
+(defun mediawiki-discussion-tools-browse-comment-at-point ()
+  "Open the comment at point in the web browser.
+The DiscussionTools comment id doubles as the anchor MediaWiki gives
+that comment, so the browser lands on it rather than the top of the
+page."
+  (interactive)
+  (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                       (current-buffer)))
+         (site (buffer-local-value 'mediawiki-discussion-tools--sitename
+                                   list-buf))
+         (page (buffer-local-value 'mediawiki-discussion-tools--page list-buf))
+         (id (mediawiki-discussion-tools--comment-id-at-point)))
+    (unless (and site page)
+      (user-error "No site or page set for this buffer"))
+    (unless id
+      (user-error "No comment at point"))
+    (browse-url (concat (mediawiki-make-page-url site page) "#" id))))
 
 (defun mediawiki-discussion-tools--format-timestamp (ts)
   "Format ISO 8601 TS as a human-readable date (UTC)."

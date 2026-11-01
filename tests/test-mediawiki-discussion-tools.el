@@ -1266,6 +1266,85 @@ as a direct lookup into the TOC-ordered section list."
       (when (get-buffer "*MW Discussion Search*")
         (kill-buffer "*MW Discussion Search*")))))
 
+;;; Browsing a Comment Tests
+
+(ert-deftest test-mdt-render-replies-tags-comment-ids ()
+  "Every rendered comment carries its DiscussionTools id."
+  (let ((replies '(((id . "c-Alice-1") (author . "Alice") (timestamp . "")
+                    (html . "Hello"))
+                   ((id . "c-Bob-2") (author . "Bob") (timestamp . "")
+                    (html . "Hi")
+                    (replies . (((id . "c-Alice-3") (author . "Alice")
+                                 (timestamp . "") (html . "Thanks"))))))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (goto-char (point-min))
+      (should (equal (mediawiki-discussion-tools--comment-id-at-point)
+                     "c-Alice-1"))
+      (search-forward "Bob")
+      (should (equal (mediawiki-discussion-tools--comment-id-at-point)
+                     "c-Bob-2"))
+      (search-forward "Thanks")
+      (should (equal (mediawiki-discussion-tools--comment-id-at-point)
+                     "c-Alice-3")))))
+
+(ert-deftest test-mdt-browse-comment-at-point ()
+  "& opens the page with the comment id as the fragment."
+  (test-mdt-with-site "TestSite"
+    (let ((opened nil)
+          (thread '((id . "h-Topic-20260616005000")
+                    (title . "Topic")
+                    (replies . (((id . "c-Alice-1") (author . "Alice")
+                                 (timestamp . "2026-06-16T00:50:00Z")
+                                 (html . "Hello")))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'browse-url)
+                       (lambda (url &rest _) (setq opened url))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (mediawiki-discussion-tools--render-thread thread)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support desk")
+                (goto-char (point-min))
+                (search-forward "Hello")
+                (mediawiki-discussion-tools-browse-comment-at-point)))
+            (should opened)
+            (should (string-match-p "#c-Alice-1\\'" opened))
+            (should (string-match-p (regexp-quote "index.php?title=") opened))
+            (should (string-match-p "Project" opened)))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*"))))))
+
+(ert-deftest test-mdt-browse-comment-at-point-no-comment ()
+  "Point on the thread title is not a comment."
+  (test-mdt-with-site "TestSite"
+    (let ((thread '((id . "h-Topic-20260616005000")
+                    (title . "Topic")
+                    (replies . (((id . "c-Alice-1") (author . "Alice")
+                                 (timestamp . "") (html . "Hello")))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'browse-url)
+                       (lambda (&rest _) (ert-fail "should not open"))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (mediawiki-discussion-tools--render-thread thread)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support desk")
+                (goto-char (point-min))
+                (should-error (mediawiki-discussion-tools-browse-comment-at-point)
+                              :type 'user-error)))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*")))))))
+
+(ert-deftest test-mdt-browse-comment-key-binding ()
+  "& is bound in the thread view only."
+  (should (eq (lookup-key mediawiki-discussion-tools-view-mode-map (kbd "&"))
+              #'mediawiki-discussion-tools-browse-comment-at-point))
+  (should-not (eq (lookup-key mediawiki-discussion-tools-list-mode-map (kbd "&"))
+                  #'mediawiki-discussion-tools-browse-comment-at-point)))
+
 (ert-deftest test-mdt-search-key-binding ()
   "s searches from either browser buffer."
   (dolist (map (list mediawiki-discussion-tools-list-mode-map

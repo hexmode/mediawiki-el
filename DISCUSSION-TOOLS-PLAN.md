@@ -290,8 +290,8 @@ buffer so `n`/`p` navigation is instant and doesn't create new windows.
 - Replies nested with increasing indentation
 
 **Keybindings:** `r` reply, `m` / `C` new thread, `d` resolve, `g` re-render,
-`n` / `p` next / previous, `s` search, `RET` / `q` close.  Again, the tables
-live in `DISCUSSION-TOOLS.mediawiki`.
+`n` / `p` next / previous, `s` search, `&` browse the comment at point,
+`RET` / `q` close.  Again, the tables live in `DISCUSSION-TOOLS.mediawiki`.
 
 ## Core Functions
 
