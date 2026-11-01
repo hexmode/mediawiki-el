@@ -5,6 +5,8 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  # Allow re-running the suite by hand, e.g. to check the Emacs cache.
+  workflow_dispatch:
 
 jobs:
   test:
@@ -19,8 +21,9 @@ jobs:
 
     name: Emacs ${{ matrix.emacs-version }}
 
-    # The build lives next to the checkout, not in /opt: the runner user can
-    # create and restore that directory, so a cache hit works without sudo.
+    # The build lives inside the checkout, not in /opt: the runner user can
+    # write there, so restoring a cache works without sudo, and actions/cache
+    # rejects paths containing ".." (which silently disabled the cache).
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -29,16 +32,16 @@ jobs:
         id: cache-emacs
         uses: actions/cache@v5
         with:
-          path: ${{ github.workspace }}/../emacs-${{ matrix.emacs-version }}
+          path: ${{ github.workspace }}/.emacs-build
           # Bump the key whenever the install layout or configure flags change.
-          key: emacs-${{ matrix.emacs-version }}-nativecomp-home-${{ runner.os }}
+          key: emacs-${{ matrix.emacs-version }}-nativecomp-build-${{ runner.os }}
 
       - name: Install Emacs
         if: steps.cache-emacs.outputs.cache-hit != 'true'
         run: |
           set -e
           EMACS_VERSION="${{ matrix.emacs-version }}"
-          EMACS_PREFIX="$(realpath -m "${{ github.workspace }}/../emacs-${EMACS_VERSION}")"
+          EMACS_PREFIX="${GITHUB_WORKSPACE}/.emacs-build"
           echo "Building Emacs $EMACS_VERSION into ${EMACS_PREFIX}"
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential \
@@ -60,12 +63,12 @@ jobs:
 
       - name: Put Emacs on PATH
         run: |
-          EMACS_PREFIX="$(realpath -m "${{ github.workspace }}/../emacs-${{ matrix.emacs-version }}")"
+          EMACS_PREFIX="${GITHUB_WORKSPACE}/.emacs-build"
           echo "${EMACS_PREFIX}/bin" >> "$GITHUB_PATH"
 
       - name: Show Emacs version
         run: |
-          EMACS_PREFIX="$(realpath -m "${{ github.workspace }}/../emacs-${{ matrix.emacs-version }}")"
+          EMACS_PREFIX="${GITHUB_WORKSPACE}/.emacs-build"
           if ! command -v emacs >/dev/null; then
             echo "::error::emacs is not on PATH; expected ${EMACS_PREFIX}/bin"
             ls -la "${EMACS_PREFIX}" 2>&1 || true
