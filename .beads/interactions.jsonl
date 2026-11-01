@@ -1,0 +1,1 @@
+{"id":"int-3f5d1a7d08d088711443d8d04a0e47de","kind":"field_change","created_at":"2026-11-01T18:06:54.456081322Z","actor":"Mark A. Hershberger","issue_id":"mediawiki-el-1gz","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Fixed in 9002b5e, merged in #63, released in v4.1.1"}}
