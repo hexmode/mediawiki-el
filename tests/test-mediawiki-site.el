@@ -88,6 +88,28 @@
     (let ((password (mediawiki-site-password "Wikipedia")))
       (should (stringp password)))))
 
+(ert-deftest test-mediawiki-site-password-empty-uses-auth-source ()
+  "An empty password in the alist falls back to auth-source."
+  (let ((mediawiki-site-alist '(("TestSite" "https://example.org/w/" "user" "" nil ""))))
+    (cl-letf (((symbol-function 'auth-source-search)
+               (lambda (&rest args)
+                 (if (plist-get args :user)
+                     nil                     ; no entry for that login
+                   (list (list :secret "auth-pass"))))))
+      (should (equal "auth-pass" (mediawiki-site-password "TestSite"))))))
+
+(ert-deftest test-mediawiki-site-password-requires-a-secret ()
+  "The auth-source query asks for an entry that actually has a secret."
+  (let ((mediawiki-site-alist '(("TestSite" "https://example.org/w/" "user" "" nil "")))
+        (seen nil))
+    (cl-letf (((symbol-function 'auth-source-search)
+               (lambda (&rest args)
+                 (push args seen)
+                 (list (list :secret "auth-pass")))))
+      (mediawiki-site-password "TestSite")
+      (should (seq-some (lambda (args) (equal (plist-get args :require) '(:secret)))
+                        seen)))))
+
 (ert-deftest test-mediawiki-site-domain ()
   "Test mediawiki-site-domain function."
   ;; Test with Wikipedia (should have empty domain)

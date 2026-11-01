@@ -19,13 +19,8 @@ jobs:
 
     name: Emacs ${{ matrix.emacs-version }}
 
-    env:
-      # Dedicated prefix so the cache contains nothing but this Emacs build.
-      # It must live somewhere the runner user can create: restoring a cache
-      # into /opt fails, because only root can write there, so the install
-      # step's `sudo mkdir' never runs on a cache hit and `emacs' is missing.
-      EMACS_PREFIX: ${{ runner.workspace }}/emacs-${{ matrix.emacs-version }}
-
+    # The build lives next to the checkout, not in /opt: the runner user can
+    # create and restore that directory, so a cache hit works without sudo.
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -34,7 +29,7 @@ jobs:
         id: cache-emacs
         uses: actions/cache@v5
         with:
-          path: ${{ env.EMACS_PREFIX }}
+          path: ${{ github.workspace }}/../emacs-${{ matrix.emacs-version }}
           # Bump the key whenever the install layout or configure flags change.
           key: emacs-${{ matrix.emacs-version }}-nativecomp-home-${{ runner.os }}
 
@@ -43,7 +38,8 @@ jobs:
         run: |
           set -e
           EMACS_VERSION="${{ matrix.emacs-version }}"
-          echo "Building Emacs $EMACS_VERSION into ${EMACS_PREFIX}..."
+          EMACS_PREFIX="$(realpath -m "${{ github.workspace }}/../emacs-${EMACS_VERSION}")"
+          echo "Building Emacs $EMACS_VERSION into ${EMACS_PREFIX}"
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential \
             libgnutls28-dev libxml2-dev libjansson-dev \
@@ -63,10 +59,13 @@ jobs:
           make install
 
       - name: Put Emacs on PATH
-        run: echo "${EMACS_PREFIX}/bin" >> "$GITHUB_PATH"
+        run: |
+          EMACS_PREFIX="$(realpath -m "${{ github.workspace }}/../emacs-${{ matrix.emacs-version }}")"
+          echo "${EMACS_PREFIX}/bin" >> "$GITHUB_PATH"
 
       - name: Show Emacs version
         run: |
+          EMACS_PREFIX="$(realpath -m "${{ github.workspace }}/../emacs-${{ matrix.emacs-version }}")"
           if ! command -v emacs >/dev/null; then
             echo "::error::emacs is not on PATH; expected ${EMACS_PREFIX}/bin"
             ls -la "${EMACS_PREFIX}" 2>&1 || true

@@ -1,3 +1,15 @@
+	* mediawiki-site.el (mediawiki-site-password): Ask auth-source for an
+	entry that actually has a secret before falling back to
+	`url-password-for-url', which stops at the first entry for the host
+	and so can return nil even when a password is stored.  This makes
+	"leave the password empty and use auth-source" work as documented.
+
+	* .github/workflows/test.yml: Build and cache Emacs next to the
+	checkout instead of /opt.  The runner cannot write /opt, so a cache
+	hit restored nothing and there was no `emacs' on PATH.  The prefix is
+	computed in each step because `runner.workspace' is not available in
+	a job-level env.
+
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
 	Documentation review against the code.

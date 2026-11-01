@@ -30,6 +30,8 @@
 
 (require 'mediawiki-core)
 (require 'mediawiki-http)
+(require 'auth-source)
+(require 'url-parse)
 
 ;;; Site Configuration
 
@@ -189,8 +191,24 @@ Interactively, prompt for a SITE."
   (mediawiki-site-user-pass sitename 2 'url-user-for-url))
 
 (defun mediawiki-site-password (sitename)
-  "Get the password for a given SITENAME."
-  (mediawiki-site-user-pass sitename 3 'url-password-for-url))
+  "Get the password for a given SITENAME.
+Uses the password in `mediawiki-site-alist' when it is not empty and
+otherwise asks auth-source, preferring an entry that actually carries
+a secret.  `url-password-for-url' alone is not enough: it stops at the
+first entry for the host, which need not have a password."
+  (let ((arg (mediawiki-site-extract sitename 3)))
+    (if (and (stringp arg) (> (string-width arg) 0))
+        arg
+      (let* ((url (url-generic-parse-url (mediawiki-site-url sitename)))
+             (host (url-host url))
+             (user (ignore-errors (mediawiki-site-username sitename)))
+             (found (or (and user
+                             (auth-source-search :host host :user user
+                                                 :require '(:secret) :max 1))
+                        (auth-source-search :host host
+                                            :require '(:secret) :max 1))))
+        (when found
+          (auth-info-password (car found)))))))
 
 (defun mediawiki-site-domain (sitename)
   "Get the LDAP domain for a given SITENAME."
