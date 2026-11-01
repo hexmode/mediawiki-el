@@ -4,7 +4,19 @@ This version of mediawiki.el represents a merging of wikipedia-mode.el (maintain
 
 The package has been reorganized into a modular structure for better maintainability and code organization, while maintaining full backward compatibility.
 
+=== Features ===
+
+* Read and edit pages on any MediaWiki site over the API, with syntax highlighting and a ''MediaWiki'' menu.
+* <code>mediawiki-file-mode</code> for editing MediaWiki markup in local files.
+* Revision history browser (<code>mediawiki-history</code>) with per-revision view, diffs against the parent or the current revision, restore and browse.
+* Watchlist and user-contributions browsers.
+* Discussion page browser with reply and new-thread support, including a support desk wrapper.
+* <code>completion-at-point</code> for <code>[[wiki links]]</code>.
+* Password/clientlogin authentication with auth-source support, and OAuth 2.0.
+
 === Installation ===
+
+mediawiki.el requires Emacs 28.1 or later.
 
 If you use [http://melpa.org/#/mediawiki MELPA], you can install via the M-x package-list-packages interface. This is preferable as you will have access to updates automatically.
 
@@ -22,12 +34,51 @@ Otherwise, just make sure this file is in your load-path (usually ~/.emacs.d is 
 ==== Configuration and use ====
 
  M-x customize-group RET mediawiki RET
- *dink* *dink*
  M-x mediawiki-site RET Wikipedia RET
 
-Open a wiki file:    M-x mediawiki-open
-Save a wiki buffer:  C-x C-s
-Save a wiki buffer with a different name:  C-x C-w
+Open a wiki page:        M-x mediawiki-open
+Save a wiki page:        C-x C-s  (mediawiki-save)
+Save as another page:    C-x C-w  (mediawiki-save-as)
+Save and bury the buffer: C-c C-c  (mediawiki-save-and-bury)
+Reload from the wiki:    M-g      (mediawiki-reload)
+Open the page in a browser: M-x mediawiki-browse
+Browse revision history: M-x mediawiki-history (from a page buffer, or M-x mediawiki-history RET ''Page title'' RET)
+Reply to a discussion:   C-c C-r  (mediawiki-reply-at-point-simple)
+Insert wiki markup:      C-c C-f C-b (bold), C-c C-f C-i (italics), C-c C-f C-l (link), C-c C-f C-e (header), C-c C-w (signature), M-return (numbered list), C-return (bulleted list)
+
+==== Basic usage: writing a page in a local file ====
+
+You do not need to log in, or even be online, to write wikitext ([[https://github.com/hexmode/mediawiki-el/issues/30 issue #30]]).
+
+Any buffer visiting a file ending in <code>.wiki</code> or <code>.mediawiki</code> is put in <code>mediawiki-file-mode</code>.  It derives from <code>mediawiki-mode</code>, so all the markup highlighting, the ''MediaWiki'' menu, and the insertion commands are available, but the save and open keys work on the local file:
+
+<pre>
+ C-x C-s    save the file          (save-buffer)
+ C-x C-w    write to another file  (write-file)
+ C-c C-c    save the buffer and close its window
+ C-c C-o    find-file
+ M-g        unbound (nothing to reload)
+</pre>
+
+So to write a page called "Some Topic" for pasting into the wiki's web editor:
+
+# <code>C-x C-f ~/drafts/some_topic.wiki RET</code>
+# Write the wikitext.
+# <code>C-x C-s</code> to save it.
+# Copy the buffer contents into the wiki's own editor when you are ready to publish.
+
+For a file with a different extension, <code>M-x mediawiki-mode</code> gives you the same editing commands, though its <code>C-x C-s</code> tries to save to the wiki; use <code>M-x mediawiki-file-mode</code> if you want the file-oriented keys, or <code>C-x C-w</code> to write the buffer to a file.
+
+<code>mediawiki-draft</code> is a lighter-weight alternative for collecting text:
+
+* <code>M-x mediawiki-draft</code> opens a temporary buffer in <code>mediawiki-mode</code>.
+* <code>M-x mediawiki-draft-buffer</code> appends the current buffer to <code>mediawiki-draft-data-file</code> (default <code>"~/Wiki/discussions/draft.wiki"</code>).
+* <code>M-x mediawiki-draft-view-draft</code> visits that file.
+* <code>M-x mediawiki-draft-send</code> copies a filed draft back into a buffer.
+
+==== Logging in ====
+
+Password-based login (bot passwords) works, but OAuth 2.0 is the preferred method; see [[#OAuth 2.0 Setup]].  If the password field for a site is empty, mediawiki.el falls back to the auth-source library, so you can keep credentials in <code>~/.authinfo.gpg</code> instead of your init file.
 
 ==== About Security ====
 
@@ -37,20 +88,28 @@ If mediawiki sees that the password is empty, then it will use [https://www.gnu.
 
 === Package Structure ===
 
-The mediawiki.el package is now organized into the following modular components:
+The mediawiki.el package is organized into the following modular components:
 
 * '''mediawiki.el''' - Main entry point with package metadata and requires
 * '''mediawiki-core.el''' - Core variables, constants, and fundamental utilities
+* '''mediawiki-site.el''' - Site configuration and management
 * '''mediawiki-faces.el''' - Font-lock face definitions for MediaWiki syntax
 * '''mediawiki-font-lock.el''' - Font-lock keywords and syntax highlighting rules
+* '''mediawiki-http.el''' - HTTP utilities (<code>url-http-get</code>, <code>url-http-post</code>) and compatibility functions
 * '''mediawiki-api.el''' - MediaWiki API interaction and data processing
-* '''mediawiki-auth.el''' - Authentication and login management
-* '''mediawiki-http.el''' - HTTP utilities and compatibility functions
+* '''mediawiki-auth.el''' - Password/clientlogin authentication
+* '''mediawiki-oauth.el''' - OAuth 2.0 authentication
 * '''mediawiki-page.el''' - Page editing, saving, and content management
+* '''mediawiki-mode.el''' - Major mode definition, user interface, and <code>mediawiki-file-mode</code> for local files
 * '''mediawiki-draft.el''' - Draft functionality and temporary editing
-* '''mediawiki-site.el''' - Site configuration and management
+* '''mediawiki-completion.el''' - <code>completion-at-point</code> for <code>[[wiki links]]</code> using the prefixsearch API
+* '''mediawiki-history.el''' - Revision history browser (<code>tabulated-list-mode</code>)
+* '''mediawiki-diff.el''' - Revision diffs, ediff, and follow-mode helpers
+* '''mediawiki-watchlist.el''' - Watchlist browser
+* '''mediawiki-user.el''' - User contributions
+* '''mediawiki-discussion-tools.el''' - Discussion page thread browser and replies
+* '''mediawiki-support-desk.el''' - Support desk wrapper around <code>mediawiki-discussion-tools</code>
 * '''mediawiki-utils.el''' - General utility functions
-* '''mediawiki-mode.el''' - Major mode definition and user interface
 
 This modular structure improves code organization and maintainability while preserving all existing functionality and maintaining full backward compatibility.
 
@@ -105,7 +164,8 @@ With the client credentials and access token configured, mediawiki.el will autom
 
 * Change customization to explicitly tell mediawiki.el to use the auth-source library.
 * Optionally use org-mode formatting for editing and translate that to mw
-* Move url-* methods to url-http
-* Use the MW API to support searching, etc.
+* Full-text search via the MediaWiki search API (<code>list=search</code>).  Link
+  completion through the prefixsearch API already lives in <code>mediawiki-completion.el</code>.
 * Clean up and thoroughly test imported wikimedia.el code
 * Improve language support.  Currently there is a toggle for English or German.  This should probably just be replaced with the ability to use MediaWiki's i18n files in json format.
+* Finish the discussion tools: marking a thread resolved is still a stub (see [DISCUSSION-TOOLS-PLAN.md]).

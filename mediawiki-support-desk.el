@@ -35,8 +35,8 @@
 ;;
 ;;   `mediawiki-support-desk'           - Open the support desk thread list
 ;;
-;; See SUPPORT-DESK-WIKI-IMPLEMENTATION.md and SUPPORT-DESK-PLAN.md for
-;; details on how the support desk works and the implementation plan.
+;; See SUPPORT-DESK-WIKI-IMPLEMENTATION.md for how the support desk works on
+;; the wiki side and DISCUSSION-TOOLS-PLAN.md for the implementation plan.
 
 ;;; Code:
 

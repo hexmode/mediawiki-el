@@ -4,7 +4,11 @@ This directory contains a comprehensive test suite for the modular reorganizatio
 
 == Test Structure ==
 
-=== Core Test Files ===
+There is one ERT suite per module.  Every file follows the same pattern: mock
+the network (<code>mediawiki-api-call</code>, <code>url-http-post</code> or
+<code>url-retrieve</code>) and never depend on the current date.
+
+=== Test Files ===
 
 * '''<code>test-mediawiki-simple.el</code>''' - Essential functional tests that verify core functionality works
 * '''<code>test-mediawiki-core.el</code>''' - Tests for core variables, constants, and utility functions
@@ -13,19 +17,33 @@ This directory contains a comprehensive test suite for the modular reorganizatio
 * '''<code>test-mediawiki-font-lock.el</code>''' - Tests for syntax highlighting rules
 * '''<code>test-mediawiki-http.el</code>''' - Tests for HTTP utilities and compatibility functions
 * '''<code>test-mediawiki-api.el</code>''' - Tests for MediaWiki API interaction functions
-* '''<code>test-mediawiki-auth.el</code>''' - Tests for authentication functionality
+* '''<code>test-mediawiki-api-json.el</code>''' - End-to-end JSON parsing tests with mocked HTTP
+* '''<code>test-mediawiki-auth.el</code>''' - Tests for clientlogin authentication
+* '''<code>test-mediawiki-oauth.el</code>''' - Tests for OAuth 2.0 token handling
 * '''<code>test-mediawiki-site.el</code>''' - Tests for site configuration and management
 * '''<code>test-mediawiki-page.el</code>''' - Tests for page operations
 * '''<code>test-mediawiki-draft.el</code>''' - Tests for draft functionality
-* '''<code>test-mediawiki-mode.el</code>''' - Tests for major mode definition
+* '''<code>test-mediawiki-mode.el</code>''' - Tests for the major modes
+* '''<code>test-mediawiki-file-mode.el</code>''' - Tests for <code>mediawiki-file-mode</code>
+* '''<code>test-mediawiki-completion.el</code>''' - Tests for wiki link completion
+* '''<code>test-mediawiki-history.el</code>''' - Tests for the revision history browser
+* '''<code>test-mediawiki-diff.el</code>''' - Tests for revision diffs
+* '''<code>test-mediawiki-watchlist.el</code>''' - Tests for the watchlist browser
+* '''<code>test-mediawiki-user.el</code>''' - Tests for user contributions
+* '''<code>test-mediawiki-discussion-tools.el</code>''' - Tests for discussion threads and replies
+* '''<code>test-mediawiki-support-desk.el</code>''' - Tests for the support desk wrapper
+* '''<code>test-mediawiki-cache.el</code>''' - Tests for the page cache
+* '''<code>test-mediawiki-autoloads.el</code>''' - Tests that user-facing commands are autoloaded
 * '''<code>test-mediawiki-integration.el</code>''' - Integration tests for module interactions
 
 === Test Runners ===
 
 The test runners are executed using the Makefile in the top directory.
 
-* '''<code>make test-mediawiki-simple</code>''' - Runs only the essential functional tests (8 tests, all pass)
-* '''<code>make test</code>''' - Runs the complete test suite (152 tests total)
+* '''<code>make ci-test</code>''' - Runs every suite, reports all failures, and exits non-zero if any suite failed (this is what CI runs)
+* '''<code>make test</code>''' - Runs every suite but continues after failures
+* '''<code>make test-mediawiki-simple</code>''' - Runs only the essential functional tests (8 tests)
+* '''<code>make test-mediawiki-NAME</code>''' - Runs one suite from <code>tests/test-mediawiki-NAME.el</code>
 
 == Running Tests ==
 
@@ -48,25 +66,18 @@ This runs 8 essential tests that verify:
 
 To run the full test suite:
 
-<syntaxhighlight lang="bash">make test</syntaxhighlight>
+<syntaxhighlight lang="bash">make ci-test</syntaxhighlight>
 === Module-Specific Testing ===
 
 To test a specific module:
 
-<syntaxhighlight lang="elisp">make test-core # or “test-utils” or “test-api”, etc</syntaxhighlight>
+<syntaxhighlight lang="bash">make test-mediawiki-core  # or test-mediawiki-utils, test-mediawiki-api, …</syntaxhighlight>
 == Test Results Summary ==
 
-=== Simple Tests: ✅ 8/8 PASS ===
-
-All essential functional tests pass, confirming that:
-* The modular reorganization preserves core functionality
-* All modules load correctly
-* Backward compatibility is maintained
-* Basic user-facing features work
-
-=== Complete Test Suite: ✅ 152/152 PASS ===
-
-* '''152 tests passing''' - Core functionality and module interactions work correctly
+The suite is the release gate: <code>make ci-test</code> (locally) and the
+''Tests'' GitHub workflow (Emacs 28.1, 29.4 and 30.1) must both be green before
+anything is merged or tagged.  Do not hardcode expected totals here; they go
+stale.  Check the output of <code>make ci-test</code> for the current numbers.
 
 == Test Categories ==
 
@@ -115,7 +126,7 @@ Key mocked components:
 
 == Key Achievements ==
 
-# '''Comprehensive Coverage''': Tests cover all 12 modules plus integration
+# '''Comprehensive Coverage''': Tests cover every module in the repository, plus integration
 # '''Backward Compatibility''': Verified that all public functions remain available
 # '''Functional Verification''': Core user-facing functionality confirmed working
 # '''Modular Testing''': Each module can be tested independently
@@ -125,17 +136,21 @@ Key mocked components:
 
 == Interpreting Results ==
 
-=== ✅ Tests All Pass ===
+=== ✅ All Suites Pass ===
 
-This is the most important result - it confirms the reorganization was successful and maintains functionality.
+This is the only acceptable result before a merge or a release:
+
+<syntaxhighlight lang="bash">make ci-test; echo "exit=$?"</syntaxhighlight>
+
+anything other than <code>exit=0</code> means a suite failed and the change is not ready.
 
 == Conclusion ==
 
-The test suite successfully demonstrates that:
+The test suite demonstrates that:
 
 # '''The modular reorganization preserves all core functionality'''
 # '''Backward compatibility is maintained'''
 # '''All modules integrate correctly'''
 # '''User-facing features continue to work'''
 
-The 8/8 passing simple tests provide high confidence that the reorganization was successful, while the comprehensive test suite provides detailed verification of individual components and their interactions.
+It runs entirely offline (<code>NO_INTERACTION=1</code>), so failures are always real regressions rather than network or clock flakiness — as long as new tests keep mocking the network and avoiding hardcoded dates.

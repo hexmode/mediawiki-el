@@ -4,6 +4,19 @@ This document describes the plan for `mediawiki-discussion-tools.el`, a new gene
 
 See [SUPPORT-DESK-WIKI-IMPLEMENTATION.md](./SUPPORT-DESK-WIKI-IMPLEMENTATION.md) for how the support desk page works on the wiki side (page structure, archiving, the `{{Resolved}}` template, and the DiscussionTools API).
 
+## Status (as of 4.1.x)
+
+| Phase | State |
+|---|---|
+| 1 — Thread listing | Implemented |
+| 2 — Thread viewing | Implemented |
+| 3 — Posting | Implemented: `mediawiki-discussion-tools-reply` (compose buffer, `C-c C-c` to post, `C-c C-k` to cancel) and `mediawiki-discussion-tools-new-thread` |
+| 4 — Status workflow | Partial: `mediawiki-discussion-tools-resolve` is still a stub that signals "not yet implemented", and the "needs attention" / "watching" tiers, own-comment detection and reply-after-me detection do not exist |
+| 5 — Archive awareness | Not started |
+
+Everything below is the design this was built from; where it disagrees with
+the code, the code wins.
+
 ## Architecture Overview
 
 ```
@@ -196,13 +209,14 @@ Derived from `tabulated-list-mode`.
 
 | Width | Header | Content |
 |---|---|---|
-| 3 | `S` | Status icon: `◉` needs-attention, `○` watching, `·` active, `?` unanswered, `✓` resolved, `~` stale |
+| 3 | (blank) | Status icon: `·` active, `?` unanswered, `~` stale (`✓` resolved and the needs-attention/watching tiers are Phase 4) |
 | 40 | Title | Thread title (truncated) |
 | 16 | Author | Opening poster's username |
 | 5 | `#` | Reply count |
-| 20 | Last | Relative time since last reply (e.g., "2 days ago") |
+| 20 | Last | Relative time since last reply (e.g., "2d ago") |
 
-**Default sort:** by priority (see priority sorting above).
+**Default sort:** by priority (see priority sorting above); there is no header
+sort, `tabulated-list-sort-key` is nil.
 
 **Keybindings:**
 
@@ -213,10 +227,7 @@ Derived from `tabulated-list-mode`.
 | `n` / `p` | `mediawiki-discussion-tools-view-next` / `-view-prev` — navigate threads, updating the view buffer |
 | `N` | `mediawiki-discussion-tools-new-thread` — create new thread |
 | `r` | `mediawiki-discussion-tools-reply` — reply to thread at point |
-| `d` | `mediawiki-discussion-tools-resolve` — mark resolved |
-| `s` | `mediawiki-discussion-tools-search` — search threads |
-| `S` | Sort prompt (by title, author, date, replies) |
-| `q` | Quit list mode |
+| `d` | `mediawiki-discussion-tools-resolve` — mark resolved (stub in 4.1.x; signals "not yet implemented") |
 
 **Window layout:** `RET` splits the frame and shows the thread view buffer
 in the lower portion.  The view buffer is named `*MW Thread View*` and is
@@ -335,25 +346,25 @@ appends {{Resolved|~~~~}} with no additional text.")
 - [x] Navigate between threads with `n` / `p` from either list or view buffer
 - [x] Close view with `RET` or `q` in view buffer
 
-### Phase 3 — Posting
+### Phase 3 — Posting (done)
 
-- Implement `mediawiki-discussion-tools-reply` (section append with `:`)
-- Implement `mediawiki-discussion-tools-new-thread` (section=new)
-- Handle edit token acquisition via `mediawiki-api.el`
-- Handle OAuth authentication via `mediawiki-auth.el`
+- [x] Implement `mediawiki-discussion-tools-reply` (section append with `:`)
+- [x] Implement `mediawiki-discussion-tools-new-thread` (section=new)
+- [x] Handle edit token acquisition via `mediawiki-api.el`
+- [x] Handle OAuth authentication via `mediawiki-auth.el`
 
 ### Phase 4 — Status workflow
 
-- Implement `mediawiki-discussion-tools-resolve` — prompts for optional summary, appends `{{Resolved|summary|~~~~}}`. The summary may reference a reply comment ID.
-- Implement "needs attention" and "watching" priority tiers
-- Detect user's own comments in threads
-- Detect when someone replied after the user
+- [ ] Implement `mediawiki-discussion-tools-resolve` — prompts for optional summary, appends `{{Resolved|summary|~~~~}}`. The summary may reference a reply comment ID. (Currently a stub that signals "not yet implemented".)
+- [ ] Implement "needs attention" and "watching" priority tiers
+- [ ] Detect user's own comments in threads
+- [ ] Detect when someone replied after the user
 
 ### Phase 5 — Archive awareness
 
-- Implement `mediawiki-discussion-tools--check-archived`
-- Mark archived threads as `closed` in the list
-- Search archive pages for thread IDs that disappeared from live page
+- [ ] Implement `mediawiki-discussion-tools--check-archived`
+- [ ] Mark archived threads as `closed` in the list
+- [ ] Search archive pages for thread IDs that disappeared from live page
 
 ## Configuration
 

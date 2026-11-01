@@ -1,29 +1,34 @@
 = Contributing to mediawiki.el =
 
-This file provides guidance to developers as well as tools like [https://claude.ai/code Claude Code], [https://github.com/QwenLM/qwen-code Qwen Code], [https://github.com/google-gemini/gemini-cli Gemini CLI], and others when working with code in this repository.
+This file describes how to build, test and change mediawiki.el.
+
+'''AI agents:''' the canonical instructions for Claude Code, OpenCode, Qwen Code,
+Gemini CLI and similar tools live in [[AGENTS.md]], which also carries the
+release checklist.  Keep that file up to date instead of adding instructions
+here.
 
 == Project Overview ==
 
-MediaWiki.el is an Emacs package for editing MediaWiki sites (like Wikipedia) directly from Emacs. This is version 2.4.x, which has been reorganized into a modular structure while maintaining full backward compatibility.
+MediaWiki.el is an Emacs package for editing MediaWiki sites (like Wikipedia) directly from Emacs.  It requires Emacs 28.1 or later.  The current version is tracked in the <code>;; Version:</code> header of <code>mediawiki.el</code> and in <code>mediawiki-version</code> (<code>mediawiki-core.el</code>); the two must always match.
 
 == Common Development Commands ==
 
 === Testing ===
 
+* <code>make ci-test</code> - Run every suite, report all failures, exit non-zero if any failed.  This is what CI runs; use it before pushing.
+* <code>make test</code> - Run every suite but keep going after failures
 * <code>make test-mediawiki-simple</code> - Run essential functional tests (8 tests, quick verification)
-* <code>make test</code> - Run complete test suite (152 tests total)
-* <code>make test-NAME</code> - Run a single test file where test-NAME corresponds with tests/test-NAME.el
+* <code>make test-mediawiki-NAME</code> - Run a single test file, <code>tests/test-mediawiki-NAME.el</code>
+
+At the time of writing there are 25 test files and roughly 386 tests.
 
 === Development Tasks ===
 
-* <code>make autoloads</code> - Generate autoloader file for the project
+* <code>make autoloads</code> - Generate the autoloader file and byte-compile
+* <code>make autoloads-only</code> - Generate the autoloader file only
 * <code>make check-file FILE=filename.el</code> - Check a specific file for balanced parentheses
 * <code>make editorconfig</code> - Clean up EOL and EOF whitespace
 * <code>make clean</code> - Remove compiled files and artifacts
-
-=== Test-Specific Commands ===
-
-* Individual test files can be run with: <code>make test-FILENAME</code> where test-FILENAME will run the tests found in <code>tests/test-FILENAME.el</code>
 
 == Architecture ==
 
@@ -33,16 +38,24 @@ The package follows a modular architecture with these core modules:
 
 * '''mediawiki.el''' - Main entry point with package metadata and requires all modules
 * '''mediawiki-core.el''' - Core variables, constants, and fundamental utilities
+* '''mediawiki-site.el''' - Site configuration and management
 * '''mediawiki-faces.el''' - Font-lock face definitions for MediaWiki syntax
 * '''mediawiki-font-lock.el''' - Font-lock keywords and syntax highlighting rules
+* '''mediawiki-http.el''' - HTTP utilities (<code>url-http-get</code>, <code>url-http-post</code>) and compatibility functions
 * '''mediawiki-api.el''' - MediaWiki API interaction and data processing
-* '''mediawiki-auth.el''' - Authentication and login management using auth-source library
-* '''mediawiki-http.el''' - HTTP utilities and compatibility functions
+* '''mediawiki-auth.el''' - Password/clientlogin authentication
+* '''mediawiki-oauth.el''' - OAuth 2.0 authentication
 * '''mediawiki-page.el''' - Page editing, saving, and content management
+* '''mediawiki-mode.el''' - Major mode definition, user interface, and <code>mediawiki-file-mode</code> for local files
 * '''mediawiki-draft.el''' - Draft functionality and temporary editing
-* '''mediawiki-site.el''' - Site configuration and management
+* '''mediawiki-completion.el''' - <code>completion-at-point</code> for wiki links
+* '''mediawiki-history.el''' - Revision history browser
+* '''mediawiki-diff.el''' - Revision diffs and follow-mode helpers
+* '''mediawiki-watchlist.el''' - Watchlist browser
+* '''mediawiki-user.el''' - User contributions
+* '''mediawiki-discussion-tools.el''' - Discussion thread browser and replies
+* '''mediawiki-support-desk.el''' - Support desk wrapper around <code>mediawiki-discussion-tools</code>
 * '''mediawiki-utils.el''' - General utility functions
-* '''mediawiki-mode.el''' - Major mode definition and user interface
 
 === Key Design Principles ===
 
@@ -62,20 +75,26 @@ The package follows a modular architecture with these core modules:
 
 == Important Implementation Notes ==
 
+* Responses are JSON (<code>format=json</code>) parsed into alists; there is no XML path any more.
+* <code>mediawiki-api-call</code> stringifies its arguments (<code>mediawiki-api--stringify-args</code>), so callers may pass integers for revision IDs, limits and namespaces.  Do not re-implement that coercion at call sites.
+* Authentication for API calls is decided in <code>mediawiki-api-call</code>: an OAuth bearer header is added when the site is OAuth-configured, otherwise cookies from <code>mediawiki-do-login</code> are used.
+* Tests must not hit the network (mock <code>mediawiki-api-call</code>, <code>url-http-post</code> or <code>url-retrieve</code>) and must not depend on the current date (build fixture timestamps relative to <code>(current-time)</code>).
+
 == ChangeLog ==
 
-Use <code>M-x add-change-log-entry</code> to document your changes in the [[ChangeLog]].
+Use <code>M-x add-change-log-entry</code>, or follow the existing format by hand, to document your changes in the [[ChangeLog]].
 
 === Dependencies ===
 
 * Requires Emacs 28.1+
-* Uses <code>mm-url</code> for HTTP functionality
-* Leverages auth-source for secure password management
+* Uses the built-in <code>url</code> library, with <code>mm-url</code> for form encoding
+* Leverages auth-source for secure password and token management
 * Uses ERT (Emacs Regression Testing) for test suite
 
 === Security Considerations ===
 
 * Passwords should not be stored in plain text - the package will use auth-source if password is empty
+* OAuth 2.0 is preferred over password login; secrets can also be kept in auth-source (see [[OAUTH-SETUP.org]])
 * All network interactions go through MediaWiki API
 * Authentication tokens are managed securely
 
@@ -88,9 +107,9 @@ Use <code>M-x add-change-log-entry</code> to document your changes in the [[Chan
 == Running Tests Effectively ==
 
 # '''Quick verification''': Always start with <code>make test-mediawiki-simple</code> or the simple test runner to verify core functionality
-# '''Full testing''': Use complete test suite for comprehensive validation
+# '''Full testing''': Use <code>make ci-test</code> for comprehensive validation
 # '''Module-specific testing''': Individual test files can be run for focused debugging
-# '''Test success metrics''': 8/8 simple tests passing indicates successful functionality; full test suite has known acceptable failure rate
+# '''Test success metrics''': every suite must pass.  <code>make ci-test</code> exits non-zero when any suite fails, and that is the gate for merging and releasing.
 
 == File Organization ==
 
