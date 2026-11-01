@@ -28,6 +28,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      # Needed on cache hits too: the cached binary links libgccjit.
+      - name: Install Emacs dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential \
+            libgnutls28-dev libxml2-dev libjansson-dev \
+            libsqlite3-dev libtree-sitter-dev libgccjit-14-dev \
+            libgif-dev libxpm-dev libjpeg-dev libtiff-dev \
+            texinfo
+
       - name: Cache Emacs build
         id: cache-emacs
         uses: actions/cache@v5
@@ -43,12 +53,6 @@ jobs:
           EMACS_VERSION="${{ matrix.emacs-version }}"
           EMACS_PREFIX="${GITHUB_WORKSPACE}/.emacs-build"
           echo "Building Emacs $EMACS_VERSION into ${EMACS_PREFIX}"
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential \
-            libgnutls28-dev libxml2-dev libjansson-dev \
-            libsqlite3-dev libtree-sitter-dev libgccjit-14-dev \
-            libgif-dev libxpm-dev libjpeg-dev libtiff-dev \
-            texinfo
           mkdir -p "${EMACS_PREFIX}"
           cd /tmp
           wget -q "https://ftp.gnu.org/gnu/emacs/emacs-${EMACS_VERSION}.tar.xz"
