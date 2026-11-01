@@ -98,7 +98,7 @@ If mediawiki sees that the password is empty, then it will use [https://www.gnu.
  n / p    next / previous thread          m / C  start a new thread
  g        refresh the list                d      mark resolved
  s        search page and archives        &      open this comment in a browser
- q        close the thread view
+ C-c C-o  open the link at point          q      close the thread view
 </pre>
 
 See [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS.mediawiki DISCUSSION-TOOLS.mediawiki] for the full guide - what the status icons and priority tiers mean, the compose buffer, and the options - and [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for a tested walk-through at Wikipedia.

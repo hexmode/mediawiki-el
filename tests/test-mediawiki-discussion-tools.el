@@ -1161,6 +1161,112 @@ as a direct lookup into the TOC-ordered section list."
         (when (get-buffer "*MW Test List*")
           (kill-buffer "*MW Test List*"))))))
 
+;;; Comment HTML Tests
+
+(ert-deftest test-mdt-wiki-title-from-url ()
+  "Wiki URLs turn into page titles; other hosts do not."
+  (test-mdt-with-site "TestSite"
+    (should (equal (mediawiki-discussion-tools--wiki-title-from-url
+                    "/wiki/Project:Support_desk" "TestSite")
+                   "Project:Support desk"))
+    (should (equal (mediawiki-discussion-tools--wiki-title-from-url
+                    "https://test.example.org/wiki/Foo_bar" "TestSite")
+                   "Foo bar"))
+    (should (equal (mediawiki-discussion-tools--wiki-title-from-url
+                    "https://test.example.org/w/index.php?title=Foo_bar&action=edit"
+                    "TestSite")
+                   "Foo bar"))
+    (should-not (mediawiki-discussion-tools--wiki-title-from-url
+                 "https://example.org/wiki/Foo" "TestSite"))
+    (should-not (mediawiki-discussion-tools--wiki-title-from-url
+                 "mailto:someone@example.org" "TestSite"))))
+
+(ert-deftest test-mdt-render-html-keeps-links ()
+  "Comment HTML is rendered with clickable links, and RET still closes."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (let ((replies (list (test-mdt--mock-reply
+                        "Alice" "2026-06-28T10:00:00Z"
+                        "<p>See <a href=\"/wiki/Project:Support_desk\">the desk</a>.</p>"))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (should (string-match-p "the desk" (buffer-string)))
+      (goto-char (point-min))
+      (search-forward "the desk")
+      (let ((url (get-text-property (match-beginning 0) 'shr-url)))
+        (should url)
+        (should (string-match-p "/wiki/Project:Support_desk" url))
+        (should (eq (get-text-property (match-beginning 0) 'keymap)
+                    mediawiki-discussion-tools-link-map))))))
+
+(ert-deftest test-mdt-link-map-leaves-ret-alone ()
+  "The link keymap does not take RET from the view."
+  (should-not (lookup-key mediawiki-discussion-tools-link-map (kbd "RET")))
+  (should (eq (lookup-key mediawiki-discussion-tools-link-map (kbd "C-c C-o"))
+              #'mediawiki-discussion-tools-open-link-at-point)))
+
+(ert-deftest test-mdt-open-link-at-point-opens-wiki-page ()
+  "A link to this site's page opens in an Emacs buffer."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (test-mdt-with-site "TestSite"
+    (let ((opened nil)
+          (replies (list (test-mdt--mock-reply
+                          "Alice" "2026-06-28T10:00:00Z"
+                          "<p>See <a href=\"/wiki/Project:Support_desk\">the desk</a>.</p>"))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-open)
+                       (lambda (title) (setq opened title)))
+                      ((symbol-function 'browse-url)
+                       (lambda (&rest _) (ert-fail "should open in Emacs"))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support_desk")
+                (let ((inhibit-read-only t))
+                  (mediawiki-discussion-tools--render-replies replies 0))
+                (goto-char (point-min))
+                (search-forward "the desk")
+                (mediawiki-discussion-tools-open-link-at-point)))
+            (should (equal opened "Project:Support desk")))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*"))))))
+
+(ert-deftest test-mdt-open-link-at-point-uses-browser-for-external ()
+  "A link to another host goes to the browser."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (test-mdt-with-site "TestSite"
+    (let ((opened nil)
+          (replies (list (test-mdt--mock-reply
+                          "Alice" "2026-06-28T10:00:00Z"
+                          "<p>See <a href=\"https://example.org/x\">elsewhere</a>.</p>"))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'browse-url)
+                       (lambda (url &rest _) (setq opened url)))
+                      ((symbol-function 'mediawiki-open)
+                       (lambda (&rest _) (ert-fail "should open in browser"))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support_desk")
+                (let ((inhibit-read-only t))
+                  (mediawiki-discussion-tools--render-replies replies 0))
+                (goto-char (point-min))
+                (search-forward "elsewhere")
+                (mediawiki-discussion-tools-open-link-at-point)))
+            (should (equal opened "https://example.org/x")))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*"))))))
+
+(ert-deftest test-mdt-open-link-at-point-no-link ()
+  "Plain text is not a link."
+  (should-error
+   (with-temp-buffer
+     (insert "just text")
+     (goto-char (point-min))
+     (mediawiki-discussion-tools-open-link-at-point))
+   :type 'user-error))
+
 ;;; Vanished Thread Tests
 
 (ert-deftest test-mdt-vanished-ids ()

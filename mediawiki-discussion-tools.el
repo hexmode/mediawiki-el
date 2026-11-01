@@ -58,6 +58,8 @@
 (require 'tabulated-list)
 (require 'cl-lib)
 (require 'browse-url)
+(require 'shr)
+(require 'url-util)
 
 (declare-function mediawiki-prompt-for-site "mediawiki-site")
 (declare-function mediawiki-open "mediawiki-page")
@@ -126,6 +128,8 @@ The user's reply text starts on the line after the separator."
     (define-key map (kbd "p")   #'mediawiki-discussion-tools-view-prev)
     (define-key map (kbd "s")   #'mediawiki-discussion-tools-search)
     (define-key map (kbd "&")   #'mediawiki-discussion-tools-browse-comment-at-point)
+    (define-key map (kbd "C-c C-o")
+      #'mediawiki-discussion-tools-open-link-at-point)
     map)
   "Keymap for `mediawiki-discussion-tools-view-mode'.")
 
@@ -165,6 +169,9 @@ archived.")
 
 (defvar mediawiki-discussion-tools--user-cache (make-hash-table :test #'equal)
   "Cache of sitename to logged-in user name, or nil when anonymous.")
+
+(defvar mediawiki-discussion-tools--siteinfo-cache (make-hash-table :test #'equal)
+  "Cache of sitename to the wiki's general siteinfo, for URL building.")
 
 ;;; Current User
 
@@ -634,6 +641,157 @@ Intended for `post-command-hook'."
         (mediawiki-discussion-tools--render-replies replies 0)))
     (set-buffer-modified-p nil)))
 
+;;; Page URLs
+
+(defun mediawiki-discussion-tools--siteinfo (sitename)
+  "Return the general siteinfo for SITENAME, or nil.
+Cached per site: it is only needed to build canonical page URLs."
+  (let ((cached (gethash sitename mediawiki-discussion-tools--siteinfo-cache
+                         'unknown)))
+    (if (not (eq cached 'unknown))
+        (unless (eq cached 'none) cached)
+      (let ((info (ignore-errors
+                    (let* ((result (mediawiki-api-call sitename "query"
+                                     '(("meta" . "siteinfo")
+                                       ("siprop" . "general")
+                                       ("formatversion" . "2"))))
+                           (general (alist-get 'general
+                                               (alist-get 'query result))))
+                      (when general
+                        (list :server (alist-get 'server general)
+                              :articlepath (alist-get 'articlepath general)))))))
+        (puthash sitename (or info 'none)
+                 mediawiki-discussion-tools--siteinfo-cache)
+        info))))
+
+(defun mediawiki-discussion-tools--page-url (sitename page)
+  "Return the canonical URL for PAGE on SITENAME.
+Uses the wiki's own article path (for example /wiki/Title) so that the
+relative links and protocol-relative image URLs MediaWiki returns
+resolve the way they do in a browser.  Falls back to
+`mediawiki-make-page-url' when siteinfo is unavailable."
+  (let* ((info (mediawiki-discussion-tools--siteinfo sitename))
+         (server (plist-get info :server))
+         (path (plist-get info :articlepath)))
+    (if (and server path)
+        (replace-regexp-in-string
+         "\\$1"
+         (url-hexify-string (string-replace " " "_" page))
+         (concat (if (string-prefix-p "//" server) (concat "https:" server)
+                   server)
+                 path)
+         t t)
+      (mediawiki-make-page-url sitename page))))
+
+;;; Comment HTML
+
+(defvar mediawiki-discussion-tools-link-map
+  (let ((map (copy-keymap shr-map)))
+    ;; RET closes the thread view, so a link must not swallow it.
+    (define-key map (kbd "RET") nil)
+    (define-key map (kbd "C-c C-o")
+      #'mediawiki-discussion-tools-open-link-at-point)
+    map)
+  "Keymap placed on links rendered in the thread view.
+It is `shr-map' without RET, plus `C-c C-o' to open a link.")
+
+(defun mediawiki-discussion-tools--wiki-title-from-url (url sitename)
+  "Return the page title URL points at on SITENAME, or nil.
+Only links on SITENAME's own host are wiki links; an external URL
+returns nil so the caller can hand it to `browse-url'."
+  (when (and url sitename)
+    (let* ((base (mediawiki-site-url sitename))
+           (absolute (url-expand-file-name url base))
+           (parsed (url-generic-parse-url absolute))
+           (file (url-filename parsed))
+           (host (downcase (or (url-host parsed) "")))
+           (site-host (downcase (or (url-host (url-generic-parse-url base))
+                                    ""))))
+      (when (and file (string= host site-host))
+        (let ((raw (cond
+                    ((string-match "/wiki/\\([^?#]+\\)" file)
+                     (match-string 1 file))
+                    ((string-match "[?&]title=\\([^&#]+\\)" file)
+                     (match-string 1 file)))))
+          (when (and raw (not (string-empty-p raw)))
+            (string-replace "_" " " (url-unhex-string raw))))))))
+
+(defun mediawiki-discussion-tools-open-link-at-point ()
+  "Open the link at point.
+Links to pages on the current site open in an Emacs buffer through
+`mediawiki-open'; anything else goes to `browse-url'."
+  (interactive)
+  (let ((url (or (get-text-property (point) 'shr-url)
+                 (and (> (point) (point-min))
+                      (get-text-property (1- (point)) 'shr-url)))))
+    (unless url
+      (user-error "No link at point"))
+    (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                         (current-buffer)))
+           (site (buffer-local-value 'mediawiki-discussion-tools--sitename
+                                     list-buf))
+           (title (mediawiki-discussion-tools--wiki-title-from-url url site)))
+      (if title
+          (let ((mediawiki-site site))
+            (mediawiki-open title))
+        (browse-url url)))))
+
+(defun mediawiki-discussion-tools--retarget-links (start end)
+  "Give links between START and END the thread view's own keymap.
+`shr' binds RET on links, which would shadow the command that closes
+the view."
+  (let ((pos start))
+    (while (< pos end)
+      (let ((next (or (next-single-property-change pos 'shr-url nil end) end)))
+        (when (get-text-property pos 'shr-url)
+          (put-text-property pos next 'keymap
+                             mediawiki-discussion-tools-link-map))
+        (setq pos next)))))
+
+(defun mediawiki-discussion-tools--render-html (html depth)
+  "Insert comment HTML into the buffer at indentation DEPTH.
+With libxml support, `shr' renders it: links stay clickable and
+images are displayed.  Without it, the tags are stripped and the text
+is shown plain."
+  (let ((html (or html ""))
+        (indent (make-string (* depth 2) ?\s)))
+    (if (or (string-empty-p (string-trim html))
+            (not (fboundp 'libxml-parse-html-region)))
+        (dolist (line (split-string (mediawiki-discussion-tools--strip-tags
+                                     html)
+                                    "\n"))
+          (if (string-empty-p line)
+              (insert "\n")
+            (insert indent line "\n")))
+      (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                           (current-buffer)))
+             (site (buffer-local-value 'mediawiki-discussion-tools--sitename
+                                       list-buf))
+             (page (buffer-local-value 'mediawiki-discussion-tools--page
+                                       list-buf))
+             (base (and site page (mediawiki-discussion-tools--page-url site page)))
+             ;; shr binds shr-base to nil inside `shr-insert-document' and
+             ;; only sets it from a <base> element, so the base URL has to
+             ;; come in through the document.  Without it, MediaWiki's
+             ;; protocol-relative image URLs and ./File: links stay
+             ;; relative, the image fetch fails and shr's grey placeholder
+             ;; is left behind.
+             (dom (with-temp-buffer
+                    (insert (if base
+                                (format "<base href=\"%s\"/>" base)
+                              "")
+                            "<div>" html "</div>")
+                    (libxml-parse-html-region (point-min) (point-max))))
+             (start (point))
+             (shr-width (max 40 (- (window-width) (* depth 2) 4)))
+             ;; Pixel-based filling needs a real frame; in batch or a
+             ;; terminal it splits every word onto its own line.
+             (shr-use-fonts (and (display-graphic-p) shr-use-fonts)))
+        (shr-insert-document dom)
+        (when (> depth 0)
+          (indent-rigidly start (point) (* depth 2)))
+        (mediawiki-discussion-tools--retarget-links start (point))))))
+
 (defun mediawiki-discussion-tools--render-replies (replies depth)
   "Render REPLIES (a list) at indentation DEPTH into the current buffer.
 Each comment's text carries its DiscussionTools id in the
@@ -652,11 +810,7 @@ Each comment's text carries its DiscussionTools id in the
         (insert "  " (propertize (mediawiki-discussion-tools--format-timestamp timestamp)
                                   'face 'font-lock-comment-face)))
       (insert "\n")
-      (let ((text (mediawiki-discussion-tools--strip-tags (or html ""))))
-        (unless (string-empty-p text)
-          (dolist (line (split-string text "\n"))
-            (insert (make-string (* depth 2) ?\s))
-            (insert line "\n"))))
+      (mediawiki-discussion-tools--render-html html depth)
       (insert "\n")
       (when id
         (add-text-properties start (point)

@@ -286,12 +286,13 @@ buffer so `n`/`p` navigation is instant and doesn't create new windows.
 
 **Display:** Each comment rendered with:
 - Author + timestamp header line
-- Indented body text (stripped of most HTML but preserving links and code blocks)
+- Body rendered by `shr` from the DiscussionTools HTML, so links are clickable, images are shown and lists keep their shape; falls back to stripping tags when Emacs has no libxml support
 - Replies nested with increasing indentation
 
 **Keybindings:** `r` reply, `m` / `C` new thread, `d` resolve, `g` re-render,
 `n` / `p` next / previous, `s` search, `&` browse the comment at point,
-`RET` / `q` close.  Again, the tables live in `DISCUSSION-TOOLS.mediawiki`.
+`C-c C-o` open the link at point, `RET` / `q` close.  Again, the tables live in
+`DISCUSSION-TOOLS.mediawiki`.
 
 ## Core Functions
 

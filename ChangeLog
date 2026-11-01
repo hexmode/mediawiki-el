@@ -1,5 +1,37 @@
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
+	Render comment links and images in the thread view.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--render-html): Render each comment body
+	with shr from the DiscussionTools HTML instead of stripping every
+	tag, so links stay clickable and images are displayed.  Falls back
+	to tag stripping when Emacs lacks libxml support, and keeps RET free
+	by replacing shr's link keymap with the view's own.  A <base> element
+	is injected into the parsed HTML, because `shr-insert-document'
+	rebinds shr-base to nil and only sets it from <base>; without it the
+	protocol-relative image URLs MediaWiki emits never got a scheme, the
+	fetch failed and shr's grey placeholder was left in place.  The base
+	is the wiki's own article URL, from a cached
+	meta=siteinfo&siprop=general call, so relative ./File: links resolve
+	to the article path too.  The trailing-space cleanup that could
+	delete the image placeholder is gone.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-open-link-at-point)
+	(mediawiki-discussion-tools--wiki-title-from-url): New command on
+	C-c C-o in the thread view.  Links to pages on the current site open
+	with mediawiki-open; anything else goes to browse-url.
+
+	* tests/test-mediawiki-discussion-tools.el: Cover URL-to-title
+	conversion, the shr link properties and keymap, both open paths, and
+	the no-link error.
+
+	* DISCUSSION-TOOLS.mediawiki, README.mediawiki,
+	DISCUSSION-TOOLS-PLAN.md: Document link rendering and C-c C-o.
+
+2026-11-01  Mark A. Hershberger  <mah@everybody.org>
+
 	Open the comment at point in a web browser.
 
 	* mediawiki-discussion-tools.el
