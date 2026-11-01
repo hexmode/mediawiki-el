@@ -12,15 +12,15 @@ Yes, it works — but open a **desk subpage**, not the Village pump index page.
 `Wikipedia:Village pump` is a hub that transcludes the desks; it has two real
 sections ("Archiving" and "See also") and is not a discussion page.
 
-| Desk page | Threads at time of writing | Notes |
-|---|---|---|
-| `Wikipedia:Village pump (policy)` | 13 | |
-| `Wikipedia:Village pump (proposals)` | 11 | |
-| `Wikipedia:Village pump (technical)` | 25 | busiest desk; largest thread trees |
-| `Wikipedia:Village pump (miscellaneous)` | 11 | |
-| `Wikipedia:Village pump (idea lab)` | 15 | |
-| `Wikipedia:Village pump (WMF)` | 12 | |
-| `Wikipedia:Village pump (news)` | 0 | announcement board, not a discussion desk |
+|Desk page                               |Threads at time of writing|Notes                                    |
+|----------------------------------------|--------------------------|-----------------------------------------|
+|`Wikipedia:Village pump (policy)`       |13                        |                                         |
+|`Wikipedia:Village pump (proposals)`    |11                        |                                         |
+|`Wikipedia:Village pump (technical)`    |25                        |busiest desk; largest thread trees       |
+|`Wikipedia:Village pump (miscellaneous)`|11                        |                                         |
+|`Wikipedia:Village pump (idea lab)`     |15                        |                                         |
+|`Wikipedia:Village pump (WMF)`          |12                        |                                         |
+|`Wikipedia:Village pump (news)`         |0                         |announcement board, not a discussion desk|
 
 ## One-time setup
 
@@ -51,14 +51,14 @@ priority: unanswered first, then active, then stale (>14 days since the last
 reply; change `mediawiki-discussion-tools-stale-days` to match the desk's
 archiving age).
 
-| Key | Command |
-|---|---|
-| `RET` | view the thread below the list |
-| `n` / `p` | next / previous thread, updating the view |
-| `r` | reply to the thread at point |
-| `N` | start a new thread |
-| `d` | mark resolved — **not implemented**, signals an error |
-| `g` | refetch the list |
+|Key      |Command                                              |
+|---------|-----------------------------------------------------|
+|`RET`    |view the thread below the list                       |
+|`n` / `p`|next / previous thread, updating the view            |
+|`r`      |reply to the thread at point                         |
+|`N`      |start a new thread                                   |
+|`d`      |mark resolved — **not implemented**, signals an error|
+|`g`      |refetch the list                                     |
 
 The list and view refresh from the API, so pressing `g` picks up other people's
 edits.  Fetching a desk takes well under a second; the full reply tree for one
