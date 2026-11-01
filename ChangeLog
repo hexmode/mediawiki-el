@@ -1,14 +1,35 @@
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki.el: Bump version to 4.1.1.
+	* mediawiki-core.el (mediawiki-version): Keep in sync; it was
+	still 3.2.0 and ended up in the User-Agent string.
+
 	* mediawiki-api.el (mediawiki-api--stringify-args): New function.
 	(mediawiki-api-call): Stringify the arguments before they are
 	encoded for the debug log, not just before the POST body.
 	(mediawiki-api-call-async): Stringify the arguments before
-	encoding.  Refs #62.
+	encoding.  Fixes #62: viewing or diffing a revision from
+	mediawiki-history-mode signalled
+	(wrong-type-argument char-or-string-p REVID) for integer
+	revision IDs.
 
 	* tests/test-mediawiki-api-json.el: Add regression tests for
 	integer parameter values in mediawiki-api-call,
 	mediawiki-api-get-revision-content and mediawiki-api-call-async.
+
+	* tests/test-mediawiki-discussion-tools.el
+	(test-mdt--timestamp): New helper.
+	(test-mdt--thread-fresh, test-mdt--thread-stale)
+	(test-mdt--thread-unanswered): Build timestamps relative to now
+	instead of hardcoding June 2026, which made the suite start
+	failing once the "fresh" thread aged past
+	mediawiki-discussion-tools-stale-days.
+	(test-mdt-parse-iso8601-valid): Don't assume date-to-time
+	returns a cons.
+
+	* .github/workflows/test.yml: Install Emacs into a per-version
+	/opt/emacs-<version> prefix and cache only that instead of all
+	of /usr/local.
 
 2026-07-08  Mark A. Hershberger  <mah@everybody.org>
 
