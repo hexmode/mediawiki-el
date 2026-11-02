@@ -57,6 +57,7 @@ The package follows a modular architecture with these core modules:
 * '''mediawiki-user.el''' - User contributions
 * '''mediawiki-discussion-tools.el''' - Discussion thread browser and replies
 * '''mediawiki-support-desk.el''' - Support desk wrapper around <code>mediawiki-discussion-tools</code>
+* '''mediawiki-recent.el''' - Remembered edited pages and discussion desks (<code>mediawiki-recent-file</code>)
 * '''mediawiki-utils.el''' - General utility functions
 
 === Key Design Principles ===
@@ -107,7 +108,9 @@ this reason.  If a module needs a key Gnus does not have, prefer a
 
 == ChangeLog ==
 
-Use <code>M-x add-change-log-entry</code>, or follow the existing format by hand, to document your changes in the [[ChangeLog]].
+Do not edit the [[ChangeLog]] by hand.  From the buffer you changed, put point on the function and press <code>C-x 4 a</code> (<code>add-change-log-entry-other-window</code>).  Emacs writes the dated header, the tab-indented <code>* file (function):</code> line and the author line for you.
+
+A day gets one entry.  The same command merges same-day work into the existing <code>YYYY-MM-DD  Name  &lt;email&gt;</code> header rather than starting another one, so a day with several commits reads as a list of changes instead of a stack of headers.  Entries that carry their own time stay separate.
 
 === Dependencies ===
 
@@ -140,5 +143,6 @@ Use <code>M-x add-change-log-entry</code>, or follow the existing format by hand
 
 * Root level contains all module <code>.el</code> files
 * <code>tests/</code> directory contains comprehensive test suite with detailed README
+* <code>specs/</code> directory holds design records and implementation plans (Markdown)
 * <code>Makefile</code> provides all development commands
 * Documentation in MediaWiki format (<tt>.mediawiki</tt> files)

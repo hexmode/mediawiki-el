@@ -95,10 +95,12 @@ If mediawiki sees that the password is empty, then it will use [https://www.gnu.
  M-x mediawiki-discussion-tools RET Page name RET
 
  RET      open the thread at point        r      reply
+ e        edit the post at point          d      mark resolved
  n / p    next / previous thread          m / C  start a new thread
  g        refresh the list                d      mark resolved
  s        search page and archives        &      open this comment in a browser
- C-c C-o  open the link at point          q      close the thread view
+ C-c C-o  open the link at point          TAB    next link (S-TAB previous)
+ q        close the thread view
 </pre>
 
 See [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS.mediawiki DISCUSSION-TOOLS.mediawiki] for the full guide - what the status icons and priority tiers mean, the compose buffer, and the options - and [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for a tested walk-through at Wikipedia.
@@ -126,6 +128,7 @@ The mediawiki.el package is organized into the following modular components:
 * '''mediawiki-user.el''' - User contributions
 * '''mediawiki-discussion-tools.el''' - Discussion page thread browser and replies
 * '''mediawiki-support-desk.el''' - Support desk wrapper around <code>mediawiki-discussion-tools</code>
+* '''mediawiki-recent.el''' - Remembered pages and discussion desks, for <code>mediawiki-open</code> outside a wiki buffer
 * '''mediawiki-utils.el''' - General utility functions
 
 This modular structure improves code organization and maintainability while preserving all existing functionality and maintaining full backward compatibility.
@@ -176,6 +179,12 @@ machine en.wikipedia.org login YOUR_CLIENT_APPLICATION_KEY password YOUR_ACCESS_
 </syntaxhighlight>
 
 With the client credentials and access token configured, mediawiki.el will automatically use OAuth 2.0 Bearer token authentication for all API requests to this site.
+
+OAuth is only used when both the client ID and the client secret are found.  If the secret is missing, mediawiki.el says so in the warnings buffer and falls back to password login, which is what makes a half-configured OAuth site look like an anonymous session.
+
+For an OAuth site the username field can stay empty.  mediawiki.el asks the wiki (<code>action=query&amp;meta=userinfo</code>) which user the token belongs to, because the login field in an authinfo entry for an OAuth consumer is the client ID, not a user name.  The answer is cached per site and refreshed whenever a new token is stored.
+
+<code>M-x mediawiki-oauth-setup-site</code> can write those auth-source entries for you.  When you already have an authinfo file it asks whether to keep the secrets there instead of your init file, and whether to encrypt the entry.  The answer is remembered in <code>mediawiki-oauth-secret-storage</code>, so the question is asked once; set that variable to <code>authinfo</code>, <code>authinfo-plain</code> or <code>site-alist</code> to decide in advance.
 
 === TODO ===
 

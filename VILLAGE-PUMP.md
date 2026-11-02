@@ -105,7 +105,7 @@ formal RfC you may still prefer the desk's own "add topic" button.
 ## Known limitations
 
 - **No resolving.**  `d` / `mediawiki-discussion-tools-resolve` is a stub
-  (Phase 4 in [DISCUSSION-TOOLS-PLAN.md](DISCUSSION-TOOLS-PLAN.md)).  The Village
+  (Phase 4 in [specs/DISCUSSION-TOOLS-PLAN.md](specs/DISCUSSION-TOOLS-PLAN.md)).  The Village
   pump does not use `{{resolved}}` much, so this rarely matters.
 - **No watchlist / "someone replied to me" view.**
 - **No per-comment reply.**  A reply is appended at the end of the section, not
