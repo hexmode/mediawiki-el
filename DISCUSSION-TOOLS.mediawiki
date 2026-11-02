@@ -159,8 +159,15 @@ context, following a link inside it, or passing it to someone else.
 separator line, <code>--- Reply below this line ---</code>.  Type below the
 separator; anything above it, including the separator, is discarded.
 
+The compose buffer - like <code>*MW New Thread*</code> and <code>*MW Edit Post*</code>
+- is an ordinary <code>mediawiki-mode</code> buffer, so the usual editing keys
+work: <kbd>C-c C-l</kbd> inserts a link, <kbd>C-c C-f</kbd> formatting, TAB
+completion inside <code>[[...]]</code>, and syntax highlighting.  The reply keys
+are layered on top of it:
+
 <pre>
  C-c C-c    post the reply and refresh the list
+ C-x C-s    the same, since there is no page to save here
  C-c C-k    cancel
 </pre>
 

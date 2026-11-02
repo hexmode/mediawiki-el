@@ -68,7 +68,11 @@
     (should (string-match-p "''" (buffer-string)))
 
     (erase-buffer)
-    (mediawiki-insert-link)
+    (cl-letf (((symbol-function 'mediawiki-read-link-target)
+               (lambda (&optional _default) "Main Page"))
+              ((symbol-function 'read-string)
+               (lambda (_prompt default &rest _) default)))
+      (mediawiki-insert-link))
     (should (string-match-p "\\[\\[.*\\]\\]" (buffer-string)))))
 
 (ert-deftest test-mediawiki-simple-font-lock ()

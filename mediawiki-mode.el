@@ -37,7 +37,12 @@
 (require 'mediawiki-faces)
 (require 'mediawiki-font-lock)
 (require 'mediawiki-site)
+(require 'seq)
 (require 'ring)
+
+(declare-function mediawiki-completion-search "mediawiki-completion"
+                  (prefix &optional sitename))
+(declare-function mediawiki-minibuffer-completion-keys "mediawiki-core")
 
 ;;; Variables
 
@@ -98,11 +103,12 @@
   (define-key mediawiki-mode-map "\C-c\C-f\C-i" 'mediawiki-insert-italics)
   (define-key mediawiki-mode-map "\C-c\C-f\C-e" 'mediawiki-insert-header)
   (define-key mediawiki-mode-map "\C-c\C-f\C-l" 'mediawiki-insert-link)
+  (define-key mediawiki-mode-map "\C-c\C-f\C-h" 'mediawiki-insert-hline)
   (define-key mediawiki-mode-map "\C-c\C-f\C-u" 'mediawiki-insert-user)
   (define-key mediawiki-mode-map "\C-c\C-f\C-q" 'mediawiki-insert-quotation)
   (define-key mediawiki-mode-map "\C-c\C-f\C-v" 'mediawiki-insert-bible-verse-template)
   (define-key mediawiki-mode-map "\C-c\C-w" 'mediawiki-insert-signature)
-  (define-key mediawiki-mode-map "\C-c\C-l" 'mediawiki-insert-hline)
+  (define-key mediawiki-mode-map "\C-c\C-l" 'mediawiki-insert-link)
   (define-key mediawiki-mode-map [(meta f8)] 'mediawiki-reply-at-point-simple)
   (define-key mediawiki-mode-map "\C-c\C-r" 'mediawiki-reply-at-point-simple)
 
@@ -437,11 +443,218 @@ surrounds region."
   (interactive)
   (mediawiki-insert "==" "=="))
 
+(defvar mediawiki-link-target-history nil
+  "History of link targets entered with `mediawiki-insert-link'.")
+
+(defconst mediawiki-link-protocols
+  (concat "\\`\\(?:"
+          (regexp-opt '("bitcoin" "ftp" "ftps" "geo" "git" "gopher" "http"
+                        "https" "irc" "ircs" "magnet" "mailto" "mms" "news"
+                        "nntp" "sms" "ssh" "svn" "tel" "telnet" "urn"
+                        "worldwind" "xmpp"))
+          "\\):")
+  "URI schemes MediaWiki turns into external links.")
+
 ;;;###autoload
-(defun mediawiki-insert-link ()
-  "Insert link (e.g. [[FOO]])."
-  (interactive)
-  (mediawiki-insert "[[" "]]"))
+(defun mediawiki-link-external-p (target)
+  "Return non-nil when TARGET is an external link.
+A target starting with a protocol MediaWiki knows (see
+`mediawiki-link-protocols') or with // is external; everything else,
+including namespace and interwiki prefixes like Project:, is an
+internal wiki link."
+  (let ((target (string-trim target)))
+    (or (string-prefix-p "//" target)
+        (string-match-p mediawiki-link-protocols target))))
+
+;;;###autoload
+(defun mediawiki-link-syntax (target &optional description)
+  "Return wiki markup linking to TARGET and showing DESCRIPTION.
+Internal targets use the [[Page]] form, external ones the [url text]
+form.  When DESCRIPTION is empty or equal to TARGET the short forms are
+used: [[Page]] for internal links and the bare URL for external ones."
+  (let ((target (string-trim target))
+        (description (string-trim (or description ""))))
+    (when (string-empty-p target)
+      (user-error "Empty link target"))
+    (if (mediawiki-link-external-p target)
+        (if (or (string-empty-p description) (string= description target))
+            target
+          (format "[%s %s]" target description))
+      (when (string-match-p "[][|]" target)
+        (user-error "Internal link target cannot contain brackets or a pipe: %s"
+                    target))
+      (if (or (string-empty-p description) (string= description target))
+          (format "[[%s]]" target)
+        (format "[[%s|%s]]" target description)))))
+
+(defun mediawiki-link-at-point ()
+  "Return the link at point as a plist, or nil when there is none.
+The plist has :target, :description, :start and :end.  Understands
+internal links ([[Page]] and [[Page|text]]), bracketed external links
+\([url text] and [url]) and bare URLs."
+  (let ((here (point))
+        (bol (line-beginning-position))
+        (eol (line-end-position))
+        result)
+    (save-excursion
+      ;; [[target|description]]
+      (let ((open (progn (goto-char here)
+                         (when (search-backward "[[" bol t) (point)))))
+        (when (and open
+                   (not (save-excursion (goto-char open)
+                                        (search-forward "]]" here t)))
+                   (save-excursion (goto-char here)
+                                   (search-forward "]]" eol t)))
+          (let* ((close (save-excursion (goto-char here)
+                                        (search-forward "]]" eol t)
+                                        (match-beginning 0)))
+                 (body (buffer-substring-no-properties (+ open 2) close))
+                 (bar (string-search "|" body)))
+            (setq result (list :target (if bar (substring body 0 bar) body)
+                               :description (and bar (substring body (1+ bar)))
+                               :start open
+                               :end (+ close 2))))))
+      ;; [url text] and [url]
+      (unless result
+        (let ((open (progn (goto-char here)
+                           (when (search-backward "[" bol t) (point)))))
+          (when (and open
+                     (not (and (> open (point-min))
+                               (eq (char-before open) ?\[)))
+                     (not (eq (char-after (1+ open)) ?\[))
+                     (save-excursion (goto-char here)
+                                     (search-forward "]" eol t))
+                     (not (eq (char-after (match-end 0)) ?\])))
+            (let* ((close (match-beginning 0))
+                   (body (buffer-substring-no-properties (1+ open) close))
+                   (space (string-search " " body))
+                   (url (if space (substring body 0 space) body)))
+              (when (mediawiki-link-external-p url)
+                (setq result (list :target url
+                                   :description (and space
+                                                     (substring body (1+ space)))
+                                   :start open
+                                   :end (1+ close))))))))
+      ;; A bare URL
+      (unless result
+        (let ((url (thing-at-point 'url t))
+              (bounds (bounds-of-thing-at-point 'url)))
+          (when (and url bounds (mediawiki-link-external-p url))
+            (setq result (list :target url
+                               :description url
+                               :start (car bounds)
+                               :end (cdr bounds)))))))
+    result))
+
+(defun mediawiki-link-in-string (text)
+  "Return TEXT parsed as a single wiki link, or nil.
+Accepts [[target]], [[target|text]], [url], [url text] and a bare URL,
+which is what tells an active region holding a link from one holding
+plain text to be linked."
+  (let ((text (string-trim (or text ""))))
+    (cond
+     ((string-empty-p text) nil)
+     ((string-match "\\`\\[\\[\\([^][]*\\)\\]\\]\\'" text)
+      (let* ((body (match-string 1 text))
+             (bar (string-search "|" body))
+             (target (if bar (substring body 0 bar) body)))
+        (unless (string-empty-p target)
+          (list :target target
+                :description (and bar (substring body (1+ bar)))))))
+     ((string-match "\\`\\[\\([^][]+\\)\\]\\'" text)
+      (let* ((body (match-string 1 text))
+             (space (string-search " " body))
+             (url (if space (substring body 0 space) body)))
+        (when (mediawiki-link-external-p url)
+          (list :target url
+                :description (and space (substring body (1+ space)))))))
+     ((and (mediawiki-link-external-p text)
+           (not (string-search " " text)))
+      (list :target text :description text)))))
+
+(defvar mediawiki-insert-link--region nil
+  "Region bounds captured by `mediawiki-insert-link' before prompting.")
+
+(defun mediawiki-read-link-target (&optional default)
+  "Prompt for a link target, completing over pages on the current site.
+DEFAULT, when given, pre-fills the prompt, so editing an existing link
+starts from its target."
+  (let ((history (cdr (assoc-string mediawiki-site mediawiki-page-history))))
+    (minibuffer-with-setup-hook
+        #'mediawiki-minibuffer-completion-keys
+      (completing-read
+       "Link: "
+       (lambda (string pred action)
+         (if (eq action 'metadata)
+             '(metadata (category . mediawiki-page))
+           (complete-with-action
+            action
+            (delete-dups
+             (append (mediawiki-completion-search string)
+                     (seq-filter
+                      (lambda (title)
+                        (or (string-empty-p string)
+                            (string-prefix-p string title t)))
+                      history)))
+            string pred)))
+       nil nil default 'mediawiki-link-target-history))))
+
+;;;###autoload
+(defun mediawiki-insert-link (&optional target description)
+  "Insert a wiki link, or edit the link at point.
+This is the analogue of `org-insert-link': the target is asked for
+first, with completion over the pages on the current site, then the
+text to display.  Targets with a URI scheme become external links
+\([url text]); anything else becomes an internal link ([[Page]] or
+[[Page|text]]); see `mediawiki-link-syntax'.
+When point is on an existing link its target and text are offered as
+the prompt defaults and the old link is replaced.  With an active
+region, the selected text becomes the link's text; if the selection is
+itself a link, that link is edited instead."
+  (interactive
+   (let* ((region (and (use-region-p)
+                       (cons (region-beginning) (region-end))))
+          (region-text (and region
+                            (buffer-substring-no-properties
+                             (car region) (cdr region))))
+          ;; A selection that is itself a link is edited, not wrapped.
+          (region-link (and region-text (mediawiki-link-in-string region-text)))
+          (existing (or region-link (mediawiki-link-at-point)))
+          (default (cond (region-link (or (plist-get region-link :description)
+                                          (plist-get region-link :target)))
+                         (region region-text)
+                         ((plist-get existing :description))
+                         (t (plist-get existing :target))))
+          (target (mediawiki-read-link-target (plist-get existing :target)))
+          (description (read-string "Description: " (or default target))))
+     ;; The minibuffer may deactivate the mark, so remember it for the body.
+     (setq mediawiki-insert-link--region region)
+     (list target description)))
+  ;; Point on an existing link: offer its values and replace it rather than
+  ;; nesting a new link.
+  (let ((existing (mediawiki-link-at-point))
+        (region (or (bound-and-true-p mediawiki-insert-link--region)
+                    (and (use-region-p)
+                         (cons (region-beginning) (region-end))))))
+    (setq mediawiki-insert-link--region nil)
+    ;; Called from Lisp without arguments, ask the same questions.
+    (unless (and (stringp target) (not (string-empty-p (string-trim target))))
+      (setq target (mediawiki-read-link-target (plist-get existing :target))))
+    (unless (stringp description)
+      (setq description (read-string
+                         "Description: "
+                         (or (and region
+                                  (buffer-substring-no-properties
+                                   (car region) (cdr region)))
+                             (plist-get existing :description)
+                             target))))
+    (cond
+     ;; A selection is replaced by the link.
+     (region
+      (delete-region (car region) (cdr region)))
+     ((and existing (plist-get existing :start) (plist-get existing :end))
+      (delete-region (plist-get existing :start) (plist-get existing :end))))
+    (insert (mediawiki-link-syntax target description))))
 
 ;;;###autoload
 (defun mediawiki-insert-link-www ()

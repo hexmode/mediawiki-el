@@ -1,3 +1,92 @@
+2026-11-02  Mark A. Hershberger  <mah@everybody.org>
+
+	* tests/test-mediawiki-mode.el (test-mediawiki-link-in-string): Cover
+	parsing a string as a link, wrapping a region and editing a selected
+	link.
+
+	* mediawiki-mode.el (mediawiki-link-in-string): Honour an active
+	region in mediawiki-insert-link: the selected text becomes the link
+	text, unless the selection is itself a link, in which case that link
+	is edited.  The region is captured before prompting, because the
+	minibuffer deactivates the mark.
+
+	* tests/test-mediawiki-mode.el
+	(test-mediawiki-link-at-point-internal): Cover finding internal,
+	external and bare links, and editing an existing link with the old
+	values as defaults.
+
+	* mediawiki-mode.el (mediawiki-link-at-point): Find the internal,
+	bracketed external or bare-URL link at point and give
+	mediawiki-insert-link its target and text as prompt defaults,
+	replacing the old link instead of nesting a new one.
+
+	* tests/test-mediawiki-mode.el
+	(test-mediawiki-minibuffer-completion-keys): Cover the keymap copy
+	and that the link prompt installs the hook.
+
+	* mediawiki-site.el (mediawiki-prompt-for-site): Install the M-TAB
+	fix in the site prompt.
+
+	* mediawiki-mode.el (mediawiki-read-link-target): Install the M-TAB
+	fix in the link prompt.
+
+	* mediawiki-core.el
+	(mediawiki-minibuffer-completion-keys): New helper for prompts: copy
+	the minibuffer keymap and bind M-TAB to minibuffer-complete, because
+	a global M-TAB bound to company-complete errors where company is not
+	active.
+
+	* tests/test-mediawiki-completion.el
+	(test-completion-complete-uses-company-when-active): Cover the
+	company path, the completion-at-point fallback and the M-TAB binding.
+
+	* mediawiki-completion.el (mediawiki-complete): Add mediawiki-complete
+	and bind M-TAB to it in mediawiki-mode-map: company-complete errors
+	with "company not enabled" when company-mode is off, so fall back to
+	completion-at-point in that case.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-reply-mode-map): Bind C-x C-s to
+	reply-submit in the reply minor mode: the compose buffers are
+	mediawiki-mode buffers now, where C-x C-s would try to save a page
+	that has no title.  The compose buffer headers say so too.
+
+	* tests/test-mediawiki-discussion-tools.el
+	(test-mdt-new-thread-opens-compose-buffer): Assert that the compose
+	buffers are mediawiki-mode buffers with the reply keys layered on top.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--submit-edit-post): Create the reply,
+	new-thread and edit-post compose buffers in mediawiki-mode, so the
+	usual editing keys, syntax highlighting, link insertion and link
+	completion work there, with the reply keys layered on top.
+
+	* tests/test-mediawiki-completion.el
+	(test-completion-use-company-puts-capf-first): Cover the backend
+	ordering, the no-duplicate case and the mode-hook installation.
+
+	* mediawiki-completion.el (mediawiki-completion-use-company): Put
+	company-capf first in mediawiki buffers so company-complete offers
+	wiki links there without changing the user's global backends, and
+	apply the same backend to buffers that were already open when company
+	loaded.
+
+	* tests/test-mediawiki-simple.el (test-mediawiki-simple-mode): Mock
+	the link prompts now that mediawiki-insert-link asks for a target.
+
+	* tests/test-mediawiki-mode.el (test-mediawiki-link-external-p): Cover
+	the link syntax for internal and external targets, the prompt order,
+	and the new bindings.
+
+	* mediawiki-completion.el (mediawiki-completion-search): Expose the
+	prefixsearch lookup so the link prompt can complete over pages.
+
+	* mediawiki-mode.el (mediawiki-insert-link): Prompt for a link target
+	and the text to show, as `org-insert-link' does, and insert [[Page]]
+	or [[Page|text]] for internal targets and [url text] (or the bare URL)
+	for schemes MediaWiki knows.  Bind it to C-c C-l and move the
+	horizontal rule to C-c C-f C-h.
+
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
 	* mediawiki-core.el (mediawiki-version): Bump version to 4.2.0;

@@ -930,6 +930,15 @@ as a direct lookup into the TOC-ordered section list."
               (should (string= mediawiki-discussion-tools--reply-page
                                "TestPage"))
               (should mediawiki-discussion-tools-reply-mode)
+              ;; The compose buffer is a real wikitext buffer, with the
+              ;; reply keys layered on top.
+              (should (derived-mode-p 'mediawiki-mode))
+              (should (eq (key-binding (kbd "C-c C-c"))
+                          #'mediawiki-discussion-tools-reply-submit))
+              (should (eq (key-binding (kbd "C-x C-s"))
+                          #'mediawiki-discussion-tools-reply-submit))
+              (should (eq (key-binding (kbd "C-c C-l"))
+                          #'mediawiki-insert-link))
               (should (string-match-p
                        (regexp-quote mediawiki-discussion-tools-reply-separator)
                        (buffer-string)))))
@@ -1607,6 +1616,7 @@ as a direct lookup into the TOC-ordered section list."
             (mediawiki-discussion-tools-edit-post)))
         (with-current-buffer "*MW Edit Post*"
           (should (eq mediawiki-discussion-tools--reply-kind 'edit-post))
+          (should (derived-mode-p 'mediawiki-mode))
           (should (string-match-p "Answer one" (buffer-string)))
           (should-not (string-match-p "Answer two" (buffer-string)))))
     (when (get-buffer "*MW Edit Post*")

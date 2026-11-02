@@ -55,6 +55,25 @@ Returns (START . END) where START is after [[ and END is before
       (when (and start end (<= pos end) (>= pos start))
         (cons start end)))))
 
+;;; Page Search
+
+(defun mediawiki-completion-search (prefix &optional sitename)
+  "Return page titles on SITENAME starting with PREFIX.
+SITENAME defaults to `mediawiki-site'.  Returns nil when there is no
+page to search from or the query fails."
+  (let ((sitename (or sitename mediawiki-site)))
+    (when (and sitename (not (string-empty-p (string-trim prefix))))
+      (ignore-errors
+        (let* ((result (mediawiki-api-call
+                        sitename "query"
+                        (list (cons "list" "prefixsearch")
+                              (cons "pssearch" prefix)
+                              (cons "pslimit"
+                                    (int-to-string mediawiki-completion-limit)))))
+               (candidates (alist-get 'prefixsearch (alist-get 'query result))))
+          (mapcar (lambda (candidate) (alist-get 'title candidate))
+                  candidates))))))
+
 ;;; Main Completion Function
 
 ;;;###autoload
@@ -71,29 +90,65 @@ or nil otherwise."
             (lambda (str pred action)
               (if (eq action 'metadata)
                   '(metadata (category . mediawiki-page))
-                (when (not (string-empty-p str))
-                  (let* ((result (mediawiki-api-call
-                                  sitename "query"
-                                  (list (cons "list" "prefixsearch")
-                                        (cons "pssearch" str)
-                                        (cons "pslimit"
-                                              (int-to-string
-                                               mediawiki-completion-limit)))))
-                         (candidates (alist-get 'prefixsearch
-                                                (alist-get 'query result)))
-                         (titles (mapcar (lambda (c) (alist-get 'title c))
-                                         candidates)))
-                    (complete-with-action action titles str pred)))))
+                (complete-with-action
+                 action (mediawiki-completion-search str sitename) str pred)))
             :exclusive 'no))))
+
+;;; Company Integration
+
+(defvar company-backends)
+(defvar company-mode)
+(defvar mediawiki-mode-map)
+
+(defun mediawiki-completion-use-company ()
+  "Put `company-capf' first in this buffer's `company-backends'.
+That makes `company-complete' offer the wiki link completion without
+changing the user's global backend list, and does nothing when company
+is not loaded.  Existing entries are kept and never duplicated."
+  (when (boundp 'company-backends)
+    (setq-local company-backends
+                (cons 'company-capf
+                      (delq 'company-capf (copy-sequence company-backends))))))
+
+(defun mediawiki-completion--company-loaded ()
+  "Set the company backend in mediawiki buffers once company is loaded."
+  (add-hook 'mediawiki-mode-hook #'mediawiki-completion-use-company)
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (derived-mode-p 'mediawiki-mode)
+        (mediawiki-completion-use-company)))))
+
+(with-eval-after-load 'company
+  (mediawiki-completion--company-loaded))
+
+;;; Completion Command
+
+(defvar company-mode)
+
+;;;###autoload
+(defun mediawiki-complete ()
+  "Complete at point, preferring company when it is active.
+Company's `company-complete' errors when company-mode is off, which is
+what a buffer-wide M-TAB binding would otherwise hit; this falls back to
+`completion-at-point' so the key works either way."
+  (interactive)
+  (if (and (fboundp 'company-complete)
+           (bound-and-true-p company-mode))
+      (company-complete)
+    (completion-at-point)))
 
 ;;; Completion Registration
 
 ;;;###autoload
 (with-eval-after-load 'mediawiki-mode
+  (define-key mediawiki-mode-map (kbd "M-TAB") #'mediawiki-complete)
+  ;; GUI frames deliver M-TAB as the `M-tab' function key.
+  (define-key mediawiki-mode-map (kbd "<M-tab>") #'mediawiki-complete)
   (add-hook 'mediawiki-mode-hook
             (lambda ()
               (add-hook 'completion-at-point-functions
-                        #'mediawiki-completion-at-point nil 'local))))
+                        #'mediawiki-completion-at-point nil 'local)
+              (mediawiki-completion-use-company))))
 
 (provide 'mediawiki-completion)
 

@@ -11,7 +11,7 @@ The package has been reorganized into a modular structure for better maintainabi
 * Revision history browser (<code>mediawiki-history</code>) with per-revision view, diffs against the parent or the current revision, restore and browse.
 * Watchlist and user-contributions browsers.
 * Discussion page browser with reply and new-thread support; replies are indented relative to the comment being answered.  Includes a support desk wrapper.  See [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS.mediawiki DISCUSSION-TOOLS.mediawiki] for how to use it, and [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] for a walk-through at the Wikipedia Village Pump.
-* <code>completion-at-point</code> for <code>[[wiki links]]</code>.
+* <code>completion-at-point</code> for <code>[[wiki links]]</code>, including through company-mode's <code>company-capf</code> backend.
 * Password/clientlogin authentication with auth-source support, and OAuth 2.0.
 
 === Installation ===
@@ -44,8 +44,9 @@ Reload from the wiki:    M-g      (mediawiki-reload)
 Open the page in a browser: M-x mediawiki-browse
 Browse revision history: M-x mediawiki-history (from a page buffer, or M-x mediawiki-history RET ''Page title'' RET)
 Reply to a discussion:   C-c C-r  (mediawiki-reply-at-point-simple)
-Insert wiki markup:      C-c C-f C-b (bold), C-c C-f C-i (italics), C-c C-f C-l (link), C-c C-f C-e (header), C-c C-w (signature), M-RET (numbered list), C-\ (bulleted list)
+Insert wiki markup:      C-c C-f C-b (bold), C-c C-f C-i (italics), C-c C-l (link; prompts like org-mode, edits the link at point, and turns an active region into the link text), C-c C-f C-e (header), C-c C-f C-h (horizontal rule), C-c C-w (signature), M-RET (numbered list), C-\ (bulleted list)
 Open the page linked at point: C-RET  (mediawiki-open-page-at-point)
+Complete a [[link]]:     M-TAB    (company when company-mode is on, otherwise completion-at-point)
 
 ==== Basic usage: writing a page in a local file ====
 

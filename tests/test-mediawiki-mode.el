@@ -135,9 +135,13 @@
   (should (commandp 'mediawiki-insert-link))
 
   (with-temp-buffer
-    (mediawiki-insert-link)
-    (should (string= "[[ ]]" (buffer-string)))
-    (should (= 3 (point)))))
+    (cl-letf (((symbol-function 'mediawiki-read-link-target)
+               (lambda (&optional _default) "Emacs"))
+              ((symbol-function 'read-string)
+               (lambda (_prompt default &rest _) default)))
+      (mediawiki-insert-link)
+      (should (string= "[[Emacs]]" (buffer-string)))
+      (should (= (point-max) (point))))))
 
 ;;; Test Text Formatting with Regions
 
@@ -349,6 +353,217 @@ buffer-offer-save=t makes Emacs prompt before killing a modified buffer."
     (mediawiki-mode)
     (should (local-variable-p 'buffer-offer-save))
     (should (buffer-local-value 'buffer-offer-save (current-buffer)))))
+
+;;; Link insertion tests
+
+(ert-deftest test-mediawiki-link-external-p ()
+  "Schemes and //host count as external; page names do not."
+  (should (mediawiki-link-external-p "https://example.org/x"))
+  (should (mediawiki-link-external-p "http://example.org"))
+  (should (mediawiki-link-external-p "mailto:someone@example.org"))
+  (should (mediawiki-link-external-p "//example.org/x"))
+  (should-not (mediawiki-link-external-p "Project:Support desk"))
+  (should-not (mediawiki-link-external-p "w:Help:Links"))
+  (should-not (mediawiki-link-external-p "Page#Section")))
+
+(ert-deftest test-mediawiki-link-syntax-internal ()
+  "Internal links use [[Page]] or [[Page|text]]."
+  (should (equal (mediawiki-link-syntax "Emacs") "[[Emacs]]"))
+  (should (equal (mediawiki-link-syntax "Emacs" "the editor")
+                 "[[Emacs|the editor]]"))
+  (should (equal (mediawiki-link-syntax "Emacs" "Emacs") "[[Emacs]]"))
+  (should (equal (mediawiki-link-syntax "Emacs" "") "[[Emacs]]"))
+  (should (equal (mediawiki-link-syntax "  Emacs  " "  ") "[[Emacs]]")))
+
+(ert-deftest test-mediawiki-link-syntax-external ()
+  "External links use [url text], or the bare URL with no text."
+  (should (equal (mediawiki-link-syntax "https://example.org")
+                 "https://example.org"))
+  (should (equal (mediawiki-link-syntax "https://example.org" "Example")
+                 "[https://example.org Example]"))
+  (should (equal (mediawiki-link-syntax "mailto:a@example.org" "Mail me")
+                 "[mailto:a@example.org Mail me]"))
+  (should (equal (mediawiki-link-syntax "https://example.org"
+                                        "https://example.org")
+                 "https://example.org")))
+
+(ert-deftest test-mediawiki-link-syntax-rejects-brackets ()
+  "A page name cannot contain link delimiters."
+  (should-error (mediawiki-link-syntax "Bad|Name") :type 'user-error)
+  (should-error (mediawiki-link-syntax "Bad]]Name") :type 'user-error)
+  (should-error (mediawiki-link-syntax "   ") :type 'user-error))
+
+(ert-deftest test-mediawiki-insert-link-prompts-in-order ()
+  "The target is asked for first, then the text to show."
+  (let ((prompts nil)
+        (inserted nil))
+    (cl-letf (((symbol-function 'mediawiki-read-link-target)
+               (lambda (&optional _default) (push "Link: " prompts) "Emacs"))
+              ((symbol-function 'read-string)
+               (lambda (prompt &rest _) (push prompt prompts) "GNU Emacs")))
+      (with-temp-buffer
+        (mediawiki-insert-link)
+        (setq inserted (buffer-string))))
+    (should (equal (nreverse prompts) '("Link: " "Description: ")))
+    (should (equal inserted "[[Emacs|GNU Emacs]]"))))
+
+(ert-deftest test-mediawiki-insert-link-uses-target-as-text-by-default ()
+  "Accepting the default description gives the short internal form."
+  (cl-letf (((symbol-function 'mediawiki-read-link-target)
+             (lambda (&optional _default) "Emacs"))
+            ((symbol-function 'read-string)
+             (lambda (_prompt default &rest _) default)))
+    (with-temp-buffer
+      (mediawiki-insert-link)
+      (should (equal (buffer-string) "[[Emacs]]")))))
+
+(ert-deftest test-mediawiki-minibuffer-completion-keys ()
+  "M-TAB completes in the prompt without changing the shared keymap."
+  (with-temp-buffer
+    (use-local-map (make-sparse-keymap))
+    (define-key (current-local-map) (kbd "TAB") #'ignore)
+    (let ((shared (current-local-map)))
+      (mediawiki-minibuffer-completion-keys)
+      (should (eq (key-binding (kbd "M-TAB")) #'minibuffer-complete))
+      (should (eq (key-binding (kbd "<M-tab>")) #'minibuffer-complete))
+      (should-not (eq shared (current-local-map)))
+      (should-not (lookup-key shared (kbd "M-TAB"))))))
+
+(ert-deftest test-mediawiki-link-target-prompt-binds-mtab ()
+  "The link prompt installs the M-TAB fix in its minibuffer."
+  (let ((seen nil))
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (&rest _)
+                 ;; Run the setup hook the prompt installed, in a buffer
+                 ;; with its own local map, as the minibuffer would.
+                 (with-temp-buffer
+                   (use-local-map (make-sparse-keymap))
+                   (run-hooks 'minibuffer-setup-hook)
+                   (setq seen (key-binding (kbd "M-TAB"))))
+                 "Emacs")))
+      (should (equal (mediawiki-read-link-target) "Emacs")))
+    (should (eq seen #'minibuffer-complete))))
+
+(ert-deftest test-mediawiki-link-in-string ()
+  "A string is parsed as a link only when it is exactly one."
+  (should (equal (mediawiki-link-in-string "[[Emacs|the editor]]")
+                 '(:target "Emacs" :description "the editor")))
+  (should (equal (mediawiki-link-in-string "[[Emacs]]")
+                 '(:target "Emacs" :description nil)))
+  (should (equal (mediawiki-link-in-string "[https://example.org Example]")
+                 '(:target "https://example.org" :description "Example")))
+  (should (equal (mediawiki-link-in-string "https://example.org")
+                 '(:target "https://example.org"
+                   :description "https://example.org")))
+  (should-not (mediawiki-link-in-string "plain words"))
+  (should-not (mediawiki-link-in-string "Project:Support desk"))
+  (should-not (mediawiki-link-in-string "  ")))
+
+(ert-deftest test-mediawiki-insert-link-wraps-region ()
+  "Selected text becomes the text of the new link."
+  (with-temp-buffer
+    (let ((transient-mark-mode t))
+      (insert "see the manual")
+      (goto-char (point-min))
+      (search-forward "the manual")
+      (set-mark (point))
+      (search-backward "the manual")
+      (activate-mark)
+      (cl-letf (((symbol-function 'mediawiki-read-link-target)
+                 (lambda (&optional _default) "Emacs"))
+                ((symbol-function 'read-string)
+                 (lambda (_prompt &optional default &rest _) default)))
+        (call-interactively #'mediawiki-insert-link)))
+    (should (equal (buffer-string) "see [[Emacs|the manual]]"))))
+
+(ert-deftest test-mediawiki-insert-link-edits-selected-link ()
+  "A selection that is a link is edited rather than wrapped again."
+  (with-temp-buffer
+    (let ((transient-mark-mode t)
+          (seen-default nil))
+      (insert "see [[Old|old text]] here")
+      (goto-char (point-min))
+      (search-forward "[[Old|old text]]")
+      (set-mark (point))
+      (search-backward "[[Old|old text]]")
+      (activate-mark)
+      (cl-letf (((symbol-function 'mediawiki-read-link-target)
+                 (lambda (&optional default)
+                   (setq seen-default default)
+                   "New"))
+                ((symbol-function 'read-string)
+                 (lambda (_prompt &optional default &rest _) default)))
+        (call-interactively #'mediawiki-insert-link))
+      (should (equal seen-default "Old")))
+    (should (equal (buffer-string) "see [[New|old text]] here"))))
+
+(ert-deftest test-mediawiki-link-at-point-internal ()
+  "An internal link is found with its target, text and bounds."
+  (with-temp-buffer
+    (insert "See [[Emacs|the editor]] here.")
+    (goto-char (point-min))
+    (search-forward "Emacs")
+    (let ((link (mediawiki-link-at-point)))
+      (should (equal (plist-get link :target) "Emacs"))
+      (should (equal (plist-get link :description) "the editor"))
+      (should (equal (buffer-substring-no-properties
+                      (plist-get link :start) (plist-get link :end))
+                     "[[Emacs|the editor]]"))))
+  (with-temp-buffer
+    (insert "See [[Emacs]] here.")
+    (goto-char (point-min))
+    (search-forward "Emacs")
+    (let ((link (mediawiki-link-at-point)))
+      (should (equal (plist-get link :target) "Emacs"))
+      (should-not (plist-get link :description)))))
+
+(ert-deftest test-mediawiki-link-at-point-external ()
+  "Bracketed and bare external links are found."
+  (with-temp-buffer
+    (insert "Visit [https://example.org Example] today.")
+    (goto-char (point-min))
+    (search-forward "Example]")
+    (backward-char)
+    (let ((link (mediawiki-link-at-point)))
+      (should (equal (plist-get link :target) "https://example.org"))
+      (should (equal (plist-get link :description) "Example"))))
+  (with-temp-buffer
+    (insert "Go to https://example.org now.")
+    (goto-char (point-min))
+    (search-forward "https://exam")
+    (let ((link (mediawiki-link-at-point)))
+      (should (equal (plist-get link :target) "https://example.org"))))
+  (with-temp-buffer
+    (insert "Nothing to see here.")
+    (goto-char (point-min))
+    (should-not (mediawiki-link-at-point))))
+
+(ert-deftest test-mediawiki-insert-link-edits-existing-link ()
+  "C-c C-l on a link replaces it, offering the old values as defaults."
+  (with-temp-buffer
+    (insert "See [[Old|old text]] here.")
+    (goto-char (point-min))
+    (search-forward "Old")
+    (let ((seen-default nil))
+      (cl-letf (((symbol-function 'mediawiki-read-link-target)
+                 (lambda (&optional default)
+                   (setq seen-default default)
+                   default))
+                ((symbol-function 'read-string)
+                 (lambda (_prompt &optional default &rest _)
+                   (if (equal default "old text") "new text" default))))
+        (call-interactively #'mediawiki-insert-link))
+      (should (equal seen-default "Old")))
+    (should (equal (buffer-string) "See [[Old|new text]] here."))))
+
+(ert-deftest test-mediawiki-insert-link-key-bindings ()
+  "C-c C-l inserts a link, as in org-mode; the hline moved."
+  (should (eq (lookup-key mediawiki-mode-map (kbd "C-c C-l"))
+              #'mediawiki-insert-link))
+  (should (eq (lookup-key mediawiki-mode-map (kbd "C-c C-f C-l"))
+              #'mediawiki-insert-link))
+  (should (eq (lookup-key mediawiki-mode-map (kbd "C-c C-f C-h"))
+              #'mediawiki-insert-hline)))
 
 (provide 'test-mediawiki-mode)
 

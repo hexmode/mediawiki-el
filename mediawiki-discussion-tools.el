@@ -56,6 +56,7 @@
 (require 'mediawiki-api)
 (require 'mediawiki-utils)
 (require 'mediawiki-recent)
+(require 'mediawiki-mode)
 (require 'tabulated-list)
 (require 'cl-lib)
 (require 'browse-url)
@@ -1091,9 +1092,13 @@ page is opened at the thread's heading instead."
                                   text (car block) (cdr block)))))
           (let ((buf (get-buffer-create "*MW Edit Post*")))
             (with-current-buffer buf
+              ;; A real wikitext buffer: mediawiki-mode keybindings, syntax
+              ;; highlighting, link insertion and completion, with the reply
+              ;; minor mode layered on top for C-c C-c / C-c C-k.
+              (mediawiki-mode)
               (erase-buffer)
               (insert "Editing post by " (or author "unknown") " in " title "\n")
-              (insert "Press C-c C-c to save, C-c C-k to cancel.\n")
+              (insert "Press C-c C-c or C-x C-s to save, C-c C-k to cancel.\n")
               (insert mediawiki-discussion-tools-reply-separator "\n\n")
               (insert body)
               (mediawiki-discussion-tools-reply-mode 1)
@@ -1221,6 +1226,9 @@ prefix, which is the quickest way to find the archive pages."
 (defvar mediawiki-discussion-tools-reply-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-c") #'mediawiki-discussion-tools-reply-submit)
+    ;; Compose buffers are mediawiki-mode buffers, whose C-x C-s wants a page
+    ;; title; in these buffers saving means posting.
+    (define-key map (kbd "C-x C-s") #'mediawiki-discussion-tools-reply-submit)
     (define-key map (kbd "C-c C-k") #'mediawiki-discussion-tools-reply-cancel)
     map)
   "Keymap for `mediawiki-discussion-tools-reply-mode'.")
@@ -1327,9 +1335,10 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
                     (or (alist-get 'id thread) "unknown")))
       (let ((buf (get-buffer-create "*MW Reply*")))
         (with-current-buffer buf
+          (mediawiki-mode)
           (erase-buffer)
           (insert "Reply to: " title "\n")
-          (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
+          (insert "Press C-c C-c or C-x C-s to post, C-c C-k to cancel.\n")
           (insert mediawiki-discussion-tools-reply-separator "\n\n")
           (mediawiki-discussion-tools-reply-mode 1)
           (setq mediawiki-discussion-tools--reply-kind 'reply
@@ -1483,9 +1492,10 @@ Use \\[mediawiki-discussion-tools-reply-submit] to post,
       (user-error "No site or page configured"))
     (let ((buf (get-buffer-create "*MW New Thread*")))
       (with-current-buffer buf
+        (mediawiki-mode)
         (erase-buffer)
         (insert "New thread: " title "\n")
-        (insert "Press C-c C-c to post, C-c C-k to cancel.\n")
+        (insert "Press C-c C-c or C-x C-s to post, C-c C-k to cancel.\n")
         (insert mediawiki-discussion-tools-reply-separator "\n\n")
         (mediawiki-discussion-tools-reply-mode 1)
         (setq mediawiki-discussion-tools--reply-kind 'new-thread

@@ -27,6 +27,12 @@
 (require 'mediawiki-completion)
 (require 'mediawiki-utils)
 
+(defvar company-backends '(company-dabbrev company-capf company-files)
+  "Stand-in for company-mode's backend list; company is not loaded in the suite.")
+
+(defvar company-mode nil
+  "Stand-in for company-mode's minor mode variable during tests.")
+
 ;;; Test Existence
 
 (ert-deftest test-completion-at-point-exists ()
@@ -42,6 +48,59 @@
   (should (boundp 'mediawiki-completion-limit))
   (should (numberp mediawiki-completion-limit))
   (should (> mediawiki-completion-limit 0)))
+
+;;; Company Integration
+
+(ert-deftest test-completion-use-company-puts-capf-first ()
+  "`company-capf' goes first without dropping the user's backends."
+  (with-temp-buffer
+    (setq-local company-backends '(company-dabbrev company-capf company-files))
+    (mediawiki-completion-use-company)
+    (should (eq (car company-backends) 'company-capf))
+    (should (equal (cdr company-backends) '(company-dabbrev company-files)))
+    ;; Running again must not duplicate the backend.
+    (mediawiki-completion-use-company)
+    (should (= 1 (seq-count (lambda (backend) (eq backend 'company-capf))
+                            company-backends)))))
+
+(ert-deftest test-completion-mode-hook-sets-company-backend ()
+  "Entering a mediawiki buffer arranges company completion."
+  (with-temp-buffer
+    (mediawiki-mode)
+    (should (local-variable-p 'company-backends))
+    (should (eq (car company-backends) 'company-capf))
+    (should (memq 'company-dabbrev company-backends))))
+
+;;; Completion Command
+
+(ert-deftest test-completion-complete-uses-company-when-active ()
+  "M-TAB prefers company when company-mode is on."
+  (let ((company-mode t)
+        (called nil))
+    (cl-letf (((symbol-function 'company-complete)
+               (lambda () (setq called 'company)))
+              ((symbol-function 'completion-at-point)
+               (lambda () (setq called 'capf))))
+      (mediawiki-complete)
+      (should (eq called 'company)))))
+
+(ert-deftest test-completion-complete-falls-back-to-capf ()
+  "Without company-mode enabled, M-TAB completes directly."
+  (let ((company-mode nil)
+        (called nil))
+    (cl-letf (((symbol-function 'company-complete)
+               (lambda () (error "company not enabled")))
+              ((symbol-function 'completion-at-point)
+               (lambda () (setq called 'capf))))
+      (mediawiki-complete)
+      (should (eq called 'capf)))))
+
+(ert-deftest test-completion-mtab-binding ()
+  "M-TAB is bound to the wrapper in mediawiki buffers, in both forms."
+  (should (eq (lookup-key mediawiki-mode-map (kbd "M-TAB"))
+              #'mediawiki-complete))
+  (should (eq (lookup-key mediawiki-mode-map (kbd "<M-tab>"))
+              #'mediawiki-complete)))
 
 ;;; Test Behavior Outside Link Context
 

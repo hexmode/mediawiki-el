@@ -98,6 +98,20 @@ Right now, this only means replacing \"_\" with \" \"."
   (when name
     (replace-regexp-in-string "_" " " name)))
 
+(defun mediawiki-minibuffer-completion-keys ()
+  "Make M-TAB complete in the current minibuffer prompt.
+For use from `minibuffer-with-setup-hook' around a `completing-read'.
+Some setups bind M-TAB globally to `company-complete', which signals
+\"company not enabled\" where company is not active and would otherwise
+shadow the minibuffer's own completion.  The minibuffer's keymap is
+copied first, so shared maps are left alone."
+  (let ((map (copy-keymap (current-local-map))))
+    ;; A GUI sends M-TAB as the `M-tab' function key, a terminal as M-TAB
+    ;; (C-M-i); a user binding on either would otherwise win.
+    (define-key map (kbd "M-TAB") #'minibuffer-complete)
+    (define-key map (kbd "<M-tab>") #'minibuffer-complete)
+    (use-local-map map)))
+
 (declare-function mediawiki-site-url "mediawiki-site")
 (defun mediawiki-make-url (title action &optional sitename)
   "Return a url when given a TITLE, ACTION and, optionally, SITENAME."

@@ -160,6 +160,7 @@ If BUFFER is not given, the current buffer is used."
 
 (declare-function mediawiki-do-login "mediawiki-auth")
 (declare-function mediawiki-edit "mediawiki-page")
+(declare-function mediawiki-minibuffer-completion-keys "mediawiki-core")
 (declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
 (declare-function mediawiki-oauth-userinfo "mediawiki-oauth")
 ;;;###autoload
@@ -256,7 +257,9 @@ positional format where the 6th element (index 5) is the first page."
                    (when mediawiki-site
                      (format " (default %s)" mediawiki-site))
                    ": "))
-          (answer (completing-read prompt mediawiki-site-alist nil t)))
+          (answer (minibuffer-with-setup-hook
+                      #'mediawiki-minibuffer-completion-keys
+                    (completing-read prompt mediawiki-site-alist nil t))))
     (if (string= "" answer)
       mediawiki-site
       answer)))
