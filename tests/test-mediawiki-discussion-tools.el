@@ -1533,13 +1533,139 @@ as a direct lookup into the TOC-ordered section list."
     (should (looking-at-p "== Topic =="))
     (should-not (mediawiki-discussion-tools--goto-section-heading "Missing"))))
 
-(ert-deftest test-mdt-edit-post-opens-page-at-section ()
-  "Editing opens the page on its site and moves to the thread's heading."
+(defconst test-mdt--section-text
+  (concat
+   "== Topic ==\n"
+   "Question? [[User:Dave|Dave]] ([[User talk:Dave|talk]]) 09:00, 1 November 2026 (UTC)\n"
+   "\n"
+   ": Answer one. [[User:Alice|Alice]] ([[User talk:Alice|talk]]) 10:00, 1 November 2026 (UTC)\n"
+   ":: Follow-up. [[User:Bob|Bob]] ([[User talk:Bob|talk]]) 11:00, 1 November 2026 (UTC)\n"
+   ": Answer two. [[User:Carol|Carol]] ([[User talk:Carol|talk]]) 12:00, 1 November 2026 (UTC)\n")
+  "A section with three signed replies.")
+
+(defun test-mdt--signed-thread ()
+  "Return a thread whose replies match `test-mdt--section-text'."
+  (list (cons 'id "h-Topic-20260616005000")
+        (cons 'title "Topic")
+        (cons 'replies
+              (list (list (cons 'id "c-Dave-1") (cons 'author "Dave"))
+                    (list (cons 'id "c-Alice-1") (cons 'author "Alice")
+                          (cons 'replies
+                                (list (list (cons 'id "c-Bob-1")
+                                            (cons 'author "Bob")))))
+                    (list (cons 'id "c-Carol-1") (cons 'author "Carol"))))))
+
+(ert-deftest test-mdt-comment-blocks ()
+  "Signed comments are cut out of the section, heading excluded."
+  (let ((blocks (mediawiki-discussion-tools--comment-blocks
+                 test-mdt--section-text)))
+    (should (= 4 (length blocks)))
+    (should (string-match-p "\\`Question?"
+                            (string-trim
+                             (substring-no-properties
+                              test-mdt--section-text
+                              (car (nth 0 blocks)) (cdr (nth 0 blocks))))))
+    (should (string-match-p "Answer one"
+                            (substring-no-properties
+                             test-mdt--section-text
+                             (car (nth 1 blocks)) (cdr (nth 1 blocks)))))))
+
+(ert-deftest test-mdt-block-for-comment ()
+  "The block for a comment is the one carrying its author's signature."
+  (let ((block (mediawiki-discussion-tools--block-for-comment
+                test-mdt--section-text (test-mdt--signed-thread) "c-Alice-1")))
+    (should block)
+    (let ((text (substring-no-properties
+                 test-mdt--section-text (car block) (cdr block))))
+      (should (string-match-p "Answer one" text))
+      (should (string-match-p "Alice" text))
+      (should-not (string-match-p "Answer two" text))))
+  (should-not (mediawiki-discussion-tools--block-for-comment
+               test-mdt--section-text (test-mdt--signed-thread) "c-Unknown")))
+
+(ert-deftest test-mdt-edit-post-opens-compose-buffer ()
+  "e opens just the comment's wikitext for editing."
+  (unwind-protect
+      (progn
+        (cl-letf (((symbol-function 'mediawiki-discussion-tools--section-for-thread)
+                   (lambda (&rest _) 1))
+                  ((symbol-function 'mediawiki-discussion-tools--section-wikitext)
+                   (lambda (&rest _) test-mdt--section-text))
+                  ((symbol-function 'mediawiki-discussion-tools--page-timestamp)
+                   (lambda (&rest _) "2026-11-01T00:00:00Z"))
+                  ((symbol-function 'pop-to-buffer)
+                   (lambda (buf &rest _) (set-buffer buf))))
+          (with-temp-buffer
+            (insert ": Answer one. [[User:Alice|Alice]] 10:00, 1 November 2026 (UTC)")
+            (add-text-properties (point-min) (point-max)
+                                 '(mediawiki-comment-id "c-Alice-1"))
+            (setq mediawiki-discussion-tools--sitename "TestSite"
+                  mediawiki-discussion-tools--page "Project:Support desk"
+                  mediawiki-discussion-tools--threads (list (test-mdt--signed-thread))
+                  mediawiki-discussion-tools--view-index 0)
+            (goto-char (point-min))
+            (mediawiki-discussion-tools-edit-post)))
+        (with-current-buffer "*MW Edit Post*"
+          (should (eq mediawiki-discussion-tools--reply-kind 'edit-post))
+          (should (string-match-p "Answer one" (buffer-string)))
+          (should-not (string-match-p "Answer two" (buffer-string)))))
+    (when (get-buffer "*MW Edit Post*")
+      (kill-buffer "*MW Edit Post*"))))
+
+(ert-deftest test-mdt-edit-post-submit-rewrites-only-that-comment ()
+  "Saving replaces the comment and leaves the rest of the section alone."
+  (let ((posted nil))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'mediawiki-discussion-tools--section-wikitext)
+                     (lambda (&rest _) test-mdt--section-text))
+                    ((symbol-function 'mediawiki-site-get-token)
+                     (lambda (&rest _) "csrf-token"))
+                    ((symbol-function 'mediawiki-api-call)
+                     (lambda (_site action args)
+                       (when (string= action "edit")
+                         (setq posted args))
+                       '((edit (("result" . "Success"))))))
+                    ((symbol-function 'quit-window) #'ignore)
+                    ((symbol-function 'mediawiki-discussion-tools--refresh-buffers)
+                     #'ignore)
+                    ((symbol-function 'pop-to-buffer)
+                     (lambda (buf &rest _) (set-buffer buf))))
+            (with-current-buffer (get-buffer-create "*MW Test Edit*")
+              (erase-buffer)
+              (insert "Editing post by Alice\n"
+                      mediawiki-discussion-tools-reply-separator "\n\n"
+                      ": Answer one, revised. [[User:Alice|Alice]] 10:05, 1 November 2026 (UTC)")
+              (mediawiki-discussion-tools-reply-mode 1)
+              (setq mediawiki-discussion-tools--reply-kind 'edit-post
+                    mediawiki-discussion-tools--reply-site "TestSite"
+                    mediawiki-discussion-tools--reply-page "Project:Support desk"
+                    mediawiki-discussion-tools--reply-section 1
+                    mediawiki-discussion-tools--reply-summary "/* Topic */ Edit comment by Alice"
+                    mediawiki-discussion-tools--edit-thread (test-mdt--signed-thread)
+                    mediawiki-discussion-tools--edit-comment-id "c-Alice-1"
+                    mediawiki-discussion-tools--edit-base "2026-11-01T00:00:00Z")
+              (mediawiki-discussion-tools-reply-submit)))
+          (should posted)
+          (let ((new-text (cdr (assoc "text" posted))))
+            (should (string-match-p "Answer one, revised" new-text))
+            (should (string-match-p "Follow-up" new-text))
+            (should (string-match-p "Answer two" new-text))
+            (should (string-match-p "\\`== Topic ==" new-text))
+            (should-not (string-match-p "Answer one\\." new-text)))
+          (should (equal (cdr (assoc "section" posted)) 1))
+          (should (equal (cdr (assoc "basetimestamp" posted))
+                         "2026-11-01T00:00:00Z")))
+      (when (get-buffer "*MW Test Edit*")
+        (kill-buffer "*MW Test Edit*")))))
+
+(ert-deftest test-mdt-edit-post-falls-back-to-page ()
+  "Without a locatable comment the page opens at the heading."
   (let ((opened nil))
     (cl-letf (((symbol-function 'mediawiki-open)
                (lambda (page site)
                  (setq opened (list page site))
-                 (insert "Intro\n\n== Other ==\n\nx\n\n== Topic ==\n\nbody\n"))))
+                 (insert "Intro\n\n== Topic ==\n\nbody\n"))))
       (with-temp-buffer
         (setq mediawiki-discussion-tools--sitename "TestSite"
               mediawiki-discussion-tools--page "Project:Support desk"

@@ -164,6 +164,26 @@ The user's reply text starts on the line after the separator."
 (defvar-local mediawiki-discussion-tools--last-viewed-id nil
   "Thread ID last shown in the view buffer, to avoid redundant updates.")
 
+(defvar-local mediawiki-discussion-tools--reply-site nil)
+(defvar-local mediawiki-discussion-tools--reply-page nil)
+(defvar-local mediawiki-discussion-tools--reply-section nil)
+(defvar-local mediawiki-discussion-tools--reply-indent ":"
+  "Indentation prefix for the pending reply, matching the comment it answers.")
+(defvar-local mediawiki-discussion-tools--reply-summary nil)
+(defvar-local mediawiki-discussion-tools--reply-kind 'reply
+  "What the compose buffer is for: `reply', `new-thread' or `edit-post'.")
+(defvar-local mediawiki-discussion-tools--reply-title nil
+  "Thread title being created in a `new-thread' compose buffer.")
+
+(defvar-local mediawiki-discussion-tools--edit-thread nil
+  "Thread record whose comment is being edited.")
+
+(defvar-local mediawiki-discussion-tools--edit-comment-id nil
+  "DiscussionTools id of the comment being edited.")
+
+(defvar-local mediawiki-discussion-tools--edit-base nil
+  "Revision timestamp seen when the comment edit started.")
+
 (defvar-local mediawiki-discussion-tools--known-ids nil
   "Thread IDs seen at the last successful refresh of this buffer.
 Used to notice threads that vanished, which usually means they were
@@ -914,11 +934,117 @@ Returns non-nil when a heading was found."
         (recenter 0))
       t)))
 
+;;; Editing one comment
+
+;; `action=edit' can replace a whole section, and DiscussionTools has no API
+;; for rewriting a single comment.  So a comment is edited by cutting its
+;; wikitext out of the section, letting the user change it, and writing the
+;; section back with everything else untouched.
+
+(defconst mediawiki-discussion-tools--signature-time-regexp
+  "[0-9]\\{1,2\\}:[0-9]\\{2\\}"
+  "Matches the time part of a wiki signature.")
+
+(defun mediawiki-discussion-tools--section-lines (text)
+  "Return (BEG . END) for each line of TEXT, ENDs excluding newlines."
+  (let ((pos 0) lines)
+    (while (< pos (length text))
+      (let ((nl (or (string-match "\n" text pos) (length text))))
+        (push (cons pos nl) lines)
+        (setq pos (1+ nl))))
+    (nreverse lines)))
+
+(defun mediawiki-discussion-tools--signature-line-p (line)
+  "Return non-nil when LINE ends a signed comment."
+  (and (string-match-p mediawiki-discussion-tools--signature-time-regexp line)
+       (string-match-p "\\(?:User\\|Special:Contributions\\)" line)))
+
+(defun mediawiki-discussion-tools--comment-blocks (text)
+  "Return the signed comments of section TEXT as (START . END) pairs.
+START is the first non-blank character of the block and END is the end
+of the signature line, so the blank space between comments is left out."
+  (let* ((lines (mediawiki-discussion-tools--section-lines text))
+         (heading (car lines))
+         (start (if (and heading
+                         (string-match-p
+                          "\\`=\\{2,6\\}"
+                          (substring-no-properties text (car heading) (cdr heading))))
+                    (min (1+ (cdr heading)) (length text))
+                  0))
+         blocks)
+    (dolist (line lines)
+      (when (mediawiki-discussion-tools--signature-line-p
+             (substring-no-properties text (car line) (cdr line)))
+        ;; Skip the blank space that separates comments.
+        (let ((begin start))
+          (while (and (< begin (car line))
+                      (memq (aref text begin) '(?\s ?\t ?\n)))
+            (setq begin (1+ begin)))
+          (push (cons begin (cdr line)) blocks))
+        (setq start (min (1+ (cdr line)) (length text)))))
+    (nreverse blocks)))
+
+(defun mediawiki-discussion-tools--mentions-author-p (text author)
+  "Return non-nil when TEXT mentions AUTHOR in a signature-like link."
+  (and author
+       (cl-some (lambda (name)
+                  (let ((quoted (regexp-quote name)))
+                    (or (string-match-p (concat "User:" quoted "\\|User talk:" quoted)
+                                        text)
+                        (string-match-p (concat "Special:Contributions/" quoted)
+                                        text))))
+                (list author (string-replace " " "_" author)))))
+
+(defun mediawiki-discussion-tools--block-for-comment (text thread comment-id)
+  "Return the (START . END) block of COMMENT-ID inside section TEXT.
+THREAD supplies the comments in document order.  Returns nil when the
+comment cannot be located confidently."
+  (let* ((comments (seq-filter (lambda (comment) (alist-get 'author comment))
+                               (mediawiki-discussion-tools--flatten-replies
+                                (alist-get 'replies thread))))
+         (index (cl-position-if (lambda (comment)
+                                  (equal (alist-get 'id comment) comment-id))
+                                comments))
+         (blocks (mediawiki-discussion-tools--comment-blocks text)))
+    (when index
+      (let ((author (alist-get 'author (nth index comments))))
+        (cond
+         ;; One signature per comment: the position is exact.
+         ((= (length comments) (length blocks))
+          (let ((block (nth index blocks)))
+            (when (mediawiki-discussion-tools--mentions-author-p
+                   (substring-no-properties text (car block) (cdr block))
+                   author)
+              block)))
+         ;; Otherwise only trust an author that signed exactly one comment.
+         (t
+          (let ((matches (seq-filter
+                          (lambda (block)
+                            (mediawiki-discussion-tools--mentions-author-p
+                             (substring-no-properties text (car block) (cdr block))
+                             author))
+                          blocks)))
+            (when (= 1 (length matches))
+              (car matches)))))))))
+
+(defun mediawiki-discussion-tools--page-timestamp (site page)
+  "Return the timestamp of PAGE's latest revision on SITE, or nil."
+  (ignore-errors
+    (let* ((result (mediawiki-api-call site "query"
+                     `(("prop" . "revisions")
+                       ("rvprop" . "timestamp")
+                       ("rvlimit" . "1")
+                       ("titles" . ,page)
+                       ("formatversion" . "2"))))
+           (info (car (alist-get 'pages (alist-get 'query result)))))
+      (alist-get 'timestamp (car (alist-get 'revisions info))))))
+
 (defun mediawiki-discussion-tools-edit-post ()
-  "Edit the page at the thread containing the comment at point.
-DiscussionTools has no API for rewriting a single comment, so this
-opens the page in a normal mediawiki buffer with point on the thread's
-heading, where the comment can be edited as wikitext."
+  "Edit the post at point.
+The comment's wikitext is cut out of the thread's section, edited in a
+compose buffer, and written back with `action=edit&section=N', leaving
+the rest of the section alone.  When the comment cannot be located, the
+page is opened at the thread's heading instead."
   (interactive)
   (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
                        (current-buffer)))
@@ -932,15 +1058,58 @@ heading, where the comment can be edited as wikitext."
                     (car (with-current-buffer list-buf
                            (mediawiki-discussion-tools--thread-at-point)))))
          (thread (when (and index threads (< index (length threads)))
-                   (nth index threads))))
+                   (nth index threads)))
+         (comment-id (mediawiki-discussion-tools--comment-id-at-point)))
     (unless thread
       (user-error "No thread selected — move point to a thread first"))
     (unless (and site page)
       (user-error "No site or page configured"))
-    (let ((title (alist-get 'title thread)))
-      (mediawiki-open page site)
-      (mediawiki-discussion-tools--goto-section-heading title)
-      (message "Editing %s on %s" page site))))
+    (let* ((title (alist-get 'title thread))
+           (section (and comment-id
+                         (mediawiki-discussion-tools--section-for-thread
+                          thread site page)))
+           (text (and section
+                      (mediawiki-discussion-tools--section-wikitext
+                       site page section)))
+           (block (and text
+                       (mediawiki-discussion-tools--block-for-comment
+                        text thread comment-id))))
+      (if (not block)
+          (progn
+            (mediawiki-open page site)
+            (mediawiki-discussion-tools--goto-section-heading title)
+            (message "Could not isolate the post; editing %s at the thread's heading"
+                     page))
+        (let ((author (alist-get 'author
+                                 (cl-find comment-id
+                                          (mediawiki-discussion-tools--flatten-replies
+                                           (alist-get 'replies thread))
+                                          :key (lambda (comment)
+                                                 (alist-get 'id comment))
+                                          :test #'equal)))
+              (body (string-trim (substring-no-properties
+                                  text (car block) (cdr block)))))
+          (let ((buf (get-buffer-create "*MW Edit Post*")))
+            (with-current-buffer buf
+              (erase-buffer)
+              (insert "Editing post by " (or author "unknown") " in " title "\n")
+              (insert "Press C-c C-c to save, C-c C-k to cancel.\n")
+              (insert mediawiki-discussion-tools-reply-separator "\n\n")
+              (insert body)
+              (mediawiki-discussion-tools-reply-mode 1)
+              (setq mediawiki-discussion-tools--reply-kind 'edit-post
+                    mediawiki-discussion-tools--reply-site site
+                    mediawiki-discussion-tools--reply-page page
+                    mediawiki-discussion-tools--reply-section section
+                    mediawiki-discussion-tools--reply-title title
+                    mediawiki-discussion-tools--reply-summary
+                    (format "/* %s */ Edit comment by %s" title (or author "unknown"))
+                    mediawiki-discussion-tools--edit-thread thread
+                    mediawiki-discussion-tools--edit-comment-id comment-id
+                    mediawiki-discussion-tools--edit-base
+                    (mediawiki-discussion-tools--page-timestamp site page)))
+            (pop-to-buffer buf)
+            (goto-char (point-max))))))))
 
 (defun mediawiki-discussion-tools--format-timestamp (ts)
   "Format ISO 8601 TS as a human-readable date (UTC)."
@@ -1055,17 +1224,6 @@ prefix, which is the quickest way to find the archive pages."
     (define-key map (kbd "C-c C-k") #'mediawiki-discussion-tools-reply-cancel)
     map)
   "Keymap for `mediawiki-discussion-tools-reply-mode'.")
-
-(defvar-local mediawiki-discussion-tools--reply-site nil)
-(defvar-local mediawiki-discussion-tools--reply-page nil)
-(defvar-local mediawiki-discussion-tools--reply-section nil)
-(defvar-local mediawiki-discussion-tools--reply-indent ":"
-  "Indentation prefix for the pending reply, matching the comment it answers.")
-(defvar-local mediawiki-discussion-tools--reply-summary nil)
-(defvar-local mediawiki-discussion-tools--reply-kind 'reply
-  "What the compose buffer is for: `reply' or `new-thread'.")
-(defvar-local mediawiki-discussion-tools--reply-title nil
-  "Thread title being created in a `new-thread' compose buffer.")
 
 (define-minor-mode mediawiki-discussion-tools-reply-mode
   "Minor mode for composing a reply.
@@ -1258,14 +1416,52 @@ the separator is missing."
             (mediawiki-discussion-tools--refresh-buffers page))
         (error "New thread failed: %S" result)))))
 
+(defun mediawiki-discussion-tools--submit-edit-post ()
+  "Write the edited comment back into its section."
+  (let* ((site mediawiki-discussion-tools--reply-site)
+         (page mediawiki-discussion-tools--reply-page)
+         (section mediawiki-discussion-tools--reply-section)
+         (summary mediawiki-discussion-tools--reply-summary)
+         (thread mediawiki-discussion-tools--edit-thread)
+         (comment-id mediawiki-discussion-tools--edit-comment-id)
+         (base mediawiki-discussion-tools--edit-base)
+         (body (string-trim (mediawiki-discussion-tools--compose-body)))
+         (text (mediawiki-discussion-tools--section-wikitext site page section))
+         (block (mediawiki-discussion-tools--block-for-comment
+                 text thread comment-id))
+         (token (mediawiki-site-get-token site "csrf")))
+    (when (string-empty-p body)
+      (user-error "The post is empty"))
+    (unless block
+      (user-error "The post moved or vanished; refresh the thread and try again"))
+    (unless token
+      (error "No CSRF token — authenticate first"))
+    (let ((result (mediawiki-api-call site "edit"
+                    `(("title" . ,page)
+                      ("section" . ,section)
+                      ("text" . ,(concat (substring text 0 (car block))
+                                         body
+                                         (substring text (cdr block))))
+                      ("summary" . ,summary)
+                      ("token" . ,token)
+                      ("formatversion" . "2")
+                      ,@(when base `(("basetimestamp" . ,base)))))))
+      (if (alist-get 'edit result)
+          (progn
+            (message "Post updated")
+            (quit-window)
+            (mediawiki-discussion-tools--refresh-buffers page))
+        (error "Edit failed: %S" result)))))
+
 (defun mediawiki-discussion-tools-reply-submit ()
   "Post the text in the current compose buffer.
-Posts a reply or a new thread, depending on the command that opened
-the buffer."
+Posts a reply, a new thread or an edited post, depending on the
+command that opened the buffer."
   (interactive)
-  (if (eq mediawiki-discussion-tools--reply-kind 'new-thread)
-      (mediawiki-discussion-tools--submit-new-thread)
-    (mediawiki-discussion-tools--submit-reply)))
+  (pcase mediawiki-discussion-tools--reply-kind
+    ('new-thread (mediawiki-discussion-tools--submit-new-thread))
+    ('edit-post (mediawiki-discussion-tools--submit-edit-post))
+    (_ (mediawiki-discussion-tools--submit-reply))))
 
 (defun mediawiki-discussion-tools-reply-cancel ()
   "Cancel the reply and close the buffer."

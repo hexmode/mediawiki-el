@@ -1,5 +1,17 @@
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
+	* tests/test-mediawiki-discussion-tools.el
+	(test-mdt-comment-blocks): Cover cutting signed comments out of a
+	section, picking the block for a comment, editing one post and
+	rewriting only that block, and the fallback to whole-page editing.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--comment-blocks): Edit one comment
+	instead of the whole page: cut the comment wikitext out of the
+	section, edit it in *MW Edit Post*, and write the section back with
+	everything else untouched and a basetimestamp.  Fall back to opening
+	the page at the thread heading when the comment cannot be located.
+
 	* AGENTS.md: Tell agents to load changed code into the user's running
 	Emacs, unbinding defvar keymaps first, and to say which buffers hold
 	stale output.

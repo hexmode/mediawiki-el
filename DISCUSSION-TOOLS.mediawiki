@@ -116,9 +116,13 @@ deliberately not bound to the link.  <kbd>TAB</kbd> moves point to the next link
 the thread and <kbd>S-TAB</kbd> back to the previous one, wherever point happens to
 be.
 
-<kbd>e</kbd> edits the post at point.  DiscussionTools has no API for rewriting a
-single comment, so this opens the whole page in a normal mediawiki buffer with
-point on the thread's heading, where the comment is edited as wikitext.
+<kbd>e</kbd> edits the post at point.  Because the API can replace a whole section
+but not a single comment, the comment's wikitext is cut out of the thread's
+section and shown alone in <code>*MW Edit Post*</code>; saving writes the section
+back with the other comments untouched, and refuses if the page changed
+underneath.  If the comment cannot be located (an unsigned comment, or a
+signature the parser does not recognise), the page opens at the thread's heading
+so it can still be edited by hand.
 
 <kbd>&</kbd> opens the comment at point in your web browser.  Every comment's
 DiscussionTools id is also the anchor MediaWiki gives it, so the browser lands on
@@ -130,7 +134,7 @@ context, following a link inside it, or passing it to someone else.
 |-
 | <kbd>r</kbd> || Reply to this thread
 |-
-| <kbd>e</kbd> || Edit the post at point (opens the page at the thread's heading)
+| <kbd>e</kbd> || Edit the post at point
 |-
 | <kbd>d</kbd> || Mark this thread resolved
 |-
