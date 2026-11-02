@@ -126,12 +126,18 @@
     (search-forward "Test")
     (should (string= "Test Page" (mediawiki-page-at-point)))
 
-    ;; Clear buffer and test link with pipe
+    ;; Clear buffer and test link with pipe, on the target and on the text
     (erase-buffer)
     (insert "This is a [[Test Page|display text]] link.")
     (goto-char (point-min))
     (search-forward "Test")
     (should (string= "Test Page" (mediawiki-page-at-point)))
+    (goto-char (point-min))
+    (search-forward "display")
+    (should (string= "Test Page" (mediawiki-page-at-point)))
+    ;; Point after the link must not reach into it.
+    (goto-char (point-max))
+    (should-not (mediawiki-page-at-point))
 
     ;; Test subpage link
     (erase-buffer)
@@ -146,6 +152,42 @@
     (insert "No links here.")
     (goto-char (point-min))
     (should-not (mediawiki-page-at-point))))
+
+(ert-deftest test-mediawiki-open-at-point-uses-link-target ()
+  "C-c C-o on a piped link opens the target, not the display text."
+  (let ((opened nil)
+        (mediawiki-page-title "Main Page"))
+    (cl-letf (((symbol-function 'mediawiki-open)
+               (lambda (page &optional _site) (setq opened page))))
+      (with-temp-buffer
+        (mediawiki-mode)
+        (setq mediawiki-page-title "Main Page")
+        (insert "See [[Mediawiki.el basic usage|Basic usage]] here.")
+        (goto-char (point-min))
+        (search-forward "Basic usage")
+        (mediawiki-open-at-point)
+        (should (equal opened "Mediawiki.el basic usage"))))))
+
+(ert-deftest test-mediawiki-open-at-point-prompts-without-link ()
+  "With no link at point, C-c C-o prompts like mediawiki-open."
+  (let ((opened nil))
+    (cl-letf (((symbol-function 'mediawiki-open)
+               (lambda (&optional page &rest _)
+                 (interactive)
+                 (setq opened (or page "Asked"))))
+              ((symbol-function 'mediawiki-recent-read)
+               (lambda (&rest _) '(nil . "Asked"))))
+      (with-temp-buffer
+        (mediawiki-mode)
+        (insert "No links here.")
+        (goto-char (point-min))
+        (mediawiki-open-at-point)
+        (should (equal opened "Asked"))))))
+
+(ert-deftest test-mediawiki-c-c-c-o-binding ()
+  "C-c C-o opens the link at point."
+  (should (eq (lookup-key mediawiki-mode-map (kbd "C-c C-o"))
+              #'mediawiki-open-at-point)))
 
 ;;; Test Prompt Functions
 

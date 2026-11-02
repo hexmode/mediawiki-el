@@ -1,5 +1,25 @@
 2026-11-02  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki-core.el (mediawiki-version): Bump version to 4.3.0;
+	this is the User-Agent value.  Not tagged: the release comes later.
+
+	* mediawiki.el: Bump version to 4.3.0.
+
+	* tests/test-mediawiki-page.el
+	(test-mediawiki-open-at-point-uses-link-target): Cover a piped link
+	on the display text, no link at point, the binding, and point after
+	the link.
+
+	* mediawiki-page.el (mediawiki-open-at-point): New command: open the
+	page linked at point, or prompt when there is no link.
+	mediawiki-open-page-at-point does the same.  mediawiki-page-at-point
+	now returns the target of [[Page|text]] whether point is on the
+	target or the text, and nil when point is after the link on the same
+	line.
+
+	* mediawiki-mode.el (mediawiki-mode-map): Bind C-c C-o to
+	mediawiki-open-at-point, so point on a link opens that page.
+
 	* mediawiki-completion.el (mediawiki-mode): Only call
 	mediawiki-completion-use-company from the autoloaded mode hook when
 	this file is loaded; in a buffer that only needed mediawiki-mode the
