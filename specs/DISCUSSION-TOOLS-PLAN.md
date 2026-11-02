@@ -78,11 +78,13 @@ per-comment authors are available; anonymous browsing keeps the
 lightweight payload.
 
 Resolved detection reads the page once per refresh with
-`action=parse&prop=wikitext|sections`, slices each section out of the
-wikitext by `byteoffset`, and matches `{{Resolved` (any case, optional
-spaces) followed by `|` or `}}`.  Scanning wikitext rather than rendered
-HTML keeps the lightweight list payload intact: one extra call per
-refresh, no per-thread fetches.
+`action=parse`, slices each section out of the wikitext by `byteoffset`,
+and matches `{{Resolved` (any case, optional spaces) followed by `|` or
+`}}`.  Scanning wikitext rather than rendered HTML keeps the lightweight
+list payload intact: one extra call per refresh, no per-thread fetches.
+On MediaWiki 1.43 and later the call uses `prop=wikitext|tocdata`
+(`sections` is deprecated there); older wikis use `prop=wikitext|sections`.
+See `mediawiki-site-at-least`.
 
 ### Priority sorting for list display
 

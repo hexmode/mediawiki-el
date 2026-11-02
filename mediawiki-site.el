@@ -163,6 +163,7 @@ If BUFFER is not given, the current buffer is used."
 (declare-function mediawiki-minibuffer-completion-keys "mediawiki-core")
 (declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
 (declare-function mediawiki-oauth-userinfo "mediawiki-oauth")
+(declare-function mediawiki-api-call "mediawiki-api" (sitename action &optional args))
 ;;;###autoload
 (defun mediawiki-site (&optional site)
   "Set up mediawiki.el for a SITE.
@@ -203,6 +204,60 @@ for an OAuth consumer holds the client ID, not a user name."
            (fboundp 'mediawiki-oauth-userinfo)
            (mediawiki-oauth-userinfo sitename))
       (url-user-for-url (mediawiki-site-url sitename))))
+
+;;; Site Version and Capabilities
+
+(defvar mediawiki-site--versions (make-hash-table :test #'equal)
+  "Cache of sitename to the MediaWiki version as a (MAJOR MINOR PATCH) list.")
+
+(defun mediawiki-site--parse-version (string)
+  "Parse \"MediaWiki 1.43.1\" or \"1.43\" into a (MAJOR MINOR PATCH) list."
+  (when (and (stringp string)
+             (string-match "\\([0-9]+\\)\\.\\([0-9]+\\)\\(?:\\.\\([0-9]+\\)\\)?" string))
+    (list (string-to-number (match-string 1 string))
+          (string-to-number (match-string 2 string))
+          (string-to-number (or (match-string 3 string) "0")))))
+
+(defun mediawiki-site-version (sitename)
+  "Return the MediaWiki version of SITENAME as (MAJOR MINOR PATCH).
+Cached per site.  Returns nil when the version cannot be determined;
+callers should then assume an older wiki and use the older API."
+  (let ((cached (gethash sitename mediawiki-site--versions 'unknown)))
+    (if (not (eq cached 'unknown))
+        cached
+      (let ((ver (ignore-errors
+                   (let* ((result (mediawiki-api-call
+                                   sitename "query"
+                                   '(("meta" . "siteinfo")
+                                     ("siprop" . "general")
+                                     ("formatversion" . "2"))))
+                          (general (alist-get 'general
+                                              (alist-get 'query result))))
+                     (or (mediawiki-site--parse-version
+                          (alist-get 'mwversion general))
+                         (mediawiki-site--parse-version
+                          (alist-get 'generator general)))))))
+        (when ver
+          (puthash sitename ver mediawiki-site--versions))
+        ver))))
+
+(defun mediawiki-site-at-least (sitename major minor &optional patch)
+  "Return non-nil when SITENAME runs MediaWiki MAJOR.MINOR.PATCH or newer.
+An unknown version returns nil, so callers fall back to the older API."
+  (let ((have (mediawiki-site-version sitename))
+        (want (list major minor (or patch 0))))
+    (and have
+         (or (> (nth 0 have) (nth 0 want))
+             (and (= (nth 0 have) (nth 0 want))
+                  (or (> (nth 1 have) (nth 1 want))
+                      (and (= (nth 1 have) (nth 1 want))
+                           (>= (nth 2 have) (nth 2 want)))))))))
+
+(defun mediawiki-site-forget-version (&optional sitename)
+  "Forget the cached version for SITENAME, or for every site."
+  (if sitename
+      (remhash sitename mediawiki-site--versions)
+    (clrhash mediawiki-site--versions)))
 
 (defun mediawiki-site--auth-secret (entry)
   "Return the password from an auth-source ENTRY, or nil.
