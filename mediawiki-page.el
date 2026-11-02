@@ -33,6 +33,7 @@
 (require 'mediawiki-site)
 (require 'mediawiki-utils)
 (require 'mediawiki-mode)
+(require 'mediawiki-recent)
 (require 'ring)
 
 ;;; Page History Management
@@ -90,17 +91,30 @@ and CONTENT is the page content string."
       (current-buffer))))
 
 ;;;###autoload
-(defun mediawiki-open (name)
-  "Open a wiki page specified by NAME from the mediawiki engine."
+(defun mediawiki-open (name &optional sitename)
+  "Open a wiki page specified by NAME from the mediawiki engine.
+SITENAME defaults to `mediawiki-site'.  Interactively, a remembered page
+brings its own site along, so the page opens on the wiki it came from."
   (interactive
-    (let* ((hist (cdr (assoc-string mediawiki-site mediawiki-page-history)))
-           (temp-history-symbol (make-symbol "mediawiki-temp-history")))
-      (set temp-history-symbol hist)
-      (list (read-string "Wiki Page: " (mediawiki-page-at-point) temp-history-symbol))))
+   (let* ((in-wiki (and mediawiki-site (derived-mode-p 'mediawiki-mode)))
+          (pick (mediawiki-recent-read
+                 'pages
+                 (and in-wiki mediawiki-site)
+                 (mediawiki-page-at-point)
+                 (and in-wiki (cdr (assoc-string mediawiki-site
+                                                 mediawiki-page-history))))))
+     (list (cdr pick)
+           (or (car pick)
+               (and in-wiki mediawiki-site)
+               (mediawiki-prompt-for-site)))))
   (when (or (not (stringp name))
           (string-equal "" name))
     (error "Need to specify a name"))
-  (mediawiki-edit mediawiki-site name))
+  (let ((site (or sitename mediawiki-site)))
+    (unless site
+      (setq site (mediawiki-prompt-for-site)))
+    (setq mediawiki-site site)
+    (mediawiki-edit site name)))
 
 ;;; Page Metadata Handling
 
@@ -189,7 +203,9 @@ Prompt for a SUMMARY if one isn't given."
               (or mediawiki-basetimestamp "now"))
             (cons "starttimestamp"
               (or mediawiki-starttimestamp "now"))))
-        (message "Saved %s to %s" title sitename))
+        (message "Saved %s to %s" title sitename)
+        (mediawiki-recent-record 'pages sitename
+                                 (mediawiki-translate-pagename title)))
       (error (progn (message "try #%d: %s " trynum
                       (concat "Retry because of error: " (cadr err)))
                (mediawiki-retry-save-page

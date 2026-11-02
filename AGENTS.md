@@ -10,8 +10,9 @@ per-tool instruction files; update this one instead.
 
 User-facing documentation lives in `README.mediawiki` (features and usage),
 `CONTRIBUTING.mediawiki` (build, architecture, keybinding conventions) and
-`DISCUSSION-TOOLS.mediawiki` (how to use the discussion browser).  When a change
-alters user-visible behaviour, update those files too.
+`DISCUSSION-TOOLS.mediawiki` (how to use the discussion browser).  Design
+records live in `specs/`.  When a change alters user-visible behaviour, update
+those files too; when it changes a design, update the matching spec.
 
 ## Build & Test
 
@@ -42,6 +43,17 @@ Rules:
   so once a file has been byte-compiled the suites keep running the old code
   after you edit it.  Rerun `make autoloads` (or `make clean`) first; otherwise
   a fix looks like it had no effect.
+- Once the suite is green, load the changed code into the user's running Emacs
+  so they can try it: `emacsclient --eval '(load-file "/abs/path/module.el")'`,
+  in dependency order.  `defvar`/`defconst` values do not update on reload —
+  keymaps are the usual trap — so `makunbound` them first:
+  `emacsclient --eval '(progn (dolist (s (quote (my-mode-map))) (when (boundp s) (makunbound s))) (load-file "/abs/path/module.el"))'`.
+  The user's Emacs usually runs an installed copy, so add the checkout to
+  `load-path` first and load new modules explicitly, in dependency order, or a
+  `require` inside the reloaded file will fail.  Then say which existing
+  buffers hold stale output (a discussion buffer needs `g`) or must be
+  reopened.  Skip this only when no server is running, i.e. when
+  `emacsclient --eval 't'` fails.
 - Tests must not touch the network: mock `mediawiki-api-call`, `url-http-post`
   or `url-retrieve`.
 - Tests must not depend on today's date.  Build fixture timestamps relative to
@@ -81,8 +93,28 @@ Rules:
   compose, `r` reply, `n`/`p` move, `RET` open, `q` quit).  Check the
   "Keybinding Conventions" section of `CONTRIBUTING.mediawiki` before adding a
   key, and keep that section current when you do.
-- `ChangeLog` is maintained by hand: `YYYY-MM-DD  Name  <email>` followed by
-  tab-indented `* file (function):` entries; mention `Fixes #N` for issues.
+- `ChangeLog` is not edited by hand.  From the source buffer, put point on the
+  definition you changed and press `C-x 4 a`
+  (`add-change-log-entry-other-window`), or run it in batch:
+
+  ```sh
+  emacs -Q --batch --eval '(progn
+    (require (quote add-log))
+    (setq user-full-name "Mark A. Hershberger"
+          user-mail-address "mah@everybody.org")
+    (find-file "mediawiki-discussion-tools.el")
+    (goto-char (point-min))
+    (search-forward "(defun mediawiki-discussion-tools-resolve")
+    (beginning-of-line)
+    (add-change-log-entry)
+    (insert "What changed and why.")
+    (save-buffer))'
+  ```
+
+  Emacs writes the dated header and the tab-indented `* file (function):`
+  line, and merges same-day changes into the existing entry, so a day gets one
+  entry unless an entry carries its own time.  Add `Fixes #N` to the
+  description when an issue exists.
 - Commits are sentence-case subject lines describing the bug, with a body that
   explains cause and fix.
 

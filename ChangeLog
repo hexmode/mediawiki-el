@@ -1,67 +1,201 @@
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
-	Finish the discussion browser's status workflow and replace the
-	planned archive scanning with a vanished-thread notice and search.
+	* tests/test-mediawiki-discussion-tools.el
+	(test-mdt-comment-blocks): Cover cutting signed comments out of a
+	section, picking the block for a comment, editing one post and
+	rewriting only that block, and the fallback to whole-page editing.
 
 	* mediawiki-discussion-tools.el
-	(mediawiki-discussion-tools-resolve): Replace the stub with a working
-	command.  Prompts for an optional summary, appends
+	(mediawiki-discussion-tools--comment-blocks): Edit one comment
+	instead of the whole page: cut the comment wikitext out of the
+	section, edit it in *MW Edit Post*, and write the section back with
+	everything else untouched and a basetimestamp.  Fall back to opening
+	the page at the thread heading when the comment cannot be located.
+
+	* AGENTS.md: Tell agents to load changed code into the user's running
+	Emacs, unbinding defvar keymaps first, and to say which buffers hold
+	stale output.
+
+	* tests/test-mediawiki-discussion-tools.el
+	(test-mdt-edit-post-key-binding): Cover the e binding, the heading
+	search, opening the page on its site, and the no-thread error.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools-edit-post): Edit a post with e in the
+	thread view.  DiscussionTools has no API for rewriting a single
+	comment, so open the page with `mediawiki-open' and put point on the
+	thread's heading instead.
+
+	* tests/test-mediawiki-oauth.el
+	(test-mediawiki-oauth-userinfo-failure-is-not-cached): Cover a failed
+	userinfo lookup not poisoning the cache, and setup-site clearing it.
+
+	* mediawiki-oauth.el (mediawiki-oauth-userinfo): Do not cache a failed
+	lookup as anonymous: a site whose secret was added later kept
+	reporting the earlier answer.  Clear the cached name in
+	mediawiki-oauth-setup-site so new credentials take effect at once.
+
+	* tests/test-mediawiki-oauth.el
+	(test-mediawiki-oauth-userinfo-name): Cover userinfo naming the OAuth
+	user, the per-site cache, the anonymous and failing cases, and the
+	fallback to auth-source for sites without OAuth.
+
+	* mediawiki-site.el (mediawiki-site-username): For an OAuth site with
+	no configured name, ask the wiki which user the token belongs to
+	instead of returning auth-source's login field, which is the OAuth
+	client ID.  That made an authenticated session look anonymous.
+
+	* mediawiki-oauth.el (mediawiki-oauth-userinfo): New function, cached
+	per site and cleared whenever a token is stored or cleared.  A
+	configured user name still wins.
+
+	* specs/README.md: Index the design records now that they live in
+	specs/.
+
+	* tests/test-mediawiki-recent.el
+	(test-mediawiki-recent-round-trip): Cover the file round trip, dedupe
+	and first-letter case folding, the entry cap, 0600, corrupt and newer
+	files being moved aside, read-not-load, prompting, local-first order,
+	and the save, open and discussion integrations.
+
+	* mediawiki-discussion-tools.el (mediawiki-discussion-tools): Offer
+	the remembered desks, with their site filled in, when called outside
+	a discussion buffer, and record a desk once its thread list is built.
+
+	* mediawiki-page.el (mediawiki-open): Take an optional SITENAME and,
+	outside a wiki buffer, prompt from the remembered pages, so a choice
+	opens on its own site.  Record a page from `mediawiki-save-page' when
+	a save succeeds.
+
+	* mediawiki-recent.el (mediawiki-recent-record): New module: a
+	versioned list of edited pages and opened desks in
+	`mediawiki-recent-file' (default ~/.emacs.d/mw-hist.el), read with
+	`read' rather than `load' and written atomically with mode 0600.
+	Corrupt or newer files are moved aside to a numbered .bak.  Prompting
+	puts the current site's entries first and annotates the rest with
+	their site and age.
+
+	* specs/RECENT-PAGES-SPEC.md: New spec for a persistent list of edited
+	pages and discussion desks.  Move DISCUSSION-TOOLS-PLAN.md and
+	SUPPORT-DESK-WIKI-IMPLEMENTATION.md into specs/ and update the links to
+	them.
+
+	* mediawiki-oauth.el
+	(mediawiki-oauth--choose-secret-storage): Ask once whether to keep
+	OAuth secrets in authinfo, encrypted or plain, and remember the
+	answer in `mediawiki-oauth-secret-storage'. Authinfo storage leaves
+	the secret and token out of the site plist.
+
+	* tests/test-mediawiki-oauth.el
+	(test-mediawiki-oauth-authinfo-entry): Cover the storage question,
+	the authinfo line and appending, and setup-site writing secrets to
+	authinfo.
+
+	* CONTRIBUTING.mediawiki: Use the built-in ChangeLog commands, not
+	hand editing.
+
+	Add a Keybinding Conventions section that points at Gnus for
+	compose/reply/move/quit keys, and warn that a stale .elc keeps the
+	test suites running old code after an edit.
+
+	Point AI agents at AGENTS.md, drop the stale 2.4.x version, document
+	make ci-test and the real test-target names, complete the module
+	list and fill in the empty implementation notes section.
+
+	* AGENTS.md: Use the built-in ChangeLog commands, not hand editing.
+
+	List DISCUSSION-TOOLS.mediawiki among the user-facing docs to keep
+	in sync.
+
+	Send agents to the keybinding conventions and to the user-facing
+	docs when behaviour changes, and record the stale .elc trap in the
+	Build & Test rules.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--list-format)
+	(mediawiki-discussion-tools--fit-columns)
+	(mediawiki-discussion-tools--refit-on-resize): Grow the thread
+	table's columns to fill the window.  Compute Title and Author widths
+	from the window width instead of hard-coding 40/16, and refit on g
+	and on window or frame resize via a buffer-local
+	window-size-change-functions entry.  Narrow windows keep the old
+	split.  The hook is installed by --ensure-hooks, which runs from the
+	mode and from --refresh-table, because a buffer that was already in
+	the mode does not gain a new buffer-local hook on reload.
+	(mediawiki-discussion-tools-next-link)
+	(mediawiki-discussion-tools-previous-link)
+	(mediawiki-discussion-tools--link-run-start): Move between links in
+	the thread view with TAB and S-TAB.  New commands, bound to TAB and
+	<backtab> in both the view map and the link keymap, so they work
+	wherever point is.  shr's own movement only works while point is on
+	a link.
+	(mediawiki-discussion-tools--render-html): Render comment links and
+	images in the thread view.  Render each comment body with shr from
+	the DiscussionTools HTML instead of stripping every tag, so links
+	stay clickable and images are displayed.  Falls back to tag
+	stripping when Emacs lacks libxml support, and keeps RET free by
+	replacing shr's link keymap with the view's own.  A <base> element
+	is injected into the parsed HTML, because `shr-insert-document'
+	rebinds shr-base to nil and only sets it from <base>; without it the
+	protocol-relative image URLs MediaWiki emits never got a scheme, the
+	fetch failed and shr's grey placeholder was left in place.  The base
+	is the wiki's own article URL, from a cached
+	meta=siteinfo&siprop=general call, so relative ./File: links resolve
+	to the article path too.  The trailing-space cleanup that could
+	delete the image placeholder is gone.
+	(mediawiki-discussion-tools-open-link-at-point)
+	(mediawiki-discussion-tools--wiki-title-from-url): New command on
+	C-c C-o in the thread view.  Links to pages on the current site open
+	with mediawiki-open; anything else goes to browse-url.
+	(mediawiki-discussion-tools--render-replies): Open the comment at
+	point in a web browser.  Attach each comment's DiscussionTools id to
+	its rendered text as the mediawiki-comment-id property.
+	(mediawiki-discussion-tools-browse-comment-at-point)
+	(mediawiki-discussion-tools--comment-id-at-point): New command on &
+	in the thread view.  It builds <page url>#<comment id> and hands it
+	to browse-url, so the browser lands on that comment instead of the
+	top of the page.
+	(mediawiki-discussion-tools-resolve): Finish the discussion
+	browser's status workflow and replace the planned archive scanning
+	with a vanished-thread notice and search.  Replace the stub with a
+	working command.  Prompts for an optional summary, appends
 	{{Resolved|summary|~~~~}} indented under the thread's last comment,
 	and refreshes the list and view buffers.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--resolved-anchors)
 	(mediawiki-discussion-tools--mark-resolved): Detect {{Resolved}} by
 	fetching the page wikitext once per refresh and matching it inside
-	each section's byte range, so the list can show the checkmark without
-	a per-thread fetch.
-
-	* mediawiki-discussion-tools.el
+	each section's byte range, so the list can show the checkmark
+	without a per-thread fetch.
 	(mediawiki-discussion-tools--priority-tiers)
 	(mediawiki-discussion-tools--thread-priority): Sort by the plan's
 	tiers (attention, watching, active, unanswered, resolved, stale)
 	instead of putting unanswered first, with the two attention tiers
 	reserved until per-comment data is fetched.
-
-	* mediawiki-discussion-tools.el
-	(mediawiki-discussion-tools--thread-status): Return
-	needs-attention when the logged-in user posted and someone answered
-	afterwards, and watching when their comment is still last.
-
-	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--thread-status): Return needs-attention
+	when the logged-in user posted and someone answered afterwards, and
+	watching when their comment is still last.
 	(mediawiki-discussion-tools--flatten-replies)
 	(mediawiki-discussion-tools--thread-contains-username-p)
 	(mediawiki-discussion-tools--replied-after-username-p): Detect the
 	user's own comments in a reply tree and whether anyone replied after
 	them.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--current-user)
 	(mediawiki-discussion-tools--userinfo): Resolve the logged-in user
 	from the site configuration or one meta=userinfo call, cached per
 	site, so OAuth sessions without a stored name still get the tiers.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--fetch-threads): Fetch full reply trees
 	when the user is known; anonymous browsing keeps the noreplies
 	payload.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--thread-anchor): New helper shared by
 	section lookup and resolved detection.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools-search): Search the page and its archive
-	subpages with one prefixed list=search call, render the hits in
-	*MW Discussion Search*, and open a result with RET.  Bound to s in
-	both browser modes.
-
-	* mediawiki-discussion-tools.el
-	(mediawiki-discussion-tools--search-results): Pass srnamespace=*.  It
-	defaults to namespace 0, so the prefixed search would never have
-	matched a Project- or Talk-namespace page, however well the prefix fit.
-
-	* mediawiki-discussion-tools.el
+	subpages with one prefixed list=search call, render the hits in *MW
+	Discussion Search*, and open a result with RET.  Bound to s in both
+	browser modes.
+	(mediawiki-discussion-tools--search-results): Pass srnamespace=*.
+	It defaults to namespace 0, so the prefixed search would never have
+	matched a Project- or Talk-namespace page, however well the prefix
+	fit.
 	(mediawiki-discussion-tools--known-ids)
 	(mediawiki-discussion-tools--vanished)
 	(mediawiki-discussion-tools--vanished-ids)
@@ -69,166 +203,171 @@
 	IDs from the last refresh and report how many disappeared, since
 	that is what archiving looks like from the client.  This replaces
 	the planned per-archive check-archived scan.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--status-icon): Give the attention tiers
 	their own icons instead of falling through to a blank column.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--refresh-buffers): New helper that
 	refreshes the list and, when it is visible, the thread view.
-
-	* tests/test-mediawiki-discussion-tools.el: Cover resolve (with and
-	without a summary, and with no matching section), resolved detection,
-	the attention tiers and their icons, vanished threads, and search.
-
-	* mediawiki-discussion-tools.el
-	(mediawiki-discussion-tools-new-thread): Prompt only for the title and
-	open a *MW New Thread* compose buffer, instead of posting from a
+	(mediawiki-discussion-tools-new-thread): Prompt only for the title
+	and open a *MW New Thread* compose buffer, instead of posting from a
 	one-line body prompt with no preview and no way to cancel.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools-reply-submit): Dispatch to
 	mediawiki-discussion-tools--submit-reply or
 	mediawiki-discussion-tools--submit-new-thread according to
 	mediawiki-discussion-tools--reply-kind.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools--compose-body): New helper returning the
 	text below the reply separator.
-
-	* mediawiki-discussion-tools.el
 	(mediawiki-discussion-tools-list-mode-map)
 	(mediawiki-discussion-tools-view-mode-map): Bind new thread to m and
 	C, as in Gnus, instead of N.
+	(mediawiki-discussion-tools--section-wikitext)
+	(mediawiki-discussion-tools--reply-prefix)
+	(mediawiki-discussion-tools--reply-indent)
+	(mediawiki-discussion-tools--indent-reply)
+	(mediawiki-discussion-tools-reply)
+	(mediawiki-discussion-tools-reply-submit): New functions. Record the
+	indentation of the comment being answered. Indent with that prefix,
+	so replies to nested comments and to Rfc "Support"/"Oppose" lines
+	nest instead of landing at a fixed depth.
 
-	* tests/test-mediawiki-discussion-tools.el: Cover the compose buffer,
-	the section=new payload, the empty-body refusal and the m/C bindings.
+	* tests/test-mediawiki-discussion-tools.el
+	(test-mdt--timestamp) (test-mdt--thread-fresh,
+	test-mdt--thread-stale) (test-mdt--thread-unanswered)
+	(test-mdt-parse-iso8601-valid): New helper. Build timestamps
+	relative to now instead of hardcoding June 2026, which made the
+	suite start failing once the "fresh" thread aged past
+	mediawiki-discussion-tools-stale-days. Don't assume date-to-time
+	returns a cons.
 
-	* DISCUSSION-TOOLS-PLAN.md: List keybindings instead of function names
-	in the status and keybinding tables, and record the m/C binding.
+	Cover the narrow, wide and author-capped formats and that fitting
+	only reports a change when the widths actually change.
 
-	* DISCUSSION-TOOLS.mediawiki: New user guide for the discussion
-	browser: opening a page, the list and its status icons, the priority
-	tiers, reading, replying, new threads, resolving, searching the page
-	and its archives, the options, and troubleshooting.  Points at the
-	support desk and the Village pump as worked examples.
+	Cover walking two links forwards and back, the end-of-buffer errors,
+	and both keymaps.
 
-	* README.mediawiki: Link the new guide from the feature list and add a
-	"Discussion tools" section with the basic keys.  Drop the TODO that
-	said marking a thread resolved was still a stub.
+	Cover URL-to-title conversion, the shr link properties and keymap,
+	both open paths, and the no-link error.
 
-	* DISCUSSION-TOOLS-PLAN.md: Note that the plan is the design record
-	and the user guide owns the instructions, and replace the duplicated
-	keybinding tables with a pointer.
+	Cover the id property, the URL built for a comment, the no-comment
+	error and the & binding.
 
-	* AGENTS.md: List DISCUSSION-TOOLS.mediawiki among the user-facing
-	docs to keep in sync.
+	Cover resolve (with and without a summary, and with no matching
+	section), resolved detection, the attention tiers and their icons,
+	vanished threads, and search.
 
-	* CONTRIBUTING.mediawiki: Add a Keybinding Conventions section that
-	points at Gnus for compose/reply/move/quit keys, and warn that a stale
-	.elc keeps the test suites running old code after an edit.
+	Cover the compose buffer, the section=new payload, the empty-body
+	refusal and the m/C bindings.
 
-	* AGENTS.md: Send agents to the keybinding conventions and to the
-	user-facing docs when behaviour changes, and record the stale .elc trap
-	in the Build & Test rules.
+	Replace the duplicated indentation logic with the new functions and
+	test reply prefix detection.
 
-2026-11-01  Mark A. Hershberger  <mah@everybody.org>
+	* DISCUSSION-TOOLS.mediawiki: Note that the columns are minimums.
 
-	Fix the Emacs cache restore and the auth-source password lookup.
+	Document the keys.
 
-	* mediawiki-site.el (mediawiki-site-password): Ask auth-source for an
-	entry that actually has a secret before falling back to
-	`url-password-for-url', which stops at the first entry for the host
-	and so can return nil even when a password is stored.  This makes
-	"leave the password empty and use auth-source" work as documented.
+	Document link rendering and C-c C-o.
+
+	Document &.
+
+	New user guide for the discussion browser: opening a page, the list
+	and its status icons, the priority tiers, reading, replying, new
+	threads, resolving, searching the page and its archives, the
+	options, and troubleshooting.  Points at the support desk and the
+	Village pump as worked examples.
+
+	* README.mediawiki: Document the keys.
+
+	Document link rendering and C-c C-o.
+
+	Document &.
+
+	Link the new guide from the feature list and add a "Discussion
+	tools" section with the basic keys.  Drop the TODO that said marking
+	a thread resolved was still a stub.
+
+	Documentation review against the code.  Add a feature list, a "Basic
+	usage" section for writing wikitext in a local file
+	(mediawiki-file-mode, drafts), and login notes; update the
+	keybinding list, module list and TODO (url helpers are already in
+	mediawiki-http.el, link completion exists). Correct C-RET (it opens
+	the page at point, not a bulleted list) and the mediawiki-file-mode
+	M-g note, both verified against a live wiki.
+
+	* DISCUSSION-TOOLS-PLAN.md: Document the keys.
+
+	Document link rendering and C-c C-o.
+
+	Document &.
+
+	List keybindings instead of function names in the status and
+	keybinding tables, and record the m/C binding.
+
+	Note that the plan is the design record and the user guide owns the
+	instructions, and replace the duplicated keybinding tables with a
+	pointer.
+
+	Record which phases are implemented and correct the list-mode
+	keybindings (no search or sort bindings).
+
+	* mediawiki-site.el
+	(mediawiki-site-password): Fix the Emacs cache restore and the
+	auth-source password lookup.  Ask auth-source for an entry that
+	actually has a secret before falling back to `url-password-for-url',
+	which stops at the first entry for the host and so can return nil
+	even when a password is stored.  This makes "leave the password
+	empty and use auth-source" work as documented.
 
 	* .github/workflows/test.yml: Build and cache Emacs next to the
-	checkout instead of /opt.  The runner cannot write /opt, so a cache
-	hit restored nothing and there was no `emacs' on PATH.  The prefix is
-	computed in each step because `runner.workspace' is not available in
+	checkout instead of /opt.  The runner
+	cannot write /opt, so a cache hit
+	restored nothing and there was no
+	`emacs' on PATH.  The prefix is
+	computed in each step because
+	`runner.workspace' is not available in
 	a job-level env.
 
-2026-11-01  Mark A. Hershberger  <mah@everybody.org>
-
-	Documentation review against the code.
-
-	* README.mediawiki: Add a feature list, a "Basic usage" section for
-	writing wikitext in a local file (mediawiki-file-mode, drafts), and
-	login notes; update the keybinding list, module list and TODO (url
-	helpers are already in mediawiki-http.el, link completion exists).
-	Correct C-RET (it opens the page at point, not a bulleted list) and
-	the mediawiki-file-mode M-g note, both verified against a live wiki.
-
-	* CONTRIBUTING.mediawiki: Point AI agents at AGENTS.md, drop the
-	stale 2.4.x version, document make ci-test and the real test-target
-	names, complete the module list and fill in the empty implementation
-	notes section.
+	Install Emacs into a per-version /opt/emacs-<version> prefix and
+	cache only that instead of all of /usr/local.
 
 	* tests/README.mediawiki: List every suite, fix the module-specific
-	test target names and replace the stale pass-count claims with the
-	ci-test gate.
-
-	* DISCUSSION-TOOLS-PLAN.md: Record which phases are implemented and
-	correct the list-mode keybindings (no search or sort bindings).
+	test target names and replace the stale
+	pass-count claims with the ci-test gate.
 
 	* mediawiki-support-desk.el: Reference the plan file that exists.
 
 	* mediawiki.el: Bump version to 4.1.1.
-	* mediawiki-core.el (mediawiki-version): Keep in sync; it was
-	still 3.2.0 and ended up in the User-Agent string.
 
-	* mediawiki-api.el (mediawiki-api--stringify-args): New function.
-	(mediawiki-api-call): Stringify the arguments before they are
-	encoded for the debug log, not just before the POST body.
-	(mediawiki-api-call-async): Stringify the arguments before
+	* mediawiki-core.el
+	(mediawiki-version): Keep in sync; it was still 3.2.0 and ended up
+	in the User-Agent string.
+
+	* mediawiki-api.el
+	(mediawiki-api--stringify-args) (mediawiki-api-call)
+	(mediawiki-api-call-async) (mediawiki-api-call): New function.
+	Stringify the arguments before they are encoded for the debug log,
+	not just before the POST body. Stringify the arguments before
 	encoding.  Fixes #62: viewing or diffing a revision from
-	mediawiki-history-mode signalled
-	(wrong-type-argument char-or-string-p REVID) for integer
-	revision IDs.
-	(mediawiki-api-call): Include the response body when parsing fails;
-	Wikimedia's rate-limit notice is plain text and the old message hid
-	it.
-
-	* mediawiki-discussion-tools.el
-	(mediawiki-discussion-tools--section-wikitext)
-	(mediawiki-discussion-tools--reply-prefix)
-	(mediawiki-discussion-tools--reply-indent)
-	(mediawiki-discussion-tools--indent-reply): New functions.
-	(mediawiki-discussion-tools-reply): Record the indentation of the
-	comment being answered.
-	(mediawiki-discussion-tools-reply-submit): Indent with that prefix,
-	so replies to nested comments and to Rfc "Support"/"Oppose" lines
-	nest instead of landing at a fixed depth.
+	mediawiki-history-mode signalled (wrong-type-argument
+	char-or-string-p REVID) for integer revision IDs. Include the
+	response body when parsing fails; Wikimedia's rate-limit notice is
+	plain text and the old message hid it.
 
 	* tools/check-parens.el: New helper that reports the opening line of
-	an unclosed form, unlike `check-parens' and the byte compiler.
-	* Makefile (check-parens): New target.
+	an unclosed form, unlike `check-parens' and
+	the byte compiler.
+
+	* Makefile
+	(check-parens): New target.
+
 	* .pre-commit-config.yaml: Run the paren check before committing.
+
 	* VILLAGE-PUMP.md: New guide to using the discussion tools at the
 	Wikipedia Village Pump.
 
-	* tests/test-mediawiki-discussion-tools.el: Replace the duplicated
-	indentation logic with the new functions and test reply prefix
-	detection.
-
-	* tests/test-mediawiki-api-json.el: Add regression tests for
-	integer parameter values in mediawiki-api-call,
-	mediawiki-api-get-revision-content and mediawiki-api-call-async.
-
-	* tests/test-mediawiki-discussion-tools.el
-	(test-mdt--timestamp): New helper.
-	(test-mdt--thread-fresh, test-mdt--thread-stale)
-	(test-mdt--thread-unanswered): Build timestamps relative to now
-	instead of hardcoding June 2026, which made the suite start
-	failing once the "fresh" thread aged past
-	mediawiki-discussion-tools-stale-days.
-	(test-mdt-parse-iso8601-valid): Don't assume date-to-time
-	returns a cons.
-
-	* .github/workflows/test.yml: Install Emacs into a per-version
-	/opt/emacs-<version> prefix and cache only that instead of all
-	of /usr/local.
+	* tests/test-mediawiki-api-json.el: Add regression tests for integer
+	parameter values in
+	mediawiki-api-call,
+	mediawiki-api-get-revision-content
+	and mediawiki-api-call-async.
 
 2026-07-08  Mark A. Hershberger  <mah@everybody.org>
 

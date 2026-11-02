@@ -18,7 +18,7 @@ Two worked examples ship with the package:
   after being tested against en.wikipedia.org.
 
 The design behind the module, and what was deliberately left out of it, is in
-[https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS-PLAN.md DISCUSSION-TOOLS-PLAN.md].
+[https://github.com/hexmode/mediawiki-el/blob/master/specs/DISCUSSION-TOOLS-PLAN.md DISCUSSION-TOOLS-PLAN.md].
 
 == Opening a page ==
 
@@ -57,6 +57,11 @@ The list has five columns:
 |-
 | 20 || Last || How long ago the last comment was posted
 |}
+
+The Title and Author widths are minimums: they grow to fill the window, so a
+wide frame shows more of a long heading instead of leaving empty space.  The
+table refits itself when you press <kbd>g</kbd> and whenever the window or frame
+is resized.
 
 Threads are sorted by priority, not by date; there is no header sort:
 
@@ -102,12 +107,42 @@ timestamp, with replies indented one level per answer.  <kbd>n</kbd> and
 <kbd>p</kbd> walk the list and replace the view contents, so paging through a desk
 costs nothing.
 
+Comment bodies are rendered as HTML rather than flattened to text, so links stay
+clickable, images are displayed as thumbnails, and lists and paragraphs keep their
+shape.  <kbd>C-c C-o</kbd> opens the link at point: a link to a page on the current
+site opens in an Emacs buffer, anything else goes to your browser.  <kbd>mouse-1</kbd>
+on a link opens it in the browser, and <kbd>RET</kbd> still closes the view - it is
+deliberately not bound to the link.  <kbd>TAB</kbd> moves point to the next link in
+the thread and <kbd>S-TAB</kbd> back to the previous one, wherever point happens to
+be.
+
+<kbd>e</kbd> edits the post at point.  Because the API can replace a whole section
+but not a single comment, the comment's wikitext is cut out of the thread's
+section and shown alone in <code>*MW Edit Post*</code>; saving writes the section
+back with the other comments untouched, and refuses if the page changed
+underneath.  If the comment cannot be located (an unsigned comment, or a
+signature the parser does not recognise), the page opens at the thread's heading
+so it can still be edited by hand.
+
+<kbd>&</kbd> opens the comment at point in your web browser.  Every comment's
+DiscussionTools id is also the anchor MediaWiki gives it, so the browser lands on
+that comment rather than the top of the page - useful for seeing a comment in
+context, following a link inside it, or passing it to someone else.
+
 {| class="wikitable"
 ! Key !! Action
 |-
 | <kbd>r</kbd> || Reply to this thread
 |-
+| <kbd>e</kbd> || Edit the post at point
+|-
 | <kbd>d</kbd> || Mark this thread resolved
+|-
+| <kbd>&</kbd> || Open the comment at point in your web browser
+|-
+| <kbd>C-c C-o</kbd> || Open the link at point (wiki pages in Emacs)
+|-
+| <kbd>TAB</kbd> / <kbd>S-TAB</kbd> || Next / previous link in the thread
 |-
 | <kbd>g</kbd> || Re-fetch and re-render this thread
 |-
@@ -249,7 +284,7 @@ OAuth sessions that do not store it.
 
 * [https://github.com/hexmode/mediawiki-el/blob/master/VILLAGE-PUMP.md VILLAGE-PUMP.md] -
   a tested walk-through at the Wikipedia Village pump.
-* [https://github.com/hexmode/mediawiki-el/blob/master/DISCUSSION-TOOLS-PLAN.md DISCUSSION-TOOLS-PLAN.md] -
+* [https://github.com/hexmode/mediawiki-el/blob/master/specs/DISCUSSION-TOOLS-PLAN.md DISCUSSION-TOOLS-PLAN.md] -
   the design, the API calls, and the decisions.
-* [https://github.com/hexmode/mediawiki-el/blob/master/SUPPORT-DESK-WIKI-IMPLEMENTATION.md SUPPORT-DESK-WIKI-IMPLEMENTATION.md] -
+* [https://github.com/hexmode/mediawiki-el/blob/master/specs/SUPPORT-DESK-WIKI-IMPLEMENTATION.md SUPPORT-DESK-WIKI-IMPLEMENTATION.md] -
   how the mediawiki.org support desk is built and archived.

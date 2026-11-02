@@ -4,7 +4,7 @@ This document describes the plan for `mediawiki-discussion-tools.el`, a new gene
 
 See [SUPPORT-DESK-WIKI-IMPLEMENTATION.md](./SUPPORT-DESK-WIKI-IMPLEMENTATION.md) for how the support desk page works on the wiki side (page structure, archiving, the `{{Resolved}}` template, and the DiscussionTools API).
 
-User-facing documentation lives in [DISCUSSION-TOOLS.mediawiki](./DISCUSSION-TOOLS.mediawiki): how to open a page, read a thread, reply, resolve and search.  This file stays the design record — API calls, data model, phases, and what was deliberately dropped — and does not repeat the user instructions.
+User-facing documentation lives in [DISCUSSION-TOOLS.mediawiki](../DISCUSSION-TOOLS.mediawiki): how to open a page, read a thread, reply, resolve and search.  This file stays the design record — API calls, data model, phases, and what was deliberately dropped — and does not repeat the user instructions.
 
 ## Status (as of 4.1.1)
 
@@ -286,12 +286,14 @@ buffer so `n`/`p` navigation is instant and doesn't create new windows.
 
 **Display:** Each comment rendered with:
 - Author + timestamp header line
-- Indented body text (stripped of most HTML but preserving links and code blocks)
+- Body rendered by `shr` from the DiscussionTools HTML, so links are clickable, images are shown and lists keep their shape; falls back to stripping tags when Emacs has no libxml support
 - Replies nested with increasing indentation
 
-**Keybindings:** `r` reply, `m` / `C` new thread, `d` resolve, `g` re-render,
-`n` / `p` next / previous, `s` search, `RET` / `q` close.  Again, the tables
-live in `DISCUSSION-TOOLS.mediawiki`.
+**Keybindings:** `r` reply, `e` edit the post at point, `m` / `C` new thread,
+`d` resolve, `g` re-render,
+`n` / `p` next / previous, `s` search, `&` browse the comment at point,
+`C-c C-o` open the link at point, `TAB` / `S-TAB` next / previous link,
+`RET` / `q` close.  Again, the tables live in `DISCUSSION-TOOLS.mediawiki`.
 
 ## Core Functions
 

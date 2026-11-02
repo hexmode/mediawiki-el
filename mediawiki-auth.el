@@ -87,6 +87,19 @@ for older wikis and bot passwords."
   (setq mediawiki-site nil)             ; This wil be set once we are
                                         ; logged in
 
+  ;; A client ID without a secret silently turns OAuth off, and the
+  ;; password fallback then looks like an anonymous session.  Say so.
+  (when (and (fboundp 'mediawiki-oauth-client-id)
+             (mediawiki-oauth-client-id sitename)
+             (not (mediawiki-oauth-configured-p sitename)))
+    (display-warning
+     'mediawiki
+     (format (concat "OAuth client ID for %s has no client secret in "
+                     "auth-source or the site configuration; falling back "
+                     "to password login.")
+             sitename)
+     :warning))
+
   ;; Check if OAuth is configured for this site
   (if (and (fboundp 'mediawiki-oauth-configured-p)
            (mediawiki-oauth-configured-p sitename))

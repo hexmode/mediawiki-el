@@ -1161,6 +1161,172 @@ as a direct lookup into the TOC-ordered section list."
         (when (get-buffer "*MW Test List*")
           (kill-buffer "*MW Test List*"))))))
 
+;;; Comment HTML Tests
+
+(ert-deftest test-mdt-wiki-title-from-url ()
+  "Wiki URLs turn into page titles; other hosts do not."
+  (test-mdt-with-site "TestSite"
+    (should (equal (mediawiki-discussion-tools--wiki-title-from-url
+                    "/wiki/Project:Support_desk" "TestSite")
+                   "Project:Support desk"))
+    (should (equal (mediawiki-discussion-tools--wiki-title-from-url
+                    "https://test.example.org/wiki/Foo_bar" "TestSite")
+                   "Foo bar"))
+    (should (equal (mediawiki-discussion-tools--wiki-title-from-url
+                    "https://test.example.org/w/index.php?title=Foo_bar&action=edit"
+                    "TestSite")
+                   "Foo bar"))
+    (should-not (mediawiki-discussion-tools--wiki-title-from-url
+                 "https://example.org/wiki/Foo" "TestSite"))
+    (should-not (mediawiki-discussion-tools--wiki-title-from-url
+                 "mailto:someone@example.org" "TestSite"))))
+
+(ert-deftest test-mdt-render-html-keeps-links ()
+  "Comment HTML is rendered with clickable links, and RET still closes."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (let ((replies (list (test-mdt--mock-reply
+                        "Alice" "2026-06-28T10:00:00Z"
+                        "<p>See <a href=\"/wiki/Project:Support_desk\">the desk</a>.</p>"))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (should (string-match-p "the desk" (buffer-string)))
+      (goto-char (point-min))
+      (search-forward "the desk")
+      (let ((url (get-text-property (match-beginning 0) 'shr-url)))
+        (should url)
+        (should (string-match-p "/wiki/Project:Support_desk" url))
+        (should (eq (get-text-property (match-beginning 0) 'keymap)
+                    mediawiki-discussion-tools-link-map))))))
+
+(ert-deftest test-mdt-link-map-leaves-ret-alone ()
+  "The link keymap does not take RET from the view."
+  (should-not (lookup-key mediawiki-discussion-tools-link-map (kbd "RET")))
+  (should (eq (lookup-key mediawiki-discussion-tools-link-map (kbd "C-c C-o"))
+              #'mediawiki-discussion-tools-open-link-at-point)))
+
+(ert-deftest test-mdt-open-link-at-point-opens-wiki-page ()
+  "A link to this site's page opens in an Emacs buffer."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (test-mdt-with-site "TestSite"
+    (let ((opened nil)
+          (replies (list (test-mdt--mock-reply
+                          "Alice" "2026-06-28T10:00:00Z"
+                          "<p>See <a href=\"/wiki/Project:Support_desk\">the desk</a>.</p>"))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'mediawiki-open)
+                       (lambda (title) (setq opened title)))
+                      ((symbol-function 'browse-url)
+                       (lambda (&rest _) (ert-fail "should open in Emacs"))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support_desk")
+                (let ((inhibit-read-only t))
+                  (mediawiki-discussion-tools--render-replies replies 0))
+                (goto-char (point-min))
+                (search-forward "the desk")
+                (mediawiki-discussion-tools-open-link-at-point)))
+            (should (equal opened "Project:Support desk")))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*"))))))
+
+(ert-deftest test-mdt-open-link-at-point-uses-browser-for-external ()
+  "A link to another host goes to the browser."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (test-mdt-with-site "TestSite"
+    (let ((opened nil)
+          (replies (list (test-mdt--mock-reply
+                          "Alice" "2026-06-28T10:00:00Z"
+                          "<p>See <a href=\"https://example.org/x\">elsewhere</a>.</p>"))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'browse-url)
+                       (lambda (url &rest _) (setq opened url)))
+                      ((symbol-function 'mediawiki-open)
+                       (lambda (&rest _) (ert-fail "should open in browser"))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support_desk")
+                (let ((inhibit-read-only t))
+                  (mediawiki-discussion-tools--render-replies replies 0))
+                (goto-char (point-min))
+                (search-forward "elsewhere")
+                (mediawiki-discussion-tools-open-link-at-point)))
+            (should (equal opened "https://example.org/x")))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*"))))))
+
+(ert-deftest test-mdt-move-between-links ()
+  "TAB and backtab walk the links in the view."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (let ((replies (list (test-mdt--mock-reply
+                        "Alice" "2026-06-28T10:00:00Z"
+                        (concat "<p><a href=\"/wiki/First\">first</a> and "
+                                "<a href=\"/wiki/Second\">second</a></p>")))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (goto-char (point-min))
+      (mediawiki-discussion-tools-next-link)
+      (should (equal (get-text-property (point) 'shr-url) "/wiki/First"))
+      (mediawiki-discussion-tools-next-link)
+      (should (equal (get-text-property (point) 'shr-url) "/wiki/Second"))
+      (should-error (mediawiki-discussion-tools-next-link) :type 'user-error)
+      (mediawiki-discussion-tools-previous-link)
+      (should (equal (get-text-property (point) 'shr-url) "/wiki/First"))
+      (should-error (mediawiki-discussion-tools-previous-link)
+                    :type 'user-error))))
+
+(ert-deftest test-mdt-link-movement-key-bindings ()
+  "TAB and backtab move between links with or without point on one."
+  (dolist (map (list mediawiki-discussion-tools-view-mode-map
+                     mediawiki-discussion-tools-link-map))
+    (should (eq (lookup-key map (kbd "TAB"))
+                #'mediawiki-discussion-tools-next-link))
+    (should (eq (lookup-key map (kbd "<backtab>"))
+                #'mediawiki-discussion-tools-previous-link))))
+
+(ert-deftest test-mdt-open-link-at-point-no-link ()
+  "Plain text is not a link."
+  (should-error
+   (with-temp-buffer
+     (insert "just text")
+     (goto-char (point-min))
+     (mediawiki-discussion-tools-open-link-at-point))
+   :type 'user-error))
+
+;;; Column Sizing Tests
+
+(ert-deftest test-mdt-list-format-narrow ()
+  "A narrow window keeps the original 40/16 split."
+  (let ((format (mediawiki-discussion-tools--list-format 80)))
+    (should (= 40 (nth 1 (aref format 1))))
+    (should (= 16 (nth 1 (aref format 2))))))
+
+(ert-deftest test-mdt-list-format-wide ()
+  "Title and Author grow to fill a wide window."
+  (let* ((format (mediawiki-discussion-tools--list-format 160))
+         (title (nth 1 (aref format 1)))
+         (author (nth 1 (aref format 2))))
+    (should (> title 40))
+    (should (> author 16))
+    (should (<= (+ 3 title author 5 20) 160))))
+
+(ert-deftest test-mdt-list-format-caps-author ()
+  "Author does not eat the whole window."
+  (should (= 30 (nth 1 (aref (mediawiki-discussion-tools--list-format 400) 2)))))
+
+(ert-deftest test-mdt-fit-columns-updates-format ()
+  "Fitting reports a change once and then stays put."
+  (with-temp-buffer
+    (mediawiki-discussion-tools-list-mode)
+    (setq tabulated-list-format (mediawiki-discussion-tools--list-format 80))
+    (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 200)))
+      (should (mediawiki-discussion-tools--fit-columns))
+      (should (> (nth 1 (aref tabulated-list-format 1)) 40))
+      (should-not (mediawiki-discussion-tools--fit-columns)))))
+
 ;;; Vanished Thread Tests
 
 (ert-deftest test-mdt-vanished-ids ()
@@ -1266,12 +1432,256 @@ as a direct lookup into the TOC-ordered section list."
       (when (get-buffer "*MW Discussion Search*")
         (kill-buffer "*MW Discussion Search*")))))
 
+;;; Browsing a Comment Tests
+
+(ert-deftest test-mdt-render-replies-tags-comment-ids ()
+  "Every rendered comment carries its DiscussionTools id."
+  (let ((replies '(((id . "c-Alice-1") (author . "Alice") (timestamp . "")
+                    (html . "Hello"))
+                   ((id . "c-Bob-2") (author . "Bob") (timestamp . "")
+                    (html . "Hi")
+                    (replies . (((id . "c-Alice-3") (author . "Alice")
+                                 (timestamp . "") (html . "Thanks"))))))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (goto-char (point-min))
+      (should (equal (mediawiki-discussion-tools--comment-id-at-point)
+                     "c-Alice-1"))
+      (search-forward "Bob")
+      (should (equal (mediawiki-discussion-tools--comment-id-at-point)
+                     "c-Bob-2"))
+      (search-forward "Thanks")
+      (should (equal (mediawiki-discussion-tools--comment-id-at-point)
+                     "c-Alice-3")))))
+
+(ert-deftest test-mdt-browse-comment-at-point ()
+  "& opens the page with the comment id as the fragment."
+  (test-mdt-with-site "TestSite"
+    (let ((opened nil)
+          (thread '((id . "h-Topic-20260616005000")
+                    (title . "Topic")
+                    (replies . (((id . "c-Alice-1") (author . "Alice")
+                                 (timestamp . "2026-06-16T00:50:00Z")
+                                 (html . "Hello")))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'browse-url)
+                       (lambda (url &rest _) (setq opened url))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (mediawiki-discussion-tools--render-thread thread)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support desk")
+                (goto-char (point-min))
+                (search-forward "Hello")
+                (mediawiki-discussion-tools-browse-comment-at-point)))
+            (should opened)
+            (should (string-match-p "#c-Alice-1\\'" opened))
+            (should (string-match-p (regexp-quote "index.php?title=") opened))
+            (should (string-match-p "Project" opened)))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*"))))))
+
+(ert-deftest test-mdt-browse-comment-at-point-no-comment ()
+  "Point on the thread title is not a comment."
+  (test-mdt-with-site "TestSite"
+    (let ((thread '((id . "h-Topic-20260616005000")
+                    (title . "Topic")
+                    (replies . (((id . "c-Alice-1") (author . "Alice")
+                                 (timestamp . "") (html . "Hello")))))))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function 'browse-url)
+                       (lambda (&rest _) (ert-fail "should not open"))))
+              (with-current-buffer (get-buffer-create "*MW Test View*")
+                (mediawiki-discussion-tools-view-mode)
+                (mediawiki-discussion-tools--render-thread thread)
+                (setq mediawiki-discussion-tools--sitename "TestSite"
+                      mediawiki-discussion-tools--page "Project:Support desk")
+                (goto-char (point-min))
+                (should-error (mediawiki-discussion-tools-browse-comment-at-point)
+                              :type 'user-error)))
+        (when (get-buffer "*MW Test View*")
+          (kill-buffer "*MW Test View*")))))))
+
+(ert-deftest test-mdt-browse-comment-key-binding ()
+  "& is bound in the thread view only."
+  (should (eq (lookup-key mediawiki-discussion-tools-view-mode-map (kbd "&"))
+              #'mediawiki-discussion-tools-browse-comment-at-point))
+  (should-not (eq (lookup-key mediawiki-discussion-tools-list-mode-map (kbd "&"))
+                  #'mediawiki-discussion-tools-browse-comment-at-point)))
+
 (ert-deftest test-mdt-search-key-binding ()
   "s searches from either browser buffer."
   (dolist (map (list mediawiki-discussion-tools-list-mode-map
                      mediawiki-discussion-tools-view-mode-map))
     (should (eq (lookup-key map (kbd "s"))
                 #'mediawiki-discussion-tools-search))))
+
+;;; Editing a post tests
+
+(ert-deftest test-mdt-edit-post-key-binding ()
+  "e edits the post at point in the thread view."
+  (should (eq (lookup-key mediawiki-discussion-tools-view-mode-map (kbd "e"))
+              #'mediawiki-discussion-tools-edit-post)))
+
+(ert-deftest test-mdt-goto-section-heading ()
+  "The helper finds a level-2 heading and skips others."
+  (with-temp-buffer
+    (insert "Intro\n\n== Other topic ==\n\nx\n\n== Topic ==\n\nbody\n")
+    (should (mediawiki-discussion-tools--goto-section-heading "Topic"))
+    (should (looking-at-p "== Topic =="))
+    (should-not (mediawiki-discussion-tools--goto-section-heading "Missing"))))
+
+(defconst test-mdt--section-text
+  (concat
+   "== Topic ==\n"
+   "Question? [[User:Dave|Dave]] ([[User talk:Dave|talk]]) 09:00, 1 November 2026 (UTC)\n"
+   "\n"
+   ": Answer one. [[User:Alice|Alice]] ([[User talk:Alice|talk]]) 10:00, 1 November 2026 (UTC)\n"
+   ":: Follow-up. [[User:Bob|Bob]] ([[User talk:Bob|talk]]) 11:00, 1 November 2026 (UTC)\n"
+   ": Answer two. [[User:Carol|Carol]] ([[User talk:Carol|talk]]) 12:00, 1 November 2026 (UTC)\n")
+  "A section with three signed replies.")
+
+(defun test-mdt--signed-thread ()
+  "Return a thread whose replies match `test-mdt--section-text'."
+  (list (cons 'id "h-Topic-20260616005000")
+        (cons 'title "Topic")
+        (cons 'replies
+              (list (list (cons 'id "c-Dave-1") (cons 'author "Dave"))
+                    (list (cons 'id "c-Alice-1") (cons 'author "Alice")
+                          (cons 'replies
+                                (list (list (cons 'id "c-Bob-1")
+                                            (cons 'author "Bob")))))
+                    (list (cons 'id "c-Carol-1") (cons 'author "Carol"))))))
+
+(ert-deftest test-mdt-comment-blocks ()
+  "Signed comments are cut out of the section, heading excluded."
+  (let ((blocks (mediawiki-discussion-tools--comment-blocks
+                 test-mdt--section-text)))
+    (should (= 4 (length blocks)))
+    (should (string-match-p "\\`Question?"
+                            (string-trim
+                             (substring-no-properties
+                              test-mdt--section-text
+                              (car (nth 0 blocks)) (cdr (nth 0 blocks))))))
+    (should (string-match-p "Answer one"
+                            (substring-no-properties
+                             test-mdt--section-text
+                             (car (nth 1 blocks)) (cdr (nth 1 blocks)))))))
+
+(ert-deftest test-mdt-block-for-comment ()
+  "The block for a comment is the one carrying its author's signature."
+  (let ((block (mediawiki-discussion-tools--block-for-comment
+                test-mdt--section-text (test-mdt--signed-thread) "c-Alice-1")))
+    (should block)
+    (let ((text (substring-no-properties
+                 test-mdt--section-text (car block) (cdr block))))
+      (should (string-match-p "Answer one" text))
+      (should (string-match-p "Alice" text))
+      (should-not (string-match-p "Answer two" text))))
+  (should-not (mediawiki-discussion-tools--block-for-comment
+               test-mdt--section-text (test-mdt--signed-thread) "c-Unknown")))
+
+(ert-deftest test-mdt-edit-post-opens-compose-buffer ()
+  "e opens just the comment's wikitext for editing."
+  (unwind-protect
+      (progn
+        (cl-letf (((symbol-function 'mediawiki-discussion-tools--section-for-thread)
+                   (lambda (&rest _) 1))
+                  ((symbol-function 'mediawiki-discussion-tools--section-wikitext)
+                   (lambda (&rest _) test-mdt--section-text))
+                  ((symbol-function 'mediawiki-discussion-tools--page-timestamp)
+                   (lambda (&rest _) "2026-11-01T00:00:00Z"))
+                  ((symbol-function 'pop-to-buffer)
+                   (lambda (buf &rest _) (set-buffer buf))))
+          (with-temp-buffer
+            (insert ": Answer one. [[User:Alice|Alice]] 10:00, 1 November 2026 (UTC)")
+            (add-text-properties (point-min) (point-max)
+                                 '(mediawiki-comment-id "c-Alice-1"))
+            (setq mediawiki-discussion-tools--sitename "TestSite"
+                  mediawiki-discussion-tools--page "Project:Support desk"
+                  mediawiki-discussion-tools--threads (list (test-mdt--signed-thread))
+                  mediawiki-discussion-tools--view-index 0)
+            (goto-char (point-min))
+            (mediawiki-discussion-tools-edit-post)))
+        (with-current-buffer "*MW Edit Post*"
+          (should (eq mediawiki-discussion-tools--reply-kind 'edit-post))
+          (should (string-match-p "Answer one" (buffer-string)))
+          (should-not (string-match-p "Answer two" (buffer-string)))))
+    (when (get-buffer "*MW Edit Post*")
+      (kill-buffer "*MW Edit Post*"))))
+
+(ert-deftest test-mdt-edit-post-submit-rewrites-only-that-comment ()
+  "Saving replaces the comment and leaves the rest of the section alone."
+  (let ((posted nil))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'mediawiki-discussion-tools--section-wikitext)
+                     (lambda (&rest _) test-mdt--section-text))
+                    ((symbol-function 'mediawiki-site-get-token)
+                     (lambda (&rest _) "csrf-token"))
+                    ((symbol-function 'mediawiki-api-call)
+                     (lambda (_site action args)
+                       (when (string= action "edit")
+                         (setq posted args))
+                       '((edit (("result" . "Success"))))))
+                    ((symbol-function 'quit-window) #'ignore)
+                    ((symbol-function 'mediawiki-discussion-tools--refresh-buffers)
+                     #'ignore)
+                    ((symbol-function 'pop-to-buffer)
+                     (lambda (buf &rest _) (set-buffer buf))))
+            (with-current-buffer (get-buffer-create "*MW Test Edit*")
+              (erase-buffer)
+              (insert "Editing post by Alice\n"
+                      mediawiki-discussion-tools-reply-separator "\n\n"
+                      ": Answer one, revised. [[User:Alice|Alice]] 10:05, 1 November 2026 (UTC)")
+              (mediawiki-discussion-tools-reply-mode 1)
+              (setq mediawiki-discussion-tools--reply-kind 'edit-post
+                    mediawiki-discussion-tools--reply-site "TestSite"
+                    mediawiki-discussion-tools--reply-page "Project:Support desk"
+                    mediawiki-discussion-tools--reply-section 1
+                    mediawiki-discussion-tools--reply-summary "/* Topic */ Edit comment by Alice"
+                    mediawiki-discussion-tools--edit-thread (test-mdt--signed-thread)
+                    mediawiki-discussion-tools--edit-comment-id "c-Alice-1"
+                    mediawiki-discussion-tools--edit-base "2026-11-01T00:00:00Z")
+              (mediawiki-discussion-tools-reply-submit)))
+          (should posted)
+          (let ((new-text (cdr (assoc "text" posted))))
+            (should (string-match-p "Answer one, revised" new-text))
+            (should (string-match-p "Follow-up" new-text))
+            (should (string-match-p "Answer two" new-text))
+            (should (string-match-p "\\`== Topic ==" new-text))
+            (should-not (string-match-p "Answer one\\." new-text)))
+          (should (equal (cdr (assoc "section" posted)) 1))
+          (should (equal (cdr (assoc "basetimestamp" posted))
+                         "2026-11-01T00:00:00Z")))
+      (when (get-buffer "*MW Test Edit*")
+        (kill-buffer "*MW Test Edit*")))))
+
+(ert-deftest test-mdt-edit-post-falls-back-to-page ()
+  "Without a locatable comment the page opens at the heading."
+  (let ((opened nil))
+    (cl-letf (((symbol-function 'mediawiki-open)
+               (lambda (page site)
+                 (setq opened (list page site))
+                 (insert "Intro\n\n== Topic ==\n\nbody\n"))))
+      (with-temp-buffer
+        (setq mediawiki-discussion-tools--sitename "TestSite"
+              mediawiki-discussion-tools--page "Project:Support desk"
+              mediawiki-discussion-tools--threads
+              (list '((id . "h-Topic-20260616005000") (title . "Topic")))
+              mediawiki-discussion-tools--view-index 0)
+        (mediawiki-discussion-tools-edit-post)
+        (should (equal opened '("Project:Support desk" "TestSite")))
+        (should (looking-at-p "== Topic =="))))))
+
+(ert-deftest test-mdt-edit-post-without-thread ()
+  "Editing with no thread selected signals."
+  (with-temp-buffer
+    (setq mediawiki-discussion-tools--sitename "TestSite"
+          mediawiki-discussion-tools--page "Project:Support desk")
+    (should-error (mediawiki-discussion-tools-edit-post) :type 'user-error)))
 
 (provide 'test-mediawiki-discussion-tools)
 
