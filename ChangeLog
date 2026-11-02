@@ -1,5 +1,10 @@
 2026-11-01  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki-core.el (mediawiki-version): Bump version to 4.2.0;
+	this is the User-Agent value.
+
+	* mediawiki.el: Bump version to 4.2.0.
+
 	* tests/test-mediawiki-discussion-tools.el
 	(test-mdt-comment-blocks): Cover cutting signed comments out of a
 	section, picking the block for a comment, editing one post and
