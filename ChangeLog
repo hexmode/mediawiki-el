@@ -1,5 +1,10 @@
 2026-11-02  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki-completion.el (mediawiki-mode): Only call
+	mediawiki-completion-use-company from the autoloaded mode hook when
+	this file is loaded; in a buffer that only needed mediawiki-mode the
+	function was still void, which broke every mediawiki-mode test in CI.
+
 	* mediawiki-core.el (mediawiki-version): Bump version to 4.2.1;
 	this is the User-Agent value.
 

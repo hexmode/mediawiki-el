@@ -148,7 +148,11 @@ what a buffer-wide M-TAB binding would otherwise hit; this falls back to
             (lambda ()
               (add-hook 'completion-at-point-functions
                         #'mediawiki-completion-at-point nil 'local)
-              (mediawiki-completion-use-company))))
+              ;; This form also lands in mediawiki-autoloads.el, which can run
+              ;; before this file is loaded (a buffer that only needed
+              ;; mediawiki-mode); the CAPF above is autoloaded, this is not.
+              (when (fboundp 'mediawiki-completion-use-company)
+                (mediawiki-completion-use-company)))))
 
 (provide 'mediawiki-completion)
 
