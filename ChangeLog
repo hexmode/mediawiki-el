@@ -1,5 +1,27 @@
 2026-11-02  Mark A. Hershberger  <mah@everybody.org>
 
+	* tests/test-mediawiki-site.el
+	(test-mediawiki-site-parse-version): Cover version parsing, the
+	cache, at-least comparison, unknown sites, and a failed fetch not
+	being cached.
+
+	* mediawiki-auth.el (mediawiki-do-login): Warm the site version cache
+	when a site is visited.
+
+	* mediawiki-discussion-tools.el
+	(mediawiki-discussion-tools--section-props): Send
+	prop=wikitext|tocdata on MediaWiki 1.43 and later and
+	prop=wikitext|sections on older wikis; sections is deprecated on
+	1.43 and warned about on every thread list refresh.  Parse either
+	response shape.
+
+	* mediawiki-site.el (mediawiki-site-version): New helpers:
+	mediawiki-site-version caches the wiki's version from meta=siteinfo,
+	and mediawiki-site-at-least answers whether a site has a given
+	MediaWiki version, so callers can send the right parameters as APIs
+	are deprecated.  The version is fetched when the site is visited.
+	An unknown version means use the older API.
+
 	* mediawiki-completion.el (mediawiki-mode): Only call
 	mediawiki-completion-use-company from the autoloaded mode hook when
 	this file is loaded; in a buffer that only needed mediawiki-mode the

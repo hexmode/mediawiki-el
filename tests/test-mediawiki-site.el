@@ -401,6 +401,60 @@
     (should-not (mediawiki-site-extract "Min" 4))
     (should (string= "Minimal" (mediawiki-site-first-page "Min")))))
 
+;;; Version and capability tests
+
+(ert-deftest test-mediawiki-site-parse-version ()
+  "Version strings parse into (MAJOR MINOR PATCH)."
+  (should (equal (mediawiki-site--parse-version "MediaWiki 1.43.1")
+                 '(1 43 1)))
+  (should (equal (mediawiki-site--parse-version "1.39") '(1 39 0)))
+  (should (equal (mediawiki-site--parse-version "1.44.0-wmf.3") '(1 44 0)))
+  (should-not (mediawiki-site--parse-version "not a version"))
+  (should-not (mediawiki-site--parse-version nil)))
+
+(ert-deftest test-mediawiki-site-version-cache ()
+  "The version is fetched once and cached."
+  (let ((mediawiki-site--versions (make-hash-table :test #'equal))
+        (calls 0))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _)
+                 (setq calls (1+ calls))
+                 '((query . ((general . ((generator . "MediaWiki 1.43.1"))))))))
+              )
+      (should (equal (mediawiki-site-version "TestSite") '(1 43 1)))
+      (should (equal (mediawiki-site-version "TestSite") '(1 43 1)))
+      (should (= 1 calls))
+      (mediawiki-site-forget-version "TestSite")
+      (mediawiki-site-version "TestSite")
+      (should (= 2 calls)))))
+
+(ert-deftest test-mediawiki-site-at-least ()
+  "Version comparison is lexical over major, minor, patch."
+  (let ((mediawiki-site--versions (make-hash-table :test #'equal)))
+    (puthash "New" '(1 43 1) mediawiki-site--versions)
+    (puthash "Old" '(1 39 5) mediawiki-site--versions)
+    (puthash "Equal" '(1 43 0) mediawiki-site--versions)
+    (should (mediawiki-site-at-least "New" 1 43))
+    (should (mediawiki-site-at-least "New" 1 39))
+    (should (mediawiki-site-at-least "Equal" 1 43))
+    (should-not (mediawiki-site-at-least "Old" 1 43))
+    (should (mediawiki-site-at-least "Old" 1 39))
+    (should-not (mediawiki-site-at-least "Old" 1 43 6))
+    ;; Unknown site: conservative, use the old API.
+    (should-not (mediawiki-site-at-least "Missing" 1 43))))
+
+(ert-deftest test-mediawiki-site-version-fetch-error ()
+  "A failed siteinfo call is not cached, so a later visit can retry."
+  (let ((mediawiki-site--versions (make-hash-table :test #'equal))
+        (fail t))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _)
+                 (if fail (error "offline")
+                   '((query . ((general . ((generator . "MediaWiki 1.43.1"))))))))))
+      (should-not (mediawiki-site-version "TestSite"))
+      (setq fail nil)
+      (should (equal (mediawiki-site-version "TestSite") '(1 43 1))))))
+
 (provide 'test-mediawiki-site)
 
 ;;; test-mediawiki-site.el ends here

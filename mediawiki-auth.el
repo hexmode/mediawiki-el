@@ -35,6 +35,7 @@
 (require 'url-parse)
 
 (declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
+(declare-function mediawiki-site-version "mediawiki-site" (sitename))
 (declare-function mediawiki-oauth-get-access-token "mediawiki-oauth")
 
 ;;; Authentication Constants
@@ -105,7 +106,9 @@ for older wikis and bot passwords."
            (mediawiki-oauth-configured-p sitename))
       (progn
         (mediawiki-oauth-get-access-token sitename)
-        (setq mediawiki-site sitename))
+        (setq mediawiki-site sitename)
+        ;; Visit-time version check; failure must not break login.
+        (ignore-errors (mediawiki-site-version sitename)))
 
     (let* ((user (or (mediawiki-site-username sitename)
                    username
@@ -125,7 +128,10 @@ for older wikis and bot passwords."
          (let ((msg (error-message-string err)))
            (if (string-match-p "unknown_action" msg)
                (mediawiki-do-login-fallback sitename user pass dom)
-             (error "%s" msg))))))))
+             (error "%s" msg))))))
+  ;; Visit-time version check; failure must not break login.
+  (ignore-errors (mediawiki-site-version sitename))
+  sitename))
 
 (defun mediawiki-do-clientlogin (sitename username password &optional domain)
   "Log into SITENAME using action=clientlogin.
