@@ -1,5 +1,10 @@
 2026-11-02  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki-core.el (mediawiki-version): Bump version to 4.2.1;
+	this is the User-Agent value.
+
+	* mediawiki.el: Bump version to 4.2.1.
+
 	* tests/test-mediawiki-mode.el (test-mediawiki-link-in-string): Cover
 	parsing a string as a link, wrapping a region and editing a selected
 	link.
