@@ -50,6 +50,7 @@
 (require 'mediawiki-site)
 (require 'json)
 (require 'auth-source)
+(require 'seq)
 (require 'url-parse)
 
 ;;; OAuth Site Properties
@@ -94,6 +95,42 @@ that is used.  Otherwise, the endpoint is derived from the site URL."
 (defun mediawiki-oauth-make-auth-header (access-token)
   "Create an Authorization header value using ACCESS-TOKEN."
   (cons "Authorization" (concat "Bearer " access-token)))
+
+(declare-function mediawiki-api-call "mediawiki-api" (sitename action &optional args))
+
+(defvar mediawiki-oauth--username-cache (make-hash-table :test #'equal)
+  "Cache of sitename to the user name the wiki reports for our token.")
+
+(defun mediawiki-oauth-forget-userinfo (&optional sitename)
+  "Forget the cached user name for SITENAME, or for every site."
+  (if sitename
+      (remhash sitename mediawiki-oauth--username-cache)
+    (clrhash mediawiki-oauth--username-cache)))
+
+(defun mediawiki-oauth-userinfo (sitename)
+  "Return the user name SITENAME attributes to the current OAuth token.
+Returns nil when the token is anonymous or the request fails.  Names are
+cached per site, and so is an explicit anonymous answer; a failed or
+unexpected response is not cached, so a half-configured site can be
+fixed without restarting Emacs.  auth-source cannot answer this,
+because for an OAuth consumer its login field is the client ID."
+  (let ((cached (gethash sitename mediawiki-oauth--username-cache 'unknown)))
+    (if (not (eq cached 'unknown))
+        (unless (eq cached 'anonymous) cached)
+      (let* ((result (ignore-errors
+                       (mediawiki-api-call
+                        sitename "query"
+                        '(("meta" . "userinfo")
+                          ("formatversion" . "2")))))
+             (info (alist-get 'userinfo (alist-get 'query result))))
+        (cond
+         ((null info) nil)
+         ((alist-get 'anon info)
+          (puthash sitename 'anonymous mediawiki-oauth--username-cache)
+          nil)
+         ((alist-get 'name info)
+          (puthash sitename (alist-get 'name info)
+                   mediawiki-oauth--username-cache)))))))
 
 ;;; Token Storage and Retrieval
 
@@ -164,7 +201,9 @@ The tokens are stored as properties in `mediawiki-site-alist'."
                                      (time-add (current-time) expiry-seconds)
                                    nil)))
               p))))
-    (mediawiki-oauth--update-site-properties sitename new-props)))
+    (mediawiki-oauth--update-site-properties sitename new-props))
+  ;; A new token may belong to a different user.
+  (mediawiki-oauth-forget-userinfo sitename))
 
 ;;; HTTP Utilities
 
@@ -287,6 +326,98 @@ the access token is expired, attempt to refresh it first."
           (mediawiki-oauth-refresh-access-token sitename)
         (mediawiki-oauth-request-access-token sitename))))
 
+;;; Secret Storage
+
+(defcustom mediawiki-oauth-secret-storage 'ask
+  "Where `mediawiki-oauth-setup-site' keeps OAuth secrets.
+`ask' asks once, saves the answer with `customize-save-variable' and
+uses it from then on.  `authinfo' writes an encrypted authinfo entry,
+`authinfo-plain' a plaintext one, and `site-alist' keeps the secret in
+`mediawiki-site-alist', which usually means your init file."
+  :type '(choice (const :tag "Ask once, then remember" ask)
+                 (const :tag "Authinfo, encrypted" authinfo)
+                 (const :tag "Authinfo, plain text" authinfo-plain)
+                 (const :tag "MediaWiki site configuration" site-alist))
+  :group 'mediawiki)
+
+(defun mediawiki-oauth--authinfo-files ()
+  "Return the authinfo and netrc files that already exist."
+  (seq-uniq
+   (seq-filter (lambda (file)
+                 (and (stringp file) (file-exists-p file)))
+               (append auth-sources
+                       '("~/.authinfo" "~/.authinfo.gpg"
+                         "~/.netrc" "~/.netrc.gpg")))))
+
+(defun mediawiki-oauth--authinfo-file (encrypted)
+  "Return the authinfo file to write to, ENCRYPTED or not.
+Prefers a file the user already has, then the conventional name."
+  (let* ((existing (mediawiki-oauth--authinfo-files))
+         (gpg-p (lambda (file) (string-match-p "\\.gpg\\'" file)))
+         (candidates (if encrypted
+                         (seq-filter gpg-p existing)
+                       (seq-remove gpg-p existing))))
+    (or (car candidates)
+        (if encrypted "~/.authinfo.gpg" "~/.authinfo"))))
+
+(defun mediawiki-oauth--choose-secret-storage (&optional ask)
+  "Decide where to keep OAuth secrets and remember the answer.
+With `mediawiki-oauth-secret-storage' set to anything but `ask', that
+value is used.  With ASK non-nil and the preference still `ask', the
+user is asked, defaulting to the site configuration when there is no
+authinfo file to write to.  Without ASK a non-interactive caller gets
+`site-alist', so it never blocks on a question.  Returns one of
+`authinfo', `authinfo-plain' or `site-alist'."
+  (cond
+   ((not (eq mediawiki-oauth-secret-storage 'ask))
+    mediawiki-oauth-secret-storage)
+   ((not ask)
+    'site-alist)
+   ((null (mediawiki-oauth--authinfo-files))
+    'site-alist)
+   (t
+    (let ((choice
+           (if (y-or-n-p
+                (concat "Store the OAuth secrets in authinfo instead of your "
+                        "init file? (Your answer will be remembered.) "))
+               (if (y-or-n-p
+                    "Encrypt the authinfo entry? (No writes a plaintext file.) ")
+                   'authinfo
+                 'authinfo-plain)
+             'site-alist)))
+      (customize-save-variable 'mediawiki-oauth-secret-storage choice)
+      (message "OAuth secrets will be kept in %s; that choice is remembered."
+               (if (eq choice 'site-alist)
+                   "your init file"
+                 (mediawiki-oauth--authinfo-file (eq choice 'authinfo))))
+      choice))))
+
+(defun mediawiki-oauth--authinfo-entry (host client-id port secret)
+  "Return an authinfo line for SECRET at PORT on HOST for CLIENT-ID."
+  (format "machine %s login %s password %s port %s"
+          host client-id secret port))
+
+(defun mediawiki-oauth--store-authinfo (file host client-id port secret)
+  "Append a authinfo entry for SECRET to FILE.
+FILE may be an encrypted authinfo file; `auto-encryption-mode' handles
+the encryption on save."
+  (with-current-buffer (find-file-noselect file)
+    (unwind-protect
+        (progn
+          (goto-char (point-max))
+          (unless (bolp) (insert "\n"))
+          (insert (mediawiki-oauth--authinfo-entry
+                   host client-id port secret)
+                  "\n")
+          (save-buffer))
+      (kill-buffer)))
+  ;; auth-source only reads the files listed in `auth-sources', and the
+  ;; user may never have used this one before.
+  (unless (member file auth-sources)
+    (add-to-list 'auth-sources file)
+    (message "Added %s to auth-sources for this session; add it to your init file to keep it." file))
+  (auth-source-forget-all-cached))
+
 ;;; Interactive Setup
 
 ;;;###autoload
@@ -297,6 +428,11 @@ CLIENT-SECRET is the OAuth consumer client secret.
 Optional ACCESS-TOKEN is a pre-obtained access token.  If not
 provided, the client credentials flow will be used to obtain one
 automatically when needed.
+
+When you already have an authinfo file, this asks whether to keep the
+secret there, encrypted or plaintext, instead of in your init file.
+The answer is remembered in `mediawiki-oauth-secret-storage', so the
+question is asked once.
 
 This mutates the site entry in `mediawiki-site-alist' in place so
 the configuration persists across the Emacs session.  To save it
@@ -309,7 +445,16 @@ permanently, use `customize-save-variable' or persist your init file."
                   (format "Access token for %s (leave empty to use client credentials): " site)
                   nil nil "")))
      (list site id secret (if (string= token "") nil token))))
-  (let* ((site (assoc sitename mediawiki-site-alist))
+  (let* ((storage (mediawiki-oauth--choose-secret-storage
+                   (called-interactively-p 'any)))
+         (authinfo-p (memq storage '(authinfo authinfo-plain)))
+         (host (url-host (url-generic-parse-url (mediawiki-site-url sitename))))
+         ;; With authinfo storage the secret is not copied into the site
+         ;; configuration; `mediawiki-oauth-client-secret' reads it back
+         ;; from auth-source.
+         (stored-secret (unless authinfo-p client-secret))
+         (stored-token (unless authinfo-p access-token))
+         (site (assoc sitename mediawiki-site-alist))
          (plist-start (mediawiki-site--plist-start site))
          (tail (nthcdr plist-start site))
          (new-props
@@ -317,8 +462,8 @@ permanently, use `customize-save-variable' or persist your init file."
               ;; Already a plist — copy and update.
               (let ((p (copy-sequence tail)))
                 (setq p (plist-put p :oauth-client-id client-id))
-                (setq p (plist-put p :oauth-client-secret client-secret))
-                (setq p (plist-put p :oauth-access-token access-token))
+                (setq p (plist-put p :oauth-client-secret stored-secret))
+                (setq p (plist-put p :oauth-access-token stored-token))
                 (setq p (plist-put p :oauth-refresh-token nil))
                 (setq p (plist-put p :oauth-token-expiry nil))
                 p)
@@ -328,12 +473,21 @@ permanently, use `customize-save-variable' or persist your init file."
                          (not (string= "" (car tail))))
                 (setq p (plist-put p :first-page (car tail))))
               (setq p (plist-put p :oauth-client-id client-id))
-              (setq p (plist-put p :oauth-client-secret client-secret))
-              (setq p (plist-put p :oauth-access-token access-token))
+              (setq p (plist-put p :oauth-client-secret stored-secret))
+              (setq p (plist-put p :oauth-access-token stored-token))
               (setq p (plist-put p :oauth-refresh-token nil))
               (setq p (plist-put p :oauth-token-expiry nil))
               p))))
+    (when authinfo-p
+      (let ((file (mediawiki-oauth--authinfo-file (eq storage 'authinfo))))
+        (mediawiki-oauth--store-authinfo
+         file host client-id "mediawiki-client-secret" client-secret)
+        (when access-token
+          (mediawiki-oauth--store-authinfo
+           file host client-id "mediawiki-access-token" access-token))))
     (mediawiki-oauth--update-site-properties sitename new-props))
+  ;; New credentials mean the cached user name may be stale.
+  (mediawiki-oauth-forget-userinfo sitename)
   (message "OAuth configured for %s" sitename)
   (when (and (called-interactively-p 'any)
              (y-or-n-p (format "Save OAuth configuration for %s to Customize? " sitename)))
@@ -367,6 +521,7 @@ from the site's configuration, but preserves the client ID and secret."
               (setq p (plist-put p :oauth-token-expiry nil))
               p))))
     (mediawiki-oauth--update-site-properties sitename new-props))
+  (mediawiki-oauth-forget-userinfo sitename)
   (message "OAuth tokens cleared for %s" sitename))
 
 (provide 'mediawiki-oauth)

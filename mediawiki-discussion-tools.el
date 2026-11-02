@@ -55,6 +55,7 @@
 (require 'mediawiki-site)
 (require 'mediawiki-api)
 (require 'mediawiki-utils)
+(require 'mediawiki-recent)
 (require 'tabulated-list)
 (require 'cl-lib)
 (require 'browse-url)
@@ -121,6 +122,7 @@ The user's reply text starts on the line after the separator."
     (define-key map (kbd "g")   #'mediawiki-discussion-tools-view-refresh)
     (define-key map (kbd "RET") #'mediawiki-discussion-tools-view-close)
     (define-key map (kbd "r")   #'mediawiki-discussion-tools-reply)
+    (define-key map (kbd "e")   #'mediawiki-discussion-tools-edit-post)
     (define-key map (kbd "m")   #'mediawiki-discussion-tools-new-thread)
     (define-key map (kbd "C")   #'mediawiki-discussion-tools-new-thread)
     (define-key map (kbd "d")   #'mediawiki-discussion-tools-resolve)
@@ -130,6 +132,9 @@ The user's reply text starts on the line after the separator."
     (define-key map (kbd "&")   #'mediawiki-discussion-tools-browse-comment-at-point)
     (define-key map (kbd "C-c C-o")
       #'mediawiki-discussion-tools-open-link-at-point)
+    (define-key map (kbd "TAB")     #'mediawiki-discussion-tools-next-link)
+    (define-key map (kbd "<backtab>")
+      #'mediawiki-discussion-tools-previous-link)
     map)
   "Keymap for `mediawiki-discussion-tools-view-mode'.")
 
@@ -460,8 +465,16 @@ If SITENAME is nil, use the current `mediawiki-site' or prompt.
 Displays threads sorted by priority: unanswered first, then active,
 then stale."
   (interactive
-   (list (read-string "Discussion page: ")
-         (or mediawiki-site (mediawiki-prompt-for-site))))
+   (let* ((in-discussion (and mediawiki-site
+                              (derived-mode-p
+                               'mediawiki-discussion-tools-list-mode
+                               'mediawiki-discussion-tools-view-mode)))
+          (pick (mediawiki-recent-read
+                 'discussions
+                 (and in-discussion mediawiki-site)
+                 mediawiki-discussion-tools--page)))
+     (list (cdr pick)
+           (or (car pick) mediawiki-site (mediawiki-prompt-for-site)))))
   (let* ((site (or sitename mediawiki-site (mediawiki-prompt-for-site)))
          (buf-name (format "*MW Discussion: %s*" page))
          (threads (mediawiki-discussion-tools--fetch-threads site page)))
@@ -476,6 +489,7 @@ then stale."
             (mapcar (lambda (thread) (alist-get 'id thread)) threads)
             mediawiki-discussion-tools--vanished nil)
       (mediawiki-discussion-tools--refresh-table)
+      (mediawiki-recent-record 'discussions site page)
       (pop-to-buffer (current-buffer)))))
 
 ;;; Interactive Commands
@@ -691,9 +705,14 @@ resolve the way they do in a browser.  Falls back to
     (define-key map (kbd "RET") nil)
     (define-key map (kbd "C-c C-o")
       #'mediawiki-discussion-tools-open-link-at-point)
+    ;; shr's own link movement only works while point is on a link.
+    (define-key map (kbd "TAB") #'mediawiki-discussion-tools-next-link)
+    (define-key map (kbd "<backtab>")
+      #'mediawiki-discussion-tools-previous-link)
     map)
   "Keymap placed on links rendered in the thread view.
-It is `shr-map' without RET, plus `C-c C-o' to open a link.")
+It is `shr-map' without RET, plus `C-c C-o' to open a link and the
+thread view's link movement keys.")
 
 (defun mediawiki-discussion-tools--wiki-title-from-url (url sitename)
   "Return the page title URL points at on SITENAME, or nil.
@@ -715,6 +734,43 @@ returns nil so the caller can hand it to `browse-url'."
                      (match-string 1 file)))))
           (when (and raw (not (string-empty-p raw)))
             (string-replace "_" " " (url-unhex-string raw))))))))
+
+(defun mediawiki-discussion-tools--link-run-start (pos)
+  "Return the start of the link run that contains POS."
+  (if (not (get-text-property pos 'shr-url))
+      pos
+    (save-excursion
+      (goto-char pos)
+      (while (and (> (point) (point-min))
+                  (get-text-property (1- (point)) 'shr-url))
+        (backward-char))
+      (point))))
+
+(defun mediawiki-discussion-tools-next-link ()
+  "Move point to the next link in the thread view."
+  (interactive)
+  (let ((pos (point))
+        found)
+    (while (and (not found)
+                (setq pos (next-single-property-change pos 'shr-url)))
+      (when (get-text-property pos 'shr-url)
+        (setq found pos)))
+    (unless found
+      (user-error "No next link"))
+    (goto-char found)))
+
+(defun mediawiki-discussion-tools-previous-link ()
+  "Move point to the previous link in the thread view."
+  (interactive)
+  (let ((pos (mediawiki-discussion-tools--link-run-start (point)))
+        found)
+    (while (and (not found)
+                (setq pos (previous-single-property-change pos 'shr-url)))
+      (when (get-text-property pos 'shr-url)
+        (setq found (mediawiki-discussion-tools--link-run-start pos))))
+    (unless found
+      (user-error "No previous link"))
+    (goto-char found)))
 
 (defun mediawiki-discussion-tools-open-link-at-point ()
   "Open the link at point.
@@ -842,6 +898,49 @@ page."
     (unless id
       (user-error "No comment at point"))
     (browse-url (concat (mediawiki-make-page-url site page) "#" id))))
+
+(defun mediawiki-discussion-tools--goto-section-heading (title)
+  "Move to the section heading for TITLE in the current buffer.
+Returns non-nil when a heading was found."
+  (when (and (stringp title) (not (string-empty-p (string-trim title))))
+    (goto-char (point-min))
+    (when (re-search-forward
+           (concat "^=\\{2,6\\}[ \t]*"
+                   (regexp-quote (string-trim title))
+                   "[ \t]*=\\{2,6\\}[ \t]*$")
+           nil t)
+      (beginning-of-line)
+      (when (get-buffer-window)
+        (recenter 0))
+      t)))
+
+(defun mediawiki-discussion-tools-edit-post ()
+  "Edit the page at the thread containing the comment at point.
+DiscussionTools has no API for rewriting a single comment, so this
+opens the page in a normal mediawiki buffer with point on the thread's
+heading, where the comment can be edited as wikitext."
+  (interactive)
+  (let* ((list-buf (or mediawiki-discussion-tools--list-buffer
+                       (current-buffer)))
+         (site (buffer-local-value 'mediawiki-discussion-tools--sitename
+                                   list-buf))
+         (page (buffer-local-value 'mediawiki-discussion-tools--page list-buf))
+         (threads (buffer-local-value 'mediawiki-discussion-tools--threads
+                                      list-buf))
+         (index (or (buffer-local-value 'mediawiki-discussion-tools--view-index
+                                        list-buf)
+                    (car (with-current-buffer list-buf
+                           (mediawiki-discussion-tools--thread-at-point)))))
+         (thread (when (and index threads (< index (length threads)))
+                   (nth index threads))))
+    (unless thread
+      (user-error "No thread selected — move point to a thread first"))
+    (unless (and site page)
+      (user-error "No site or page configured"))
+    (let ((title (alist-get 'title thread)))
+      (mediawiki-open page site)
+      (mediawiki-discussion-tools--goto-section-heading title)
+      (message "Editing %s on %s" page site))))
 
 (defun mediawiki-discussion-tools--format-timestamp (ts)
   "Format ISO 8601 TS as a human-readable date (UTC)."
@@ -1274,11 +1373,69 @@ appended."
 
 ;;; Mode Definition
 
+(defconst mediawiki-discussion-tools--fixed-columns 3
+  "Columns that never grow: the status icon, reply count and last reply.")
+
+(defun mediawiki-discussion-tools--list-format (&optional width)
+  "Return a `tabulated-list-format' sized for WIDTH columns.
+Title and Author share whatever space is left after the fixed columns,
+so the table fills the window instead of stopping short.  Narrow
+windows keep the historical 40/16 split rather than squeezing them."
+  (let* ((width (or width 80))
+         ;; icon, "#" and "Last", padding, plus a little slack for the
+         ;; separators `tabulated-list' adds between columns.
+         (fixed (+ mediawiki-discussion-tools--fixed-columns 5 20
+                   tabulated-list-padding 3))
+         (available (- width fixed)))
+    (if (< available 56)
+        [("" 3 t)
+         ("Title" 40 t)
+         ("Author" 16 t)
+         ("#" 5 t :right-align t)
+         ("Last" 20 t)]
+      (let ((author (min 30 (max 16 (/ available 4))))
+            (title 0))
+        (setq title (- available author))
+        (vector (list "" mediawiki-discussion-tools--fixed-columns t)
+                (list "Title" title t)
+                (list "Author" author t)
+                (list "#" 5 t :right-align t)
+                (list "Last" 20 t))))))
+
+(defun mediawiki-discussion-tools--fit-columns (&optional window)
+  "Size the Title and Author columns for WINDOW.
+Returns non-nil when the format changed, so the caller can redisplay
+the table."
+  (let* ((width (if window (window-width window) (window-width)))
+         (format (mediawiki-discussion-tools--list-format width)))
+    (unless (equal format tabulated-list-format)
+      (setq tabulated-list-format format)
+      (tabulated-list-init-header)
+      t)))
+
+(defun mediawiki-discussion-tools--refit-on-resize (&optional window)
+  "Refit and redisplay the thread table when WINDOW changes size.
+Added buffer-locally to `window-size-change-functions'."
+  (when (derived-mode-p 'mediawiki-discussion-tools-list-mode)
+    (when (mediawiki-discussion-tools--fit-columns window)
+      (tabulated-list-print t))))
+
+(defun mediawiki-discussion-tools--ensure-hooks ()
+  "Install the buffer-local hooks the thread list needs.
+Called from the mode and from every refresh, so a buffer that was
+already in the mode picks up new hooks after a reload or a `g'."
+  (add-hook 'window-size-change-functions
+            #'mediawiki-discussion-tools--refit-on-resize nil t)
+  (add-hook 'post-command-hook
+            #'mediawiki-discussion-tools--follow-point nil t))
+
 (defun mediawiki-discussion-tools--refresh-table ()
   "Rebuild the `tabulated-list' entries and refresh the display."
+  (mediawiki-discussion-tools--ensure-hooks)
   (setq tabulated-list-entries
         (mapcar #'mediawiki-discussion-tools--make-entry
                 mediawiki-discussion-tools--threads))
+  (mediawiki-discussion-tools--fit-columns (get-buffer-window (current-buffer)))
   (tabulated-list-print t))
 
 (define-derived-mode mediawiki-discussion-tools-list-mode tabulated-list-mode
@@ -1288,18 +1445,18 @@ Displays a sortable table of discussion threads with metadata
 extracted from the DiscussionTools API.
 
 \\{mediawiki-discussion-tools-list-mode-map}"
-  (setq tabulated-list-format
-        [(""   3 t)
-         ("Title"  40 t)
-         ("Author" 16 t)
-         ("#"       5 t :right-align t)
-         ("Last"   20 t)])
   (setq tabulated-list-padding 1)
+  (setq tabulated-list-format (mediawiki-discussion-tools--list-format
+                               (window-width (get-buffer-window
+                                              (current-buffer)
+                                              t))))
   (setq tabulated-list-sort-key nil)   ; preserve our priority sort order
   (add-hook 'tabulated-list-revert-hook #'mediawiki-discussion-tools-refresh nil t)
+  ;; Grow Title and Author into the window's width, and keep doing so
+  ;; after a resize or a `g' refresh.
+  (mediawiki-discussion-tools--ensure-hooks)
   (tabulated-list-init-header)
-  (hl-line-mode 1)
-  (add-hook 'post-command-hook #'mediawiki-discussion-tools--follow-point nil t))
+  (hl-line-mode 1))
 
 (define-derived-mode mediawiki-discussion-tools-view-mode special-mode
   "Thread"

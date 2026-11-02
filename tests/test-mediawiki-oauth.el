@@ -393,6 +393,211 @@ a new list that is discarded, leaving the site entry unchanged."
       (should (equal (plist-get (nthcdr 5 site) :oauth-client-id) "my-id"))
       (should (equal (plist-get (nthcdr 5 site) :oauth-access-token) "my-token")))))
 
+;;; User name discovery tests
+
+(ert-deftest test-mediawiki-oauth-userinfo-name ()
+  "The wiki's userinfo names the OAuth user, and the answer is cached."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (mediawiki-oauth-forget-userinfo)
+    (let ((calls 0))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (&rest _)
+                   (setq calls (1+ calls))
+                   '((query . ((userinfo . ((name . "Alice")))))))))
+        (should (equal (mediawiki-oauth-userinfo "TestSite") "Alice"))
+        (should (equal (mediawiki-oauth-userinfo "TestSite") "Alice"))
+        (should (= 1 calls))))))
+
+(ert-deftest test-mediawiki-oauth-userinfo-anonymous ()
+  "An anonymous token yields nil, not a name."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (mediawiki-oauth-forget-userinfo)
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _)
+                 '((query . ((userinfo . ((anon . t)))))))))
+      (should-not (mediawiki-oauth-userinfo "TestSite")))))
+
+(ert-deftest test-mediawiki-oauth-userinfo-error ()
+  "A failed request yields nil instead of signalling."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (mediawiki-oauth-forget-userinfo)
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _) (error "network down"))))
+      (should-not (mediawiki-oauth-userinfo "TestSite")))))
+
+(ert-deftest test-mediawiki-oauth-userinfo-failure-is-not-cached ()
+  "A failed lookup does not poison the cache once things are fixed."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (mediawiki-oauth-forget-userinfo)
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _) (error "network down"))))
+      (should-not (mediawiki-oauth-userinfo "TestSite")))
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _)
+                 '((query . ((userinfo . ((name . "Alice")))))))))
+      (should (equal (mediawiki-oauth-userinfo "TestSite") "Alice")))))
+
+(ert-deftest test-mediawiki-oauth-setup-forgets-userinfo ()
+  "Configuring OAuth clears any earlier answer for the site."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (mediawiki-oauth-forget-userinfo)
+    (puthash "TestSite" 'anonymous mediawiki-oauth--username-cache)
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _)
+                 '((query . ((userinfo . ((name . "Alice")))))))))
+      (mediawiki-oauth-setup-site "TestSite" "cid" "secret")
+      (should (equal (mediawiki-oauth-userinfo "TestSite") "Alice")))))
+
+(ert-deftest test-mediawiki-oauth-site-username-uses-userinfo ()
+  "An OAuth site with no configured user asks the wiki, not auth-source."
+  (let ((mediawiki-site-alist
+         (list (list "TestSite" "https://test.example.org/w/" "" "" ""
+                     :description "Test Site"))))
+    (mediawiki-oauth-forget-userinfo)
+    (mediawiki-oauth-setup-site "TestSite" "cid" "secret")
+    (cl-letf (((symbol-function 'mediawiki-api-call)
+               (lambda (&rest _) '((query . ((userinfo . ((name . "Alice"))))))))
+              ((symbol-function 'url-user-for-url)
+               (lambda (&rest _) "cid")))
+      (should (equal (mediawiki-site-username "TestSite") "Alice")))))
+
+(ert-deftest test-mediawiki-oauth-site-username-without-oauth ()
+  "Without OAuth the old auth-source lookup still applies."
+  (let ((mediawiki-site-alist
+         (list (list "TestSite" "https://test.example.org/w/" "" "" ""
+                     :description "Test Site"))))
+    (cl-letf (((symbol-function 'url-user-for-url)
+               (lambda (&rest _) "authuser")))
+      (should (equal (mediawiki-site-username "TestSite") "authuser")))))
+
+(ert-deftest test-mediawiki-oauth-new-token-forgets-userinfo ()
+  "Storing a new token drops the cached user name."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (mediawiki-oauth-forget-userinfo)
+    (let ((name "Alice"))
+      (cl-letf (((symbol-function 'mediawiki-api-call)
+                 (lambda (&rest _)
+                   `((query . ((userinfo . ((name . ,name)))))))))
+        (should (equal (mediawiki-oauth-userinfo "TestSite") "Alice"))
+        (setq name "Bob")
+        (mediawiki-oauth-set-tokens "TestSite" "new-token" nil 3600)
+        (should (equal (mediawiki-oauth-userinfo "TestSite") "Bob"))))))
+
+;;; Secret storage tests
+
+(ert-deftest test-mediawiki-oauth-authinfo-entry ()
+  "An authinfo line has the fields auth-source expects."
+  (should (equal (mediawiki-oauth--authinfo-entry
+                  "example.org" "cid" "mediawiki-client-secret" "s3cret")
+                 (concat "machine example.org login cid password s3cret"
+                         " port mediawiki-client-secret"))))
+
+(ert-deftest test-mediawiki-oauth-store-authinfo-appends ()
+  "Storing two secrets adds two lines and keeps the first."
+  (let ((file (make-temp-file "mw-authinfo-"))
+        ;; `--store-authinfo' registers the file with auth-source; keep
+        ;; that out of the rest of the suite.
+        (auth-sources auth-sources))
+    (unwind-protect
+        (progn
+          (mediawiki-oauth--store-authinfo file "example.org" "cid"
+                                           "mediawiki-client-secret" "one")
+          (mediawiki-oauth--store-authinfo file "example.org" "cid"
+                                           "mediawiki-access-token" "two")
+          (with-temp-buffer
+            (insert-file-contents file)
+            (should (string-match-p "port mediawiki-client-secret"
+                                    (buffer-string)))
+            (should (string-match-p "port mediawiki-access-token"
+                                    (buffer-string)))
+            (should (= 2 (how-many "^machine " (point-min) (point-max))))))
+      (delete-file file))))
+
+(ert-deftest test-mediawiki-oauth-choose-storage-when-configured ()
+  "A remembered choice is used without asking."
+  (let ((mediawiki-oauth-secret-storage 'authinfo))
+    (cl-letf (((symbol-function 'y-or-n-p)
+               (lambda (&rest _) (ert-fail "should not ask"))))
+      (should (eq (mediawiki-oauth--choose-secret-storage t) 'authinfo)))))
+
+(ert-deftest test-mediawiki-oauth-choose-storage-asks-and-remembers ()
+  "Authinfo plus encryption is saved for next time."
+  (let ((mediawiki-oauth-secret-storage 'ask)
+        (answers '(t t))
+        (saved nil))
+    (cl-letf (((symbol-function 'mediawiki-oauth--authinfo-files)
+               (lambda () '("~/.authinfo.gpg")))
+              ((symbol-function 'y-or-n-p) (lambda (&rest _) (pop answers)))
+              ((symbol-function 'customize-save-variable)
+               (lambda (sym val) (setq saved (cons sym val)))))
+      (should (eq (mediawiki-oauth--choose-secret-storage t) 'authinfo))
+      (should (equal saved '(mediawiki-oauth-secret-storage . authinfo))))))
+
+(ert-deftest test-mediawiki-oauth-choose-storage-plain ()
+  "Declining encryption keeps the entry in a plaintext file."
+  (let ((mediawiki-oauth-secret-storage 'ask)
+        (answers '(t nil))
+        (saved nil))
+    (cl-letf (((symbol-function 'mediawiki-oauth--authinfo-files)
+               (lambda () '("~/.authinfo")))
+              ((symbol-function 'y-or-n-p) (lambda (&rest _) (pop answers)))
+              ((symbol-function 'customize-save-variable)
+               (lambda (sym val) (setq saved (cons sym val)))))
+      (should (eq (mediawiki-oauth--choose-secret-storage t) 'authinfo-plain))
+      (should (equal saved
+                     '(mediawiki-oauth-secret-storage . authinfo-plain))))))
+
+(ert-deftest test-mediawiki-oauth-choose-storage-declines ()
+  "Declining authinfo keeps the secret in the site configuration."
+  (let ((mediawiki-oauth-secret-storage 'ask)
+        (saved nil))
+    (cl-letf (((symbol-function 'mediawiki-oauth--authinfo-files)
+               (lambda () '("~/.authinfo.gpg")))
+              ((symbol-function 'y-or-n-p) (lambda (&rest _) nil))
+              ((symbol-function 'customize-save-variable)
+               (lambda (sym val) (setq saved (cons sym val)))))
+      (should (eq (mediawiki-oauth--choose-secret-storage t) 'site-alist))
+      (should (equal saved '(mediawiki-oauth-secret-storage . site-alist))))))
+
+(ert-deftest test-mediawiki-oauth-choose-storage-no-authinfo ()
+  "Without an authinfo file there is nothing to ask about."
+  (let ((mediawiki-oauth-secret-storage 'ask))
+    (cl-letf (((symbol-function 'mediawiki-oauth--authinfo-files)
+               (lambda () nil))
+              ((symbol-function 'y-or-n-p)
+               (lambda (&rest _) (ert-fail "should not ask")))
+              ((symbol-function 'customize-save-variable)
+               (lambda (&rest _) (ert-fail "should not save"))))
+      (should (eq (mediawiki-oauth--choose-secret-storage t) 'site-alist)))))
+
+(ert-deftest test-mediawiki-oauth-choose-storage-non-interactive ()
+  "Non-interactive callers never prompt."
+  (let ((mediawiki-oauth-secret-storage 'ask))
+    (cl-letf (((symbol-function 'y-or-n-p)
+               (lambda (&rest _) (ert-fail "should not ask"))))
+      (should (eq (mediawiki-oauth--choose-secret-storage) 'site-alist)))))
+
+(ert-deftest test-mediawiki-oauth-setup-site-authinfo-storage ()
+  "The secret and token go to authinfo, not the site entry."
+  (test-mediawiki-oauth-with-site "TestSite"
+    (let ((mediawiki-oauth-secret-storage 'authinfo)
+          (written nil))
+      (cl-letf (((symbol-function 'mediawiki-oauth--store-authinfo)
+                 (lambda (file host id port secret)
+                   (push (list file host id port secret) written))))
+        (mediawiki-oauth-setup-site "TestSite" "cid" "csecret" "atoken")
+        (should (equal (mediawiki-oauth-client-id "TestSite") "cid"))
+        (should-not (mediawiki-site-property "TestSite" :oauth-client-secret))
+        (should-not (mediawiki-site-property "TestSite" :oauth-access-token))
+        (should (member (list (mediawiki-oauth--authinfo-file t)
+                              "test.example.org" "cid"
+                              "mediawiki-client-secret" "csecret")
+                        written))
+        (should (member (list (mediawiki-oauth--authinfo-file t)
+                              "test.example.org" "cid"
+                              "mediawiki-access-token" "atoken")
+                        written))))))
+
 (provide 'test-mediawiki-oauth)
 
 ;;; test-mediawiki-oauth.el ends here

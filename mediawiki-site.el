@@ -160,6 +160,8 @@ If BUFFER is not given, the current buffer is used."
 
 (declare-function mediawiki-do-login "mediawiki-auth")
 (declare-function mediawiki-edit "mediawiki-page")
+(declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
+(declare-function mediawiki-oauth-userinfo "mediawiki-oauth")
 ;;;###autoload
 (defun mediawiki-site (&optional site)
   "Set up mediawiki.el for a SITE.
@@ -187,8 +189,19 @@ Interactively, prompt for a SITE."
        auth)))
 
 (defun mediawiki-site-username (sitename)
-  "Get the username for a given SITENAME."
-  (mediawiki-site-user-pass sitename 2 'url-user-for-url))
+  "Get the username for a given SITENAME.
+A name configured for the site wins.  For an OAuth site without one,
+ask the wiki which user the token belongs to: auth-source's login field
+for an OAuth consumer holds the client ID, not a user name."
+  (or (let ((configured (mediawiki-site-extract sitename 2)))
+        (and (stringp configured)
+             (> (string-width configured) 0)
+             configured))
+      (and (fboundp 'mediawiki-oauth-configured-p)
+           (mediawiki-oauth-configured-p sitename)
+           (fboundp 'mediawiki-oauth-userinfo)
+           (mediawiki-oauth-userinfo sitename))
+      (url-user-for-url (mediawiki-site-url sitename))))
 
 (defun mediawiki-site--auth-secret (entry)
   "Return the password from an auth-source ENTRY, or nil.

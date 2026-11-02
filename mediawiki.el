@@ -148,6 +148,7 @@
 (require 'mediawiki-watchlist)
 (require 'mediawiki-completion)
 (require 'mediawiki-user)
+(require 'mediawiki-recent)
 
 (provide 'mediawiki)
 

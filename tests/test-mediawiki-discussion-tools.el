@@ -1258,6 +1258,35 @@ as a direct lookup into the TOC-ordered section list."
         (when (get-buffer "*MW Test View*")
           (kill-buffer "*MW Test View*"))))))
 
+(ert-deftest test-mdt-move-between-links ()
+  "TAB and backtab walk the links in the view."
+  (skip-unless (fboundp 'libxml-parse-html-region))
+  (let ((replies (list (test-mdt--mock-reply
+                        "Alice" "2026-06-28T10:00:00Z"
+                        (concat "<p><a href=\"/wiki/First\">first</a> and "
+                                "<a href=\"/wiki/Second\">second</a></p>")))))
+    (with-temp-buffer
+      (mediawiki-discussion-tools--render-replies replies 0)
+      (goto-char (point-min))
+      (mediawiki-discussion-tools-next-link)
+      (should (equal (get-text-property (point) 'shr-url) "/wiki/First"))
+      (mediawiki-discussion-tools-next-link)
+      (should (equal (get-text-property (point) 'shr-url) "/wiki/Second"))
+      (should-error (mediawiki-discussion-tools-next-link) :type 'user-error)
+      (mediawiki-discussion-tools-previous-link)
+      (should (equal (get-text-property (point) 'shr-url) "/wiki/First"))
+      (should-error (mediawiki-discussion-tools-previous-link)
+                    :type 'user-error))))
+
+(ert-deftest test-mdt-link-movement-key-bindings ()
+  "TAB and backtab move between links with or without point on one."
+  (dolist (map (list mediawiki-discussion-tools-view-mode-map
+                     mediawiki-discussion-tools-link-map))
+    (should (eq (lookup-key map (kbd "TAB"))
+                #'mediawiki-discussion-tools-next-link))
+    (should (eq (lookup-key map (kbd "<backtab>"))
+                #'mediawiki-discussion-tools-previous-link))))
+
 (ert-deftest test-mdt-open-link-at-point-no-link ()
   "Plain text is not a link."
   (should-error
@@ -1266,6 +1295,37 @@ as a direct lookup into the TOC-ordered section list."
      (goto-char (point-min))
      (mediawiki-discussion-tools-open-link-at-point))
    :type 'user-error))
+
+;;; Column Sizing Tests
+
+(ert-deftest test-mdt-list-format-narrow ()
+  "A narrow window keeps the original 40/16 split."
+  (let ((format (mediawiki-discussion-tools--list-format 80)))
+    (should (= 40 (nth 1 (aref format 1))))
+    (should (= 16 (nth 1 (aref format 2))))))
+
+(ert-deftest test-mdt-list-format-wide ()
+  "Title and Author grow to fill a wide window."
+  (let* ((format (mediawiki-discussion-tools--list-format 160))
+         (title (nth 1 (aref format 1)))
+         (author (nth 1 (aref format 2))))
+    (should (> title 40))
+    (should (> author 16))
+    (should (<= (+ 3 title author 5 20) 160))))
+
+(ert-deftest test-mdt-list-format-caps-author ()
+  "Author does not eat the whole window."
+  (should (= 30 (nth 1 (aref (mediawiki-discussion-tools--list-format 400) 2)))))
+
+(ert-deftest test-mdt-fit-columns-updates-format ()
+  "Fitting reports a change once and then stays put."
+  (with-temp-buffer
+    (mediawiki-discussion-tools-list-mode)
+    (setq tabulated-list-format (mediawiki-discussion-tools--list-format 80))
+    (cl-letf (((symbol-function 'window-width) (lambda (&rest _) 200)))
+      (should (mediawiki-discussion-tools--fit-columns))
+      (should (> (nth 1 (aref tabulated-list-format 1)) 40))
+      (should-not (mediawiki-discussion-tools--fit-columns)))))
 
 ;;; Vanished Thread Tests
 
@@ -1457,6 +1517,45 @@ as a direct lookup into the TOC-ordered section list."
                      mediawiki-discussion-tools-view-mode-map))
     (should (eq (lookup-key map (kbd "s"))
                 #'mediawiki-discussion-tools-search))))
+
+;;; Editing a post tests
+
+(ert-deftest test-mdt-edit-post-key-binding ()
+  "e edits the post at point in the thread view."
+  (should (eq (lookup-key mediawiki-discussion-tools-view-mode-map (kbd "e"))
+              #'mediawiki-discussion-tools-edit-post)))
+
+(ert-deftest test-mdt-goto-section-heading ()
+  "The helper finds a level-2 heading and skips others."
+  (with-temp-buffer
+    (insert "Intro\n\n== Other topic ==\n\nx\n\n== Topic ==\n\nbody\n")
+    (should (mediawiki-discussion-tools--goto-section-heading "Topic"))
+    (should (looking-at-p "== Topic =="))
+    (should-not (mediawiki-discussion-tools--goto-section-heading "Missing"))))
+
+(ert-deftest test-mdt-edit-post-opens-page-at-section ()
+  "Editing opens the page on its site and moves to the thread's heading."
+  (let ((opened nil))
+    (cl-letf (((symbol-function 'mediawiki-open)
+               (lambda (page site)
+                 (setq opened (list page site))
+                 (insert "Intro\n\n== Other ==\n\nx\n\n== Topic ==\n\nbody\n"))))
+      (with-temp-buffer
+        (setq mediawiki-discussion-tools--sitename "TestSite"
+              mediawiki-discussion-tools--page "Project:Support desk"
+              mediawiki-discussion-tools--threads
+              (list '((id . "h-Topic-20260616005000") (title . "Topic")))
+              mediawiki-discussion-tools--view-index 0)
+        (mediawiki-discussion-tools-edit-post)
+        (should (equal opened '("Project:Support desk" "TestSite")))
+        (should (looking-at-p "== Topic =="))))))
+
+(ert-deftest test-mdt-edit-post-without-thread ()
+  "Editing with no thread selected signals."
+  (with-temp-buffer
+    (setq mediawiki-discussion-tools--sitename "TestSite"
+          mediawiki-discussion-tools--page "Project:Support desk")
+    (should-error (mediawiki-discussion-tools-edit-post) :type 'user-error)))
 
 (provide 'test-mediawiki-discussion-tools)
 
