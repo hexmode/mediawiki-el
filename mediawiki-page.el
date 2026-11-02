@@ -241,37 +241,51 @@ SUMMARY, and CONTENT on SITENAME."
 
 ;;;###autoload
 (defun mediawiki-open-page-at-point ()
-  "Open a new buffer with the page at point."
+  "Open a new buffer with the page linked at point."
   (interactive)
-  (mediawiki-open (mediawiki-page-at-point)))
+  (let ((page (mediawiki-page-at-point)))
+    (if page
+        (mediawiki-open page)
+      (call-interactively #'mediawiki-open))))
+
+;;;###autoload
+(defun mediawiki-open-at-point ()
+  "Open the page linked at point, or prompt for a page.
+On an internal link such as [[Page|text]] this opens Page, whether
+point is on the target or on the text."
+  (interactive)
+  (mediawiki-open-page-at-point))
 
 (defun mediawiki-page-at-point ()
-  "Return the page name under point.
-Typically, this means anything enclosed in [[PAGE]]."
-  (let ((pos (point))
-         (eol (line-end-position))
-         (bol (line-beginning-position)))
+  "Return the page name of the wiki link at point, or nil.
+For [[Page]] and [[Page|text]] this is Page, whether point is on the
+target or on the text.  A subpage link (/Archive) is returned relative
+to the current page.  Returns nil when point is not on a link."
+  (let ((here (point))
+        (bol (line-beginning-position))
+        (eol (line-end-position)))
     (save-excursion
-      (let* ((start  (when (search-backward "[[" bol t)
-                       (+ (point) 2)))
-              (end    (when (search-forward "]]" eol t)
-                        (- (point) 2)))
-              (middle (when start
-                        (goto-char start)
-                        (when (search-forward "|" end t)
-                          (1- (point)))))
-              (pagename (when (and
-                                (not (eq nil start))
-                                (not (eq nil end))
-                                (<= pos end)
-                                (>= pos start))
-                          (buffer-substring-no-properties
-                            start (or middle end)))))
-        (when pagename
-          (if (string= "/"
-                (substring pagename 0 1))
-            (concat mediawiki-page-title pagename)
-            pagename))))))
+      (let ((open (progn (goto-char here)
+                         (when (search-backward "[[" bol t) (point)))))
+        (when (and open
+                   (< open here)
+                   (save-excursion (goto-char here)
+                                   (search-forward "]]" eol t))
+                   (not (save-excursion (goto-char (+ open 2))
+                                        (search-forward "]]" here t))))
+          (let* ((close (save-excursion (goto-char here)
+                                        (search-forward "]]" eol t)
+                                        (match-beginning 0)))
+                 (body (buffer-substring-no-properties (+ open 2) close))
+                 (bar (string-search "|" body))
+                 (page (if bar
+                           (substring-no-properties body 0 bar)
+                         body)))
+            (when (and page (>= here open) (<= here close))
+              (if (and (> (length page) 0)
+                       (string= "/" (substring page 0 1)))
+                  (concat mediawiki-page-title page)
+                page))))))))
 
 ;;; Buffer Management
 

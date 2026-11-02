@@ -131,7 +131,7 @@
   (define-key mediawiki-mode-map "\C-x\C-s"  'mediawiki-save)
   (define-key mediawiki-mode-map "\C-c\C-c"  'mediawiki-save-and-bury)
   (define-key mediawiki-mode-map "\C-x\C-w"  'mediawiki-save-as)
-  (define-key mediawiki-mode-map "\C-c\C-o"  'mediawiki-open)
+  (define-key mediawiki-mode-map "\C-c\C-o"  'mediawiki-open-at-point)
   (define-key mediawiki-mode-map "\M-p"
     'mediawiki-goto-previous-page)
   (define-key mediawiki-mode-map "\M-n"      'mediawiki-goto-next-page)
