@@ -1,5 +1,10 @@
 2026-11-02  Mark A. Hershberger  <mah@everybody.org>
 
+	* mediawiki-core.el (mediawiki-version): Bump version to 4.3.0;
+	this is the User-Agent value.  Not tagged: the release comes later.
+
+	* mediawiki.el: Bump version to 4.3.0.
+
 	* tests/test-mediawiki-page.el
 	(test-mediawiki-open-at-point-uses-link-target): Cover a piped link
 	on the display text, no link at point, the binding, and point after
