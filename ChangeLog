@@ -1,3 +1,19 @@
+2026-11-17  Mark A. Hershberger  <mah@everybody.org>
+
+	* mediawiki-auth.el (mediawiki-botpassword-separator): New user option,
+	the separator between a bot password's username and app name.  Defaults
+	to "@"; customize it for a wiki that changes
+	$wgUserrightsInterwikiDelimiter.
+
+	* mediawiki-auth.el (mediawiki-do-login): Route bot-password logins
+	(usernames containing the separator) straight to action=login, the only
+	API that supports bot passwords.  Previously action=clientlogin treated
+	the app suffix as part of the username and the login failed in primary
+	authentication.
+
+	* tests/test-mediawiki-auth.el (test-mediawiki-botpassword-login-mock):
+	Cover bot-password login routing to action=login.
+	(test-mediawiki-auth-constants): Assert the separator's default.
 2026-11-02  Mark A. Hershberger  <mah@everybody.org>
 
 	* tests/test-mediawiki-site.el

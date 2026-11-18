@@ -51,6 +51,16 @@ but the MediaWiki API requires it as a parameter."
   :type 'string
   :group 'mediawiki)
 
+(defcustom mediawiki-botpassword-separator "@"
+  "Separator between username and app name in a bot password.
+
+MediaWiki bot passwords are logged in as USERNAME<sep>APPNAME
+with the bot password itself as the password.  The separator is
+`$wgUserrightsInterwikiDelimiter' on the wiki, which defaults to
+\"@\".  Change this only if the wiki has customized that setting."
+  :type 'string
+  :group 'mediawiki)
+
 ;;; Authentication State Checking
 
 (defun mediawiki-logged-in-p (&optional sitename)
@@ -122,13 +132,18 @@ for older wikis and bot passwords."
                      (read-string "LDAP Domain: ")
                      dom-loaded)))
             (sitename sitename))
-      (condition-case err
-          (mediawiki-do-clientlogin sitename user pass dom)
-        (error
-         (let ((msg (error-message-string err)))
-           (if (string-match-p "unknown_action" msg)
-               (mediawiki-do-login-fallback sitename user pass dom)
-             (error "%s" msg))))))
+      (if (string-match-p (regexp-quote mediawiki-botpassword-separator) user)
+          ;; Bot passwords (username<sep>appId) are only supported by
+          ;; action=login, not action=clientlogin.  Route them straight
+          ;; to the fallback.
+          (mediawiki-do-login-fallback sitename user pass dom)
+        (condition-case err
+            (mediawiki-do-clientlogin sitename user pass dom)
+          (error
+           (let ((msg (error-message-string err)))
+             (if (string-match-p "unknown_action" msg)
+                 (mediawiki-do-login-fallback sitename user pass dom)
+               (error "%s" msg)))))))
   ;; Visit-time version check; failure must not break login.
   (ignore-errors (mediawiki-site-version sitename))
   sitename))
