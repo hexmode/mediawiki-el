@@ -65,6 +65,8 @@
 
 (declare-function mediawiki-prompt-for-site "mediawiki-site")
 (declare-function mediawiki-open "mediawiki-page")
+(declare-function mediawiki-site-at-least "mediawiki-site"
+                  (sitename major minor &optional patch))
 
 ;;; Customization
 
@@ -350,18 +352,19 @@ the anchor is the part between \"h-\" and the trailing timestamp."
 
 (defun mediawiki-discussion-tools--resolved-anchors (sitename page)
   "Return the anchors of PAGE sections that contain a resolved marker.
-Reads the wikitext once with `action=parse&prop=wikitext|sections' and
-matches `{{Resolved' inside each section's byte range.  Returns nil if
-the page cannot be fetched, so a failure never blocks the thread list."
+Reads the wikitext once with `action=parse' and matches `{{Resolved'
+inside each section's byte range.  Returns nil if the page cannot be
+fetched, so a failure never blocks the thread list."
   (condition-case nil
       (let* ((result (mediawiki-api-call sitename "parse"
                        `(("page" . ,page)
-                         ("prop" . "wikitext|sections")
+                         ("prop" . ,(mediawiki-discussion-tools--section-props
+                                     sitename))
                          ("formatversion" . "2"))))
              (parse (alist-get 'parse result))
              (wikitext (or (alist-get 'wikitext parse) ""))
              (length (length wikitext)))
-        (cl-loop for (section . rest) on (alist-get 'sections parse)
+        (cl-loop for (section . rest) on (mediawiki-discussion-tools--parse-sections result)
                  for start = (or (alist-get 'byteoffset section) 0)
                  for end = (if rest
                                (or (alist-get 'byteoffset (car rest)) length)
@@ -1238,18 +1241,33 @@ prefix, which is the quickest way to find the archive pages."
 \\{mediawiki-discussion-tools-reply-mode-map}"
   :lighter " MW-Reply")
 
+(defun mediawiki-discussion-tools--section-props (sitename)
+  "Return the action=parse properties that include section metadata.
+`prop=sections' is deprecated on MediaWiki 1.43 and later in favour of
+`prop=tocdata'; older wikis do not have tocdata."
+  (if (mediawiki-site-at-least sitename 1 43)
+      "wikitext|tocdata"
+    "wikitext|sections"))
+
+(defun mediawiki-discussion-tools--parse-sections (result)
+  "Return the section objects from a parse RESULT, old or new shape.
+`prop=sections' puts them on parse.sections, `prop=tocdata' on
+parse.tocdata.sections."
+  (let ((parse (alist-get 'parse result)))
+    (or (alist-get 'sections (alist-get 'tocdata parse))
+        (alist-get 'sections parse))))
+
 (defun mediawiki-discussion-tools--section-numbers (sitename page)
   "Return an alist mapping section anchors to section indices for PAGE.
-Calls action=parse&prop=tocdata and filters out non-discussion
-sections (those without an index field).  Each entry is
-(ANCHOR . INDEX) where INDEX is the value for action=edit&section=."
+Calls action=parse and filters out non-discussion sections (those
+without an index field).  Each entry is (ANCHOR . INDEX) where INDEX is
+the value for action=edit&section=."
   (let* ((result (mediawiki-api-call sitename "parse"
-                   `(("page" . ,page)
-                     ("prop" . "tocdata")
-                     ("formatversion" . "2"))))
-         (sections (alist-get 'sections
-                              (alist-get 'tocdata
-                                         (alist-get 'parse result)))))
+                    `(("page" . ,page)
+                      ("prop" . ,(mediawiki-discussion-tools--section-props
+                                  sitename))
+                      ("formatversion" . "2"))))
+         (sections (mediawiki-discussion-tools--parse-sections result)))
     (cl-loop for s in sections
              for idx = (alist-get 'index s)
              for anchor = (alist-get 'anchor s)

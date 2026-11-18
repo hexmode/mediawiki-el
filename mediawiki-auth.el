@@ -35,6 +35,7 @@
 (require 'url-parse)
 
 (declare-function mediawiki-oauth-configured-p "mediawiki-oauth")
+(declare-function mediawiki-site-version "mediawiki-site" (sitename))
 (declare-function mediawiki-oauth-get-access-token "mediawiki-oauth")
 
 ;;; Authentication Constants
@@ -47,6 +48,16 @@ This will be used to verify a successful login.")
   "Return URL for third-party authentication flows in action=clientlogin.
 This URL is never actually visited by the user during Emacs-based login,
 but the MediaWiki API requires it as a parameter."
+  :type 'string
+  :group 'mediawiki)
+
+(defcustom mediawiki-botpassword-separator "@"
+  "Separator between username and app name in a bot password.
+
+MediaWiki bot passwords are logged in as USERNAME<sep>APPNAME
+with the bot password itself as the password.  The separator is
+`$wgUserrightsInterwikiDelimiter' on the wiki, which defaults to
+\"@\".  Change this only if the wiki has customized that setting."
   :type 'string
   :group 'mediawiki)
 
@@ -105,7 +116,9 @@ for older wikis and bot passwords."
            (mediawiki-oauth-configured-p sitename))
       (progn
         (mediawiki-oauth-get-access-token sitename)
-        (setq mediawiki-site sitename))
+        (setq mediawiki-site sitename)
+        ;; Visit-time version check; failure must not break login.
+        (ignore-errors (mediawiki-site-version sitename)))
 
     (let* ((user (or (mediawiki-site-username sitename)
                    username
@@ -119,13 +132,21 @@ for older wikis and bot passwords."
                      (read-string "LDAP Domain: ")
                      dom-loaded)))
             (sitename sitename))
-      (condition-case err
-          (mediawiki-do-clientlogin sitename user pass dom)
-        (error
-         (let ((msg (error-message-string err)))
-           (if (string-match-p "unknown_action" msg)
-               (mediawiki-do-login-fallback sitename user pass dom)
-             (error "%s" msg))))))))
+      (if (string-match-p (regexp-quote mediawiki-botpassword-separator) user)
+          ;; Bot passwords (username<sep>appId) are only supported by
+          ;; action=login, not action=clientlogin.  Route them straight
+          ;; to the fallback.
+          (mediawiki-do-login-fallback sitename user pass dom)
+        (condition-case err
+            (mediawiki-do-clientlogin sitename user pass dom)
+          (error
+           (let ((msg (error-message-string err)))
+             (if (string-match-p "unknown_action" msg)
+                 (mediawiki-do-login-fallback sitename user pass dom)
+               (error "%s" msg)))))))
+  ;; Visit-time version check; failure must not break login.
+  (ignore-errors (mediawiki-site-version sitename))
+  sitename))
 
 (defun mediawiki-do-clientlogin (sitename username password &optional domain)
   "Log into SITENAME using action=clientlogin.

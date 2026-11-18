@@ -33,7 +33,10 @@
   "Test that authentication constants are defined."
   (should (boundp 'mediawiki-login-success))
   (should (stringp mediawiki-login-success))
-  (should (string= "pt-logout" mediawiki-login-success)))
+  (should (string= "pt-logout" mediawiki-login-success))
+  (should (boundp 'mediawiki-botpassword-separator))
+  (should (stringp mediawiki-botpassword-separator))
+  (should (string= "@" mediawiki-botpassword-separator)))
 
 ;;; Test Authentication State Checking
 
@@ -115,6 +118,35 @@
     (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
       (should (string= "TestSite" result)))))
 
+;;; Test Bot-Password Login (Mocked)
+
+(ert-deftest test-mediawiki-botpassword-login-mock ()
+  "Test bot-password login routes to action=login, not action=clientlogin.
+A username containing `mediawiki-botpassword-separator' is a bot
+password, and only action=login supports those."
+  (let ((api-call-count 0))
+    (cl-letf (((symbol-function 'mediawiki-site-username)
+               (lambda (site) "testuser@mybot"))
+              ((symbol-function 'mediawiki-site-password)
+               (lambda (site) "botpassword"))
+              ((symbol-function 'mediawiki-site-domain)
+               (lambda (site) nil))
+              ((symbol-function 'mediawiki-site-get-token)
+               (lambda (site type) "login-token"))
+              ((symbol-function 'mediawiki-site-version)
+               (lambda (site) '(1 43 1)))
+              ((symbol-function 'mediawiki-api-call)
+               (lambda (site action args)
+                 (setq api-call-count (1+ api-call-count))
+                 (should (string= "login" action))
+                 (should (string= "testuser@mybot"
+                                  (cdr (assoc "lgname" args))))
+                 '((login . ((result . "Success")
+                             (lgusername . "testuser")))))))
+      (let ((result (mediawiki-do-login "TestSite" "testuser@mybot" "botpassword")))
+        (should (string= "TestSite" result))
+        (should (= 1 api-call-count))))))
+
 ;;; Test Logout Process (Mocked)
 
 (ert-deftest test-mediawiki-logout-process-mock ()
@@ -148,6 +180,8 @@
                (lambda (site) nil))
               ((symbol-function 'mediawiki-site-get-token)
                (lambda (site type) "login-token"))
+              ((symbol-function 'mediawiki-site-version)
+               (lambda (site) '(1 43 1)))
               ((symbol-function 'read-string)
                (lambda (prompt) "abc123"))
               ((symbol-function 'mediawiki-api-call)
@@ -210,6 +244,8 @@ CALL-COUNT-REF is a cons cell whose car tracks the call count."
                (lambda (site) nil))
               ((symbol-function 'mediawiki-site-get-token)
                (lambda (site type) "login-token"))
+              ((symbol-function 'mediawiki-site-version)
+               (lambda (site) '(1 43 1)))
               ((symbol-function 'mediawiki-api-call)
                (test-mediawiki-make-fallback-api-call call-count)))
       (let ((result (mediawiki-do-login "TestSite" "testuser" "testpass")))
@@ -229,6 +265,8 @@ CALL-COUNT-REF is a cons cell whose car tracks the call count."
                (lambda (site) "TESTDOMAIN"))
               ((symbol-function 'mediawiki-site-get-token)
                (lambda (site type) "login-token"))
+              ((symbol-function 'mediawiki-site-version)
+               (lambda (site) '(1 43 1)))
               ((symbol-function 'mediawiki-api-call)
                (lambda (site action args)
                  (setcar call-count (1+ (car call-count)))

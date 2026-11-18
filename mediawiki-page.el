@@ -36,6 +36,8 @@
 (require 'mediawiki-recent)
 (require 'ring)
 
+(declare-function mediawiki-site-version "mediawiki-site" (sitename))
+
 ;;; Page History Management
 (defun mediawiki-add-page-history (sitename title)
   "Update SITENAME's page history with TITLE."
@@ -69,6 +71,8 @@ and CONTENT is the page content string."
                            (concat sitename ": " pagetitle))
       (unless (mediawiki-logged-in-p sitename)
         (mediawiki-do-login sitename))
+      ;; Visit-time version check, in case login was already done.
+      (ignore-errors (mediawiki-site-version sitename))
       (ring-insert mediawiki-page-ring (current-buffer))
       (delete-region (point-min) (point-max))
       (mediawiki-mode)

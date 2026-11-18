@@ -59,6 +59,11 @@ Rules:
 - Tests must not depend on today's date.  Build fixture timestamps relative to
   `(current-time)`; hardcoded dates silently expire (this bit us when fixtures
   pinned to June 2026 aged past `mediawiki-discussion-tools-stale-days`).
+- The MediaWiki API deprecates parameters over time (`prop=sections` →
+  `prop=tocdata` on 1.43, for example).  Do not pick a form at the call site
+  based on hope: ask `mediawiki-site-at-least` which wiki you are talking to
+  and send the right parameters.  The version is cached per site and warmed
+  when the site is visited.  An unknown version means "use the older API".
 - CI (`.github/workflows/test.yml`) runs every suite on Emacs 28.1, 29.4 and
   30.1, built from source into `/opt/emacs-<version>` and cached under
   `emacs-<version>-nativecomp-opt-<os>`.  The first run under a new cache key
